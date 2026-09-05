@@ -35,7 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
     25: { name:'Monero Standard', cls:'standard', icon:'◆' },
   };
 
-  // ─── Advanced: custom Monero node URL ───
+  // ─── Advanced: custom QWC node URL ───
   // Reads and writes the same localStorage key that js/monero-rpc.js uses,
   // so whatever the user sets here on the verify page is automatically
   // picked up by the dashboard's MoneroRPC calls. Letting users configure
@@ -62,7 +62,7 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         if (v) localStorage.setItem(NODE_KEY, v.replace(/\/$/, ''));
         else   localStorage.removeItem(NODE_KEY);
-        advMsg.textContent = v ? 'Saved. Your wallet will use this node.' : 'Cleared. Using monero-web proxy.';
+        advMsg.textContent = v ? 'Saved. Your wallet will use this node.' : 'Cleared. Using the Qwertycoin proxy.';
         advMsg.style.color = v ? 'var(--success)' : 'var(--text-dim)';
       } catch (e) {
         advMsg.textContent = 'Could not save: ' + e.message;
@@ -72,7 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (advReset) advReset.addEventListener('click', () => {
       try { localStorage.removeItem(NODE_KEY); } catch (e) {}
       advInput.value = '';
-      advMsg.textContent = 'Reverted to monero-web proxy (default).';
+      advMsg.textContent = 'Reverted to the Qwertycoin proxy (default).';
       advMsg.style.color = 'var(--text-dim)';
     });
   }
@@ -376,6 +376,7 @@ document.addEventListener('DOMContentLoaded', () => {
           privateViewKeyHex:  k.privateViewKeyHex,
           publicSpendKeyHex:  k.publicSpendKeyHex,
           publicViewKeyHex:   k.publicViewKeyHex,
+          mnemonic:           k.mnemonic || null,
           watchOnly:          !!k.watchOnly,
           seedFormat:         k.seedFormat || null,
           birthday:           (typeof k.birthday === 'number') ? k.birthday : null,
@@ -458,6 +459,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 privateViewKeyHex:  k.privateViewKeyHex,
                 publicSpendKeyHex:  k.publicSpendKeyHex,
                 publicViewKeyHex:   k.publicViewKeyHex,
+                mnemonic:           k.mnemonic || null,
                 seedFormat:         k.seedFormat || null,
                 birthday:           (typeof k.birthday === 'number') ? k.birthday : null,
                 createdAtCurrentTip: true,
@@ -466,16 +468,6 @@ document.addEventListener('DOMContentLoaded', () => {
               // so it skips historical scanning. Two signals for redundancy:
               // vault has createdAtCurrentTip=true, sessionStorage has this flag.
               try { sessionStorage.setItem('monero-web-fresh-wallet', '1'); } catch (e) {}
-              // Pre-register the wallet on the LWS with generated_locally=true
-              // BEFORE redirecting to the dashboard. This ensures the LWS
-              // creates the account starting from the current chain tip (no
-              // historical scan needed). The dashboard will see the account
-              // already exists and is "up to date" immediately.
-              try {
-                await LwsClient.login(k.address, k.privateViewKeyHex, { generatedLocally: true });
-              } catch (e) {
-                console.warn('[verify] pre-register on LWS failed (non-fatal):', e);
-              }
               window.location.href = '/dashboard';
             });
           }

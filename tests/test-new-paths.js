@@ -17,6 +17,9 @@
 
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
+
 // ── Minimal browser shims ────────────────────────────────────────────
 if (!global.crypto) global.crypto = require('crypto').webcrypto;
 const _store = new Map();
@@ -82,14 +85,15 @@ function assertEq(actual, expected, msg) {
     assertEq(k.address,            w.address,            'address');
     assertEq(k.privateSpendKeyHex, w.privateSpendKeyHex, 'spend key');
     assertEq(k.privateViewKeyHex,  w.privateViewKeyHex,  'view key');
+    assertEq(k.mnemonic,           w.mnemonic,           'mnemonic retained for browser sync');
   });
 
   // BIP-39
-  await test('BIP-39 12 words → produces a valid mainnet address', async () => {
+  await test('BIP-39 12 words → produces a valid QWC mainnet address', async () => {
     const m = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
     const k = await MoneroKeys.deriveFromBip39(m, '', 'mainnet');
-    assertEq(k.address.length, 95, 'mainnet length');
-    assertEq(k.address[0],     '4', 'mainnet prefix');
+    assertEq(k.address.length, 98, 'mainnet length');
+    assertEq(k.address.slice(0, 3), 'QWC', 'mainnet prefix');
     assertEq(k.privateSpendKeyHex.length, 64);
     assertEq(k.privateViewKeyHex.length,  64);
     // Determinism: re-derive
@@ -131,11 +135,11 @@ function assertEq(actual, expected, msg) {
     assert(threw, 'bad checksum should throw');
   });
 
-  await test('Polyseed → full Monero address derivation', async () => {
+  await test('Polyseed → full QWC address derivation', async () => {
     const ps = 'raven tail swear infant grief assist regular lamp duck valid someone little harsh puppy airport language';
     const k  = await MoneroKeys.deriveFromPolyseed(ps, 'mainnet');
-    assertEq(k.address.length, 95);
-    assertEq(k.address[0],     '4');
+    assertEq(k.address.length, 98);
+    assertEq(k.address.slice(0, 3), 'QWC');
     assertEq(k.seedFormat,     'polyseed');
     assertEq(k.wordCount,      16);
   });
@@ -277,11 +281,11 @@ function assertEq(actual, expected, msg) {
   });
 
   // ── LwsClient (mock-mode behaviour) ────────────────────────────────
-  await test('LwsClient.formatXmr — atomic units → human XMR', () => {
-    assertEq(LwsClient.formatXmr('1000000000000'), '1');
-    assertEq(LwsClient.formatXmr('1234567890000'), '1.23456789');
+  await test('LwsClient.formatXmr — atomic units → human QWC', () => {
+    assertEq(LwsClient.formatXmr('100000000'), '1');
+    assertEq(LwsClient.formatXmr('123456789'), '1.23456789');
     assertEq(LwsClient.formatXmr('0'), '0');
-    assertEq(LwsClient.formatXmr('1'), '0.000000000001');
+    assertEq(LwsClient.formatXmr('1'), '0.00000001');
   });
 
   await test('LwsClient.availableBalance — total - sent - locked', () => {
@@ -306,6 +310,48 @@ function assertEq(actual, expected, msg) {
 
   await test('LwsClient mock mode is on for localhost', () => {
     assert(LwsClient.isMock(), 'mock should auto-enable on localhost');
+  });
+
+  await test('QWC proxy uses the configured mainnet RPC and Turnstile site key', () => {
+    const proxy = fs.readFileSync(path.join(__dirname, '../functions/api/proxy.js'), 'utf8');
+    const lws = fs.readFileSync(path.join(__dirname, '../js/lws-client.js'), 'utf8');
+
+    assert(proxy.includes('https://explorer.qwertycoin.org/qwc-rpc'), 'QWC RPC endpoint missing');
+    assert(proxy.includes('/get_outs'), 'get outs RPC path missing');
+    assert(proxy.includes('/get_output_distribution.bin'), 'output distribution RPC path missing');
+    assert(proxy.includes('/send_raw_transaction'), 'send RPC path missing');
+    assert(proxy.includes('get_output_histogram'), 'output histogram RPC missing');
+    assert(!proxy.includes('xmr-node.cakewallet.com'), 'legacy Monero public node should not be used');
+    assert(lws.includes('0x4AAAAAAEkKWLZIa61TTy18'), 'Turnstile site key missing');
+  });
+
+  await test('Dashboard QWC history sums wallet transfers and miner outputs', () => {
+    const dashboard = fs.readFileSync(path.join(__dirname, '../js/dashboard-page.js'), 'utf8');
+
+    assert(dashboard.includes('function getQwcTxDisplayAmount'), 'history amount normalizer missing');
+    assert(dashboard.includes('tx.incomingTransfers || tx.incoming_transfers'), 'incoming transfer amounts are not summed');
+    assert(dashboard.includes('tx.outgoingTransfer || tx.outgoing_transfer'), 'outgoing transfer amount is not read');
+    assert(dashboard.includes('transfer.destinations || transfer.recipients'), 'outgoing destination amounts are not summed');
+    assert(dashboard.includes('function qwcGetSelfTransferAmount'), 'self-transfer output fallback is missing');
+    assert(dashboard.includes('qwcMergeWalletOutputDetails'), 'wallet output details are not merged into history txs');
+    assert(dashboard.includes('outputSum - changeAmount'), 'outgoing output/change fallback is missing');
+    assert(dashboard.includes('tx.isMinerTx === true || tx.is_miner_tx === true'), 'miner tx outputs are not treated as received funds');
+    assert(dashboard.includes('https://explorer.qwertycoin.org/tx/'), 'QWC history explorer links are missing');
+    assert(dashboard.includes('qwcBindTransactionDetails(listEl)'), 'QWC history rows are not clickable');
+    assert(!dashboard.includes("tx.incomingAmount || tx.outgoingAmount || tx.amount || '0'"), 'old flat amount fallback still controls QWC history rendering');
+  });
+
+  await test('Dashboard shows spendable balance separately from locked funds', () => {
+    const html = fs.readFileSync(path.join(__dirname, '../dashboard.html'), 'utf8');
+    const dashboard = fs.readFileSync(path.join(__dirname, '../js/dashboard-page.js'), 'utf8');
+
+    assert(html.includes('Available Balance'), 'main balance label should describe spendable funds');
+    assert(html.includes('id="balance-breakdown"'), 'locked/total balance breakdown is missing');
+    assert(dashboard.includes('function renderBalanceSummary'), 'shared balance renderer is missing');
+    assert(dashboard.includes('renderBalanceSummary(balance, unlocked)'), 'QWC wallet balance should render unlocked funds as available');
+    assert(dashboard.includes('renderBalanceSummary(avail + locked, avail, LwsClient.formatXmr)'), 'LWS balance should render spendable funds as available');
+    assert(dashboard.includes('setSendAvailableDisplay(qwcLastAvailableDisplay)'), 'send dialog should preserve spendable balance');
+    assert(!dashboard.includes("const balText = document.getElementById('balance-xmr').textContent"), 'send dialog should not copy total balance from the header');
   });
 
   await test('LwsClient.login (mock) returns plausible response', async () => {

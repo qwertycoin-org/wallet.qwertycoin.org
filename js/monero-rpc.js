@@ -33,7 +33,7 @@ const MoneroRPC = (function () {
   // (e.g. "https://my-node.example:18089"). When set, the proxy is bypassed
   // and requests go straight to that node — the node must serve CORS headers
   // and use HTTPS, otherwise the browser will block the request.
-  const CUSTOM_NODE_KEY = 'monero-web-node-url';
+  const CUSTOM_NODE_KEY = 'qwertycoin-web-node-url';
 
   function getCustomNode() {
     try { return localStorage.getItem(CUSTOM_NODE_KEY) || ''; } catch (e) { return ''; }
@@ -48,7 +48,7 @@ const MoneroRPC = (function () {
 
   // Default nodes (used by proxy server-side, listed here for reference)
   const DEFAULT_NODES = [
-    { url: 'proxy', name: 'monero-web proxy', cors: true },
+    { url: 'proxy', name: 'QWC proxy', cors: true },
   ];
 
   let currentNode = null;
@@ -185,7 +185,7 @@ const MoneroRPC = (function () {
    * Connect via proxy — tests that the proxy and backend nodes are reachable
    */
   async function connect() {
-    notifyListeners({ status: 'connecting', message: 'Connecting to Monero network...' });
+    notifyListeners({ status: 'connecting', message: 'Connecting to QWC network...' });
 
     try {
       const start = Date.now();
@@ -193,7 +193,7 @@ const MoneroRPC = (function () {
       const latency = Date.now() - start;
 
       currentNode = {
-        name: 'monero-web proxy',
+        name: 'QWC proxy',
         url: PROXY_URL,
         ok: true,
         latency,
@@ -220,7 +220,7 @@ const MoneroRPC = (function () {
     } catch(e) {
       currentNode = null;
       notifyListeners({ status: 'disconnected', message: 'No nodes reachable: ' + e.message });
-      throw new Error('Could not connect to Monero network: ' + e.message);
+      throw new Error('Could not connect to QWC network: ' + e.message);
     }
   }
 
@@ -308,24 +308,24 @@ const MoneroRPC = (function () {
   }
 
   /**
-   * Format atomic units (piconero) to XMR display string
-   * 1 XMR = 1e12 piconero
+   * Format QWC atomic units to a display string.
+   * 1 QWC = 1e8 atomic units.
    */
   function formatXMR(atomicUnits) {
     if (typeof atomicUnits === 'string') atomicUnits = BigInt(atomicUnits);
     if (typeof atomicUnits === 'number') atomicUnits = BigInt(Math.round(atomicUnits));
-    const xmr = Number(atomicUnits) / 1e12;
-    return xmr.toFixed(12).replace(/\.?0+$/, '');
+    const qwc = Number(atomicUnits) / 1e8;
+    return qwc.toFixed(8).replace(/\.?0+$/, '');
   }
 
   /**
-   * Parse XMR amount string to atomic units
+   * Parse a QWC amount string to atomic units.
    */
   function parseXMR(xmrString) {
     const parts = xmrString.split('.');
     const whole = BigInt(parts[0] || '0');
-    const frac = (parts[1] || '').padEnd(12, '0').substring(0, 12);
-    return whole * BigInt(1e12) + BigInt(frac);
+    const frac = (parts[1] || '').padEnd(8, '0').substring(0, 8);
+    return whole * 100000000n + BigInt(frac);
   }
 
   return {

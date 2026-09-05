@@ -1,0 +1,14 @@
+{
+  "name": "qwertycoin-web-wallet",
+  "version": "0.0.0-beta.0",
+  "private": true,
+  "description": "Qwertycoin v2 non-custodial web wallet PWA",
+  "license": "MIT",
+  "scripts": {
+    "build": "bash tools/build-manifest.sh --write",
+    "test": "node tests/test-new-paths.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -3,12 +3,12 @@
  * monero-keys.js
  * Monero Key Derivation Engine
  *
- * Converts seed bytes or mnemonic phrases into Monero wallet keys:
+ * Converts seed bytes or mnemonic phrases into QWC wallet keys:
  *   - Private spend key (seed → sc_reduce32)
  *   - Private view key  (Keccak-256 of spend key → sc_reduce32)
  *   - Public spend key  (ed25519 basepoint × private spend key)
  *   - Public view key   (ed25519 basepoint × private view key)
- *   - Monero address    (base58 of netbyte + pub_spend + pub_view + checksum)
+ *   - QWC address       (base58 of varint prefix + pub_spend + pub_view + checksum)
  *
  * Depends on: keccak256.js, monero-ed25519.js, monero-wordlist.js
  */
@@ -16,7 +16,7 @@
 const MoneroKeys = (function () {
   'use strict';
 
-  const MAINNET  = 0x12;  // '4...'
+  const MAINNET  = 0x14820c; // QWC v2 mainnet standard address prefix -> "QWC..."
   const TESTNET  = 0x35;  // '9...' or 'A...'
   const STAGENET = 0x18;  // '5...'
 
@@ -156,6 +156,7 @@ const MoneroKeys = (function () {
     result.wordCount = count;
     result.seedFormat = (count === 13) ? 'mymonero' : 'standard';
     result.seedHex = bytesToHex(seed);
+    result.mnemonic = words.join(' ');
     return result;
   }
 
@@ -184,19 +185,33 @@ const MoneroKeys = (function () {
   }
 
   /**
-   * Encode a standard Monero address
+   * Encode a standard CryptoNote address.
    */
   function encodeAddress(netByte, pubSpend, pubView) {
-    const raw = new Uint8Array(69);
-    raw[0] = netByte;
-    raw.set(pubSpend, 1);
-    raw.set(pubView, 33);
-    const hash = Keccak256.hash(raw.slice(0, 65));
-    raw[65] = hash[0];
-    raw[66] = hash[1];
-    raw[67] = hash[2];
-    raw[68] = hash[3];
+    const prefix = encodeVarint(netByte);
+    const payloadLength = prefix.length + 64;
+    const raw = new Uint8Array(payloadLength + 4);
+    raw.set(prefix, 0);
+    raw.set(pubSpend, prefix.length);
+    raw.set(pubView, prefix.length + 32);
+    const hash = Keccak256.hash(raw.slice(0, payloadLength));
+    raw[payloadLength] = hash[0];
+    raw[payloadLength + 1] = hash[1];
+    raw[payloadLength + 2] = hash[2];
+    raw[payloadLength + 3] = hash[3];
     return MoneroEd25519.cnBase58Encode(raw);
+  }
+
+  function encodeVarint(value) {
+    let n = Number(value);
+    if (!Number.isSafeInteger(n) || n < 0) throw new Error('Invalid address prefix');
+    const out = [];
+    while (n >= 0x80) {
+      out.push((n & 0x7f) | 0x80);
+      n = Math.floor(n / 128);
+    }
+    out.push(n);
+    return new Uint8Array(out);
   }
 
   function bytesToHex(bytes) {
@@ -213,7 +228,7 @@ const MoneroKeys = (function () {
   }
 
   /**
-   * Generate a brand new Monero wallet
+   * Generate a brand new QWC wallet
    * Uses browser crypto.getRandomValues() for secure entropy
    *
    * @param {string} lang - Word list language (default: 'english')

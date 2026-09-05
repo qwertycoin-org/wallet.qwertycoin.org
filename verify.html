@@ -3,27 +3,31 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
-<meta name="description" content="Open your Monero web wallet in the browser. Enter a BIP-39, MyMonero 13-word, Polyseed or 25-word standard seed — keys derive locally and never leave your device. Non-custodial, open source, no downloads.">
-<link rel="canonical" href="https://monero-web.com/verify">
-<meta property="og:title" content="Open your Monero wallet — monero-web.com">
-<meta property="og:description" content="Derive keys, manage subaddresses, and access your Monero — entirely in your browser. Supports BIP-39, MyMonero, Polyseed, and 25-word standard seeds.">
-<meta property="og:url" content="https://monero-web.com/verify">
+<meta name="description" content="Open your Qwertycoin web wallet in the browser. Enter a QWC seed phrase or private key — keys derive locally and never leave your device. Non-custodial, open source, no downloads.">
+<link rel="canonical" href="https://wallet.qwertycoin.org/verify">
+<meta property="og:title" content="Open your Qwertycoin wallet — wallet.qwertycoin.org">
+<meta property="og:description" content="Derive keys, manage addresses, and access your QWC — entirely in your browser.">
+<meta property="og:url" content="https://wallet.qwertycoin.org/verify">
 <meta property="og:type" content="website">
-<meta property="og:image" content="https://monero-web.com/assets/social-card.png">
+<meta property="og:image" content="https://wallet.qwertycoin.org/assets/social-card.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="https://monero-web.com/assets/social-card.png">
-<title>Monero Web — Verify Your Wallet</title>
-<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta name="twitter:image" content="https://wallet.qwertycoin.org/assets/social-card.png">
+<title>Qwertycoin Web Wallet — Verify Your Wallet</title>
+<link rel="icon" type="image/png" sizes="192x192" href="/assets/favicon-192x192.png">
+<link rel="apple-touch-icon" sizes="192x192" href="/assets/favicon-192x192.png">
 <link rel="icon" type="image/x-icon" href="/favicon.ico" sizes="any">
 <link rel="stylesheet" href="/fonts/fonts.css">
 <style>
 :root {
-  --bg:#0a0a0a; --surface:#111113; --surface-2:#19191d; --border:rgba(255,255,255,0.06);
-  --border-focus:rgba(255,130,47,0.4); --text:#eae8e4; --text-dim:#6e6c6a; --text-mid:#9a9894;
-  --xmr:#ff6600; --xmr-dim:rgba(255,102,0,0.12); --xmr-glow:rgba(255,102,0,0.2);
-  --success:#22c55e; --danger:#ef4444; --radius-sm:10px;
+  --bg:#071327; --surface:#0f274c; --surface-2:#173762; --surface-3:#f4f8fd;
+  --border:rgba(217,232,251,0.18); --border-strong:rgba(255,255,255,0.32);
+  --border-focus:rgba(255,175,0,0.56); --text:#ffffff; --text-dim:#a9bdd7; --text-mid:#d9e8fb;
+  --xmr:#ffaf00; --xmr-dim:rgba(255,175,0,0.14); --xmr-glow:rgba(255,175,0,0.24);
+  --primary:#1465b7; --primary-dark:#0b4f96; --success:#22c55e; --danger:#ef4444; --radius-sm:8px;
+  --font-sans:'Open Sans',ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --font-display:'Montserrat',ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 }
 *{margin:0;padding:0;box-sizing:border-box}
 /* Stop the I-beam text caret from appearing on decorative UI when clicked.
@@ -32,47 +36,43 @@ body{user-select:none;-webkit-user-select:none;cursor:default}
 input,textarea{user-select:text;-webkit-user-select:text;cursor:text}
 .result-value,#res-mnemonic,#create-mnemonic,#create-spend,#create-view,#create-address{user-select:text;-webkit-user-select:text;cursor:text}
 button,a,.tab,.copy-btn{cursor:pointer}
-html{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;font-size:16px;-webkit-font-smoothing:antialiased}
-body{min-height:100dvh;display:flex;flex-direction:column;overflow-x:hidden}
+html{background:var(--bg);color:var(--text);font-family:var(--font-sans);font-size:16px;-webkit-font-smoothing:antialiased}
+body{min-height:100dvh;display:flex;flex-direction:column;overflow-x:hidden;background:linear-gradient(115deg,#071327 0%,#10294f 48%,#071327 100%)}
 
-.ambient{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
-.ambient .orb{position:absolute;border-radius:50%;filter:blur(140px);animation:drift 20s ease-in-out infinite alternate}
-.ambient .orb-1{width:600px;height:600px;background:var(--xmr);opacity:.08;top:-20%;left:-15%}
-.ambient .orb-2{width:400px;height:400px;background:#ff8c42;opacity:.05;bottom:-15%;right:-10%;animation-delay:-8s}
+.ambient{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;background-image:linear-gradient(rgba(255,255,255,0.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.035) 1px,transparent 1px);background-size:64px 64px;mask-image:linear-gradient(180deg,rgba(0,0,0,.78),rgba(0,0,0,.18))}
+.ambient::before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(255,175,0,0.09),transparent 34%,rgba(20,101,183,0.12));}
 
 .page{position:relative;z-index:2;flex:1;display:flex;flex-direction:column}
-.container{width:100%;max-width:500px;margin:0 auto;padding:0 20px}
+.container{width:100%;max-width:980px;margin:0 auto;padding:0 24px}
 
-nav{padding:20px 0;display:flex;align-items:center;justify-content:space-between;animation:fadeDown .7s ease-out both}
+nav{min-height:86px;padding:16px 0;display:flex;align-items:center;justify-content:space-between;gap:24px;border-bottom:1px solid rgba(255,255,255,0.26)}
 .logo{display:flex;align-items:center;gap:10px}
-.logo-icon{width:34px;height:34px}
-.logo-text{font-size:1.1rem;font-weight:600;letter-spacing:-0.02em}
-.logo-text span{color:var(--xmr)}
-.nav-links{display:flex;gap:6px}
-.nav-links a{color:var(--text-dim);text-decoration:none;font-size:.8rem;font-weight:500;padding:7px 14px;border-radius:100px;transition:all .25s}
-.nav-links a:hover{color:var(--text);background:var(--surface-2)}
+.logo-img{width:169px;height:48px;object-fit:contain}
+.nav-links{display:flex;align-items:center;gap:22px;font-family:var(--font-display);font-size:.78rem;font-weight:700;text-transform:uppercase}
+.nav-links a{color:rgba(255,255,255,0.86);text-decoration:none;transition:color .2s}
+.nav-links a:hover{color:#fff}
 
-.main-area{flex:1;display:flex;align-items:flex-start;justify-content:center;padding:20px 0 60px}
-.card{width:100%;animation:fadeUp .8s .15s ease-out both}
-.card-header{text-align:center;margin-bottom:28px}
-.card-header h1{font-size:1.5rem;font-weight:700;letter-spacing:-0.03em;line-height:1.2;margin-bottom:6px}
-.card-header p{font-size:.85rem;color:var(--text-dim);line-height:1.5}
+.main-area{flex:1;display:flex;align-items:flex-start;justify-content:center;padding:48px 0 72px}
+.card{width:100%}
+.card-header{text-align:left;margin-bottom:30px}
+.card-header h1{font-family:var(--font-display);font-size:2.15rem;font-weight:800;letter-spacing:0;line-height:1.12;margin-bottom:10px}
+.card-header p{font-size:.98rem;color:var(--text-mid);line-height:1.6;max-width:660px}
 
-.tabs{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px;margin-bottom:20px}
-.tab{flex:1;padding:10px 8px;text-align:center;font-size:.82rem;font-weight:500;color:var(--text-dim);border-radius:8px;cursor:pointer;transition:all .25s;border:none;background:none;font-family:inherit}
+.tabs{display:flex;background:rgba(7,19,39,0.52);border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px;margin-bottom:22px}
+.tab{flex:1;padding:13px 10px;text-align:center;font-size:.82rem;font-weight:700;color:var(--text-dim);border-radius:6px;cursor:pointer;transition:all .25s;border:none;background:none;font-family:var(--font-display)}
 .tab:hover{color:var(--text)}
-.tab.active{background:var(--surface-2);color:var(--text);box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.tab.active{background:var(--xmr);color:#201200;box-shadow:0 8px 24px rgba(255,175,0,.18)}
 
 .form-section{display:none}
-.form-section.active{display:block;animation:fadeIn .35s ease-out}
+.form-section.active{display:block}
 
 .input-group{margin-bottom:14px}
-.input-group label{display:flex;align-items:center;justify-content:space-between;font-size:.78rem;font-weight:500;color:var(--text-mid);margin-bottom:6px}
-.input-group label .hint{font-weight:400;color:var(--text-dim);font-size:.72rem}
-.input-group textarea{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;font-family:'JetBrains Mono',monospace;font-size:.8rem;line-height:1.7;color:var(--text);resize:none;outline:none;transition:border-color .25s,box-shadow .25s;min-height:100px}
+.input-group label{display:flex;align-items:center;justify-content:space-between;gap:18px;font-size:.8rem;font-weight:700;color:var(--text-mid);margin-bottom:7px}
+.input-group label .hint{font-weight:400;color:var(--text-dim);font-size:.72rem;text-align:right}
+.input-group textarea{width:100%;background:rgba(7,19,39,0.58);border:1px solid var(--border);border-radius:var(--radius-sm);padding:15px 16px;font-family:'JetBrains Mono',monospace;font-size:.82rem;line-height:1.7;color:var(--text);resize:none;outline:none;transition:border-color .25s,box-shadow .25s;min-height:128px}
 .input-group textarea::placeholder{color:var(--text-dim);font-family:'JetBrains Mono',monospace}
 .input-group textarea:focus{border-color:var(--border-focus);box-shadow:0 0 0 3px var(--xmr-dim)}
-.input-group input{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;font-family:'JetBrains Mono',monospace;font-size:.8rem;color:var(--text);outline:none;transition:border-color .25s,box-shadow .25s}
+.input-group input{width:100%;background:rgba(7,19,39,0.58);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;font-family:'JetBrains Mono',monospace;font-size:.8rem;color:var(--text);outline:none;transition:border-color .25s,box-shadow .25s}
 .input-group input::placeholder{color:var(--text-dim)}
 .input-group input:focus{border-color:var(--border-focus);box-shadow:0 0 0 3px var(--xmr-dim)}
 
@@ -84,48 +84,55 @@ nav{padding:20px 0;display:flex;align-items:center;justify-content:space-between
 .seed-format-badge.bip39{background:rgba(56,189,248,0.1);border:1px solid rgba(56,189,248,0.2);color:#38bdf8}
 .seed-format-badge.mymonero{background:rgba(168,85,247,0.12);border:1px solid rgba(168,85,247,0.2);color:#c084fc}
 .seed-format-badge.polyseed{background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);color:#4ade80}
-.seed-format-badge.standard{background:var(--xmr-dim);border:1px solid rgba(255,102,0,0.15);color:var(--xmr)}
+.seed-format-badge.standard{background:var(--xmr-dim);border:1px solid rgba(255,175,0,0.15);color:var(--xmr)}
 
-.btn-primary{width:100%;padding:14px;background:var(--xmr);color:#fff;font-family:'Outfit',sans-serif;font-size:.9rem;font-weight:600;border:none;border-radius:var(--radius-sm);cursor:pointer;transition:all .25s;box-shadow:0 4px 24px var(--xmr-glow);display:flex;align-items:center;justify-content:center;gap:8px}
-.btn-primary:hover{background:#e85d00;transform:translateY(-1px)}
+.btn-primary{width:100%;padding:15px;background:var(--xmr);color:#201200;font-family:var(--font-display);font-size:.9rem;font-weight:800;border:none;border-radius:var(--radius-sm);cursor:pointer;transition:all .25s;box-shadow:0 10px 28px var(--xmr-glow);display:flex;align-items:center;justify-content:center;gap:8px;text-transform:uppercase}
+.btn-primary:hover{background:#ffc247;transform:translateY(-1px)}
 .btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
 
 /* ─── RESULTS ─── */
 .results{display:none;margin-top:20px;animation:fadeIn .4s ease-out}
 .results.show{display:block}
-.result-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;margin-bottom:12px}
+.result-card{background:rgba(7,19,39,0.58);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;margin-bottom:12px}
 .result-card .result-label{font-size:.7rem;font-weight:500;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between}
 .result-card .result-value{font-family:'JetBrains Mono',monospace;font-size:.75rem;color:var(--text);word-break:break-all;line-height:1.6;user-select:all}
 .result-card .result-value.address{color:var(--xmr);font-size:.8rem;font-weight:500}
-.copy-btn{background:none;border:1px solid var(--border);border-radius:6px;padding:3px 10px;font-size:.65rem;color:var(--text-dim);cursor:pointer;font-family:'Outfit',sans-serif;transition:all .2s}
+.copy-btn{background:none;border:1px solid var(--border);border-radius:6px;padding:3px 10px;font-size:.65rem;color:var(--text-dim);cursor:pointer;font-family:var(--font-display);transition:all .2s}
 .copy-btn:hover{color:var(--text);border-color:rgba(255,255,255,.15)}
 .copy-btn.copied{color:var(--success);border-color:rgba(34,197,94,.3)}
 
 .result-match{display:flex;align-items:center;gap:8px;padding:12px 16px;border-radius:var(--radius-sm);margin-bottom:12px;font-size:.8rem;font-weight:500}
 .result-match.success{background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.15);color:#4ade80}
-.result-match.info{background:var(--xmr-dim);border:1px solid rgba(255,102,0,0.12);color:var(--xmr)}
+.result-match.info{background:var(--xmr-dim);border:1px solid rgba(255,175,0,0.12);color:var(--xmr)}
 
 .error-msg{background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.15);color:#f87171;padding:12px 16px;border-radius:var(--radius-sm);font-size:.8rem;margin-top:12px;display:none}
 .error-msg.show{display:block}
 
-.security-notice{display:flex;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:16px}
+.security-notice{display:flex;gap:10px;background:rgba(7,19,39,0.58);border:1px solid var(--border);border-radius:var(--radius-sm);padding:13px 15px;margin-bottom:16px}
 .security-notice svg{flex-shrink:0;width:16px;height:16px;color:var(--success);margin-top:1px}
 .security-notice p{font-size:.72rem;line-height:1.5;color:var(--text-dim)}
 .security-notice strong{color:var(--text-mid)}
 
-footer{padding:20px 0;text-align:center;border-top:1px solid var(--border);position:relative;z-index:2}
+footer{padding:22px 0;text-align:center;border-top:1px solid rgba(255,255,255,0.22);position:relative;z-index:2}
 footer p{font-size:.7rem;color:var(--text-dim)}
 
-@keyframes drift{0%{transform:translate(0,0) scale(1)}100%{transform:translate(30px,-20px) scale(1.1)}}
 @keyframes fadeDown{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
 @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
 @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-@media(min-width:520px){.container{max-width:520px}.card-header h1{font-size:1.7rem}}
+@media(min-width:820px){.container{max-width:820px}}
+@media(min-width:1040px){.container{max-width:1040px}.result-card .result-value.address{white-space:nowrap;overflow-x:auto}}
 @media(max-width:520px){
   .container{padding:0 16px}
-  .card{padding:18px}
+  nav{min-height:auto;align-items:flex-start;gap:14px;flex-direction:column}
+  .logo-img{width:154px;height:auto}
+  .nav-links{width:100%;gap:10px;flex-wrap:wrap;font-size:.7rem}
+  .main-area{padding:34px 0 54px}
   .card-header{margin-bottom:18px}
+  .card-header h1{font-size:1.7rem}
+  .card-header p{font-size:.88rem}
+  .input-group label{align-items:flex-start;flex-direction:column;gap:3px}
+  .input-group label .hint{text-align:left}
   .input-group textarea{min-height:90px;font-size:.74rem}
   .input-group input,.input-group select{font-size:.74rem;padding:10px 12px}
   .tabs{flex-wrap:wrap;gap:4px}
@@ -140,16 +147,15 @@ footer p{font-size:.7rem;color:var(--text-dim)}
 </head>
 <body>
 
-<div class="ambient"><div class="orb orb-1"></div><div class="orb orb-2"></div></div>
+<div class="ambient"></div>
 
 <div class="page">
   <div class="container">
     <nav>
-      <a href="/" class="logo" style="text-decoration:none;color:inherit;cursor:pointer" title="Back to home">
-        <svg class="logo-icon" viewBox="0 0 256 256"><circle cx="128" cy="128" r="128" fill="#ff6600"/><path d="M63.5 178.2V105.7l64.5 64.5 64.5-64.5v72.5h29.8v-99.9c0-6.7-5.4-12.1-12.1-12.1-3.2 0-6.3 1.3-8.6 3.5L128 143.3 54.4 69.7c-2.3-2.3-5.3-3.5-8.6-3.5-6.7 0-12.1 5.4-12.1 12.1v99.9h29.8z" fill="#fff"/></svg>
-        <div class="logo-text">monero<span>web</span></div>
+      <a href="/verify" class="logo" style="text-decoration:none;color:inherit;cursor:pointer" title="Open wallet">
+        <img class="logo-img" src="/assets/classic/logo.png" alt="Qwertycoin">
       </a>
-      <div class="nav-links"><a href="/">Home</a><a href="/self-host">Self-Host</a><a href="#" class="swap-popup-trigger">Swap crypto</a><a href="https://github.com/Medtabka/monero-web" target="_blank" rel="noopener">GitHub</a></div>
+      <div class="nav-links"><a href="/verify">Wallet</a><a href="https://qwertycoin.org/">Mainnet</a><a href="/self-host">Self-Host</a><a href="#" class="swap-popup-trigger">Swap crypto</a><a href="https://github.com/qwertycoin-org/wallet.qwertycoin.org" target="_blank" rel="noopener">GitHub</a></div>
     </nav>
   </div>
 
@@ -157,21 +163,21 @@ footer p{font-size:.7rem;color:var(--text-dim)}
     <div class="container">
       <div class="card">
         <div class="card-header">
-          <h1>Access your Monero wallet</h1>
-          <p>Create a new wallet, restore from seed phrase, or import a private key. Everything runs locally in your browser.</p>
+          <h1>Access your Qwertycoin wallet</h1>
+          <p>Create a new 25-word QWC wallet, restore an existing seed phrase, or import private keys. Everything runs locally in your browser.</p>
         </div>
 
         <!-- Advanced settings — collapsed by default. Privacy-conscious
-             users can point the wallet at their own Monero node / LWS
+             users can point the wallet at their own QWC node / LWS
              BEFORE deriving keys, so the view key never touches our
              default proxy. -->
         <details style="margin-bottom:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px">
           <summary style="cursor:pointer;font-size:.76rem;color:var(--text-mid);list-style:none;display:flex;align-items:center;gap:8px;user-select:none">
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 008 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H2a2 2 0 010-4h.09A1.65 1.65 0 004.6 8a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V2a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H22a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
-            <span>Advanced · use your own Monero node</span>
+            <span>Advanced · use your own QWC node</span>
           </summary>
           <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
-            <p style="font-size:.68rem;color:var(--text-dim);line-height:1.5;margin-bottom:8px">Point the wallet at a Monero node you control. The view key is sent to this node for balance scanning — leave it at the default (monero-web proxy) unless you're running your own <code>monerod</code>.</p>
+            <p style="font-size:.68rem;color:var(--text-dim);line-height:1.5;margin-bottom:8px">Point the wallet at a QWC node you control. The view key is sent to this node for balance scanning — leave it at the default Qwertycoin proxy unless you're running your own QWC daemon.</p>
             <input id="adv-node-url" type="text" placeholder="https://my-node.example:18089" autocomplete="off" spellcheck="false" style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.72rem;outline:none;margin-bottom:6px">
             <div style="display:flex;gap:6px">
               <button id="adv-node-save" type="button" class="btn-secondary" style="flex:1;padding:8px;font-size:.72rem;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer">Save</button>
@@ -191,7 +197,7 @@ footer p{font-size:.7rem;color:var(--text-dim)}
         <!-- SEED TAB -->
         <div class="form-section active" id="tab-seed">
           <div class="input-group">
-            <label>Mnemonic Seed <span class="hint">12 · 13 · 16 · 25 words · any of 13 languages, auto-detected</span></label>
+            <label>Mnemonic Seed <span class="hint">QWC standard: 25 words · legacy imports: 12, 13 or 16 words</span></label>
             <textarea id="seed-input" placeholder="Enter your seed phrase separated by spaces..." spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
             <div class="seed-status-row">
               <div class="word-count" id="word-counter"><span class="count" id="wc-num">0</span> words</div>
@@ -207,13 +213,13 @@ footer p{font-size:.7rem;color:var(--text-dim)}
           <div class="input-group" id="restore-height-group">
             <label>When was this wallet created? <span class="hint">Speeds up scanning · auto-detected for Polyseed</span></label>
             <div id="wallet-age-buttons" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
-              <button type="button" class="wallet-age-btn" data-age="week"  style="flex:1 1 auto;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Outfit',sans-serif;font-size:.75rem;font-weight:500;cursor:pointer;transition:all .2s;min-width:80px;text-align:center">This week</button>
-              <button type="button" class="wallet-age-btn" data-age="month" style="flex:1 1 auto;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Outfit',sans-serif;font-size:.75rem;font-weight:500;cursor:pointer;transition:all .2s;min-width:80px;text-align:center">This month</button>
-              <button type="button" class="wallet-age-btn" data-age="3months" style="flex:1 1 auto;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Outfit',sans-serif;font-size:.75rem;font-weight:500;cursor:pointer;transition:all .2s;min-width:80px;text-align:center">~3 months</button>
-              <button type="button" class="wallet-age-btn" data-age="6months" style="flex:1 1 auto;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Outfit',sans-serif;font-size:.75rem;font-weight:500;cursor:pointer;transition:all .2s;min-width:80px;text-align:center">~6 months</button>
-              <button type="button" class="wallet-age-btn" data-age="year"  style="flex:1 1 auto;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Outfit',sans-serif;font-size:.75rem;font-weight:500;cursor:pointer;transition:all .2s;min-width:80px;text-align:center">~1 year</button>
-              <button type="button" class="wallet-age-btn" data-age="2years" style="flex:1 1 auto;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Outfit',sans-serif;font-size:.75rem;font-weight:500;cursor:pointer;transition:all .2s;min-width:80px;text-align:center">~2 years</button>
-              <button type="button" class="wallet-age-btn" data-age="unknown" style="flex:1 1 auto;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Outfit',sans-serif;font-size:.75rem;font-weight:500;cursor:pointer;transition:all .2s;min-width:80px;text-align:center">I don't know</button>
+              <button type="button" class="wallet-age-btn" data-age="week"  style="flex:1 1 auto;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font-display);font-size:.75rem;font-weight:500;cursor:pointer;transition:all .2s;min-width:80px;text-align:center">This week</button>
+              <button type="button" class="wallet-age-btn" data-age="month" style="flex:1 1 auto;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font-display);font-size:.75rem;font-weight:500;cursor:pointer;transition:all .2s;min-width:80px;text-align:center">This month</button>
+              <button type="button" class="wallet-age-btn" data-age="3months" style="flex:1 1 auto;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font-display);font-size:.75rem;font-weight:500;cursor:pointer;transition:all .2s;min-width:80px;text-align:center">~3 months</button>
+              <button type="button" class="wallet-age-btn" data-age="6months" style="flex:1 1 auto;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font-display);font-size:.75rem;font-weight:500;cursor:pointer;transition:all .2s;min-width:80px;text-align:center">~6 months</button>
+              <button type="button" class="wallet-age-btn" data-age="year"  style="flex:1 1 auto;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font-display);font-size:.75rem;font-weight:500;cursor:pointer;transition:all .2s;min-width:80px;text-align:center">~1 year</button>
+              <button type="button" class="wallet-age-btn" data-age="2years" style="flex:1 1 auto;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font-display);font-size:.75rem;font-weight:500;cursor:pointer;transition:all .2s;min-width:80px;text-align:center">~2 years</button>
+              <button type="button" class="wallet-age-btn" data-age="unknown" style="flex:1 1 auto;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font-display);font-size:.75rem;font-weight:500;cursor:pointer;transition:all .2s;min-width:80px;text-align:center">I don't know</button>
             </div>
             <div id="restore-height-selected" style="display:none;font-size:.72rem;color:var(--success);margin-bottom:6px"></div>
             <details style="margin-top:4px">
@@ -277,7 +283,7 @@ footer p{font-size:.7rem;color:var(--text-dim)}
         <div class="form-section" id="tab-create">
           <div class="input-group">
             <label>Seed Language</label>
-            <select id="create-lang" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;font-family:'Outfit',sans-serif;font-size:.82rem;color:var(--text);outline:none;cursor:pointer;appearance:none;-webkit-appearance:none;background-image:url('data:image/svg+xml,<svg width=&quot;10&quot; height=&quot;6&quot; viewBox=&quot;0 0 10 6&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;><path d=&quot;M1 1l4 4 4-4&quot; stroke=&quot;%236e6c6a&quot; stroke-width=&quot;1.5&quot; fill=&quot;none&quot;/></svg>');background-repeat:no-repeat;background-position:right 14px center">
+            <select id="create-lang" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;font-family:var(--font-display);font-size:.82rem;color:var(--text);outline:none;cursor:pointer;appearance:none;-webkit-appearance:none;background-image:url('data:image/svg+xml,<svg width=&quot;10&quot; height=&quot;6&quot; viewBox=&quot;0 0 10 6&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;><path d=&quot;M1 1l4 4 4-4&quot; stroke=&quot;%236e6c6a&quot; stroke-width=&quot;1.5&quot; fill=&quot;none&quot;/></svg>');background-repeat:no-repeat;background-position:right 14px center">
               <option value="english">English</option>
               <option value="chinese_simplified">简体中文 (Chinese simplified)</option>
               <option value="dutch">Nederlands (Dutch)</option>
@@ -292,9 +298,9 @@ footer p{font-size:.7rem;color:var(--text-dim)}
               <option value="spanish">Español (Spanish)</option>
             </select>
           </div>
-          <div class="security-notice" style="border-color:rgba(255,102,0,0.15)">
+          <div class="security-notice" style="border-color:rgba(255,175,0,0.15)">
             <svg fill="none" stroke="var(--xmr)" stroke-width="2" viewBox="0 0 24 24" style="width:20px;height:20px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            <p><strong>This creates a brand new Monero wallet.</strong> A 25-word seed phrase will be generated using your browser's cryptographic random number generator. Write it down and store it safely — it's the only way to recover your wallet.</p>
+            <p><strong>This creates a brand new Qwertycoin wallet.</strong> A 25-word seed phrase will be generated using your browser's cryptographic random number generator. Write it down and store it safely — it's the only way to recover your wallet.</p>
           </div>
 
           <button class="btn-primary" id="btn-create" style="background:#22c55e;box-shadow:0 4px 24px rgba(34,197,94,0.2)">
@@ -304,12 +310,12 @@ footer p{font-size:.7rem;color:var(--text-dim)}
 
           <div id="create-result" style="display:none;margin-top:20px">
             <div class="result-match info">◆ New wallet created — write down your seed phrase!</div>
-            <div class="result-card" style="border-color:rgba(255,102,0,0.2);background:rgba(255,102,0,0.04)">
+            <div class="result-card" style="border-color:rgba(255,175,0,0.2);background:rgba(255,175,0,0.04)">
               <div class="result-label" style="color:var(--xmr)">Your Seed Phrase — WRITE THIS DOWN <button class="copy-btn" data-target="create-mnemonic">Copy</button></div>
               <div class="result-value" id="create-mnemonic" style="font-size:.82rem;line-height:2;color:var(--text)"></div>
             </div>
             <div class="result-card">
-              <div class="result-label">Monero Address <button class="copy-btn" data-target="create-address">Copy</button></div>
+              <div class="result-label">Qwertycoin Address <button class="copy-btn" data-target="create-address">Copy</button></div>
               <div class="result-value address" id="create-address"></div>
             </div>
             <div class="result-card">
@@ -330,13 +336,13 @@ footer p{font-size:.7rem;color:var(--text-dim)}
         <div class="results" id="results">
           <div class="result-match info" id="result-format"></div>
 
-          <div class="result-card" id="res-mnemonic-card" style="display:none;border-color:rgba(255,102,0,0.2);background:rgba(255,102,0,0.04)">
+          <div class="result-card" id="res-mnemonic-card" style="display:none;border-color:rgba(255,175,0,0.2);background:rgba(255,175,0,0.04)">
             <div class="result-label" style="color:var(--xmr)">Recovered 25-word Mnemonic <button class="copy-btn" data-target="res-mnemonic">Copy</button></div>
             <div class="result-value" id="res-mnemonic" style="font-size:.78rem;line-height:1.9;color:var(--text);word-spacing:.15em"></div>
-            <div style="font-size:.7rem;color:var(--text-dim);margin-top:8px;line-height:1.5">The standard Monero 25-word phrase is a reversible encoding of your spend key — write this down for backup.</div>
+            <div style="font-size:.7rem;color:var(--text-dim);margin-top:8px;line-height:1.5">The standard 25-word QWC phrase is a reversible encoding of your spend key — write this down for backup.</div>
           </div>
           <div class="result-card">
-            <div class="result-label">Monero Address <button class="copy-btn" data-target="res-address">Copy</button></div>
+            <div class="result-label">Qwertycoin Address <button class="copy-btn" data-target="res-address">Copy</button></div>
             <div class="result-value address" id="res-address"></div>
           </div>
           <div class="result-card">
@@ -363,7 +369,7 @@ footer p{font-size:.7rem;color:var(--text-dim)}
 
   <footer>
     <div class="container">
-      <p>monero-web.com — Open source · MIT License · Your keys never leave your browser · <a href="/privacy" style="color:inherit;text-decoration:underline">Privacy</a> · <a href="https://github.com/Medtabka/monero-web" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">GitHub</a></p>
+      <p>wallet.qwertycoin.org — Open source · MIT License · Your keys never leave your browser · <a href="/privacy" style="color:inherit;text-decoration:underline">Privacy</a> · <a href="https://github.com/qwertycoin-org/wallet.qwertycoin.org" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">GitHub</a></p>
     </div>
   </footer>
 </div>

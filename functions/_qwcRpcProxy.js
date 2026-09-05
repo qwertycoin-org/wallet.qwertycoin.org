@@ -1,11 +1,7 @@
+// Copyright (c) 2026 The Qwertycoin Project
 // SPDX-License-Identifier: MIT
-// functions/api/proxy.js - Cloudflare Pages Function for restricted QWC RPC.
-//
-// This endpoint keeps the browser on same-origin RPC while only forwarding the
-// read/sync/send paths a non-custodial wallet needs. It must never expose admin
-// daemon methods such as mining, peer bans, stop_daemon, or unrestricted RPC.
 
-const QWC_NODES = [
+const DEFAULT_NODES = [
   "https://explorer.qwertycoin.org/qwc-rpc"
 ];
 
@@ -24,14 +20,13 @@ const JSON_RPC_METHODS = new Set([
   "get_transactions"
 ]);
 
-const RPC_PATHS = new Set([
+const ROOT_RPC_PATHS = new Set([
   "/json_rpc",
   "/getblocks.bin",
   "/getblocks_by_height.bin",
   "/gethashes.bin",
   "/get_o_indexes.bin",
   "/get_output_distribution.bin",
-  "/get_outs",
   "/get_outs.bin",
   "/get_transactions",
   "/gettransactions",
@@ -60,13 +55,11 @@ const BASE_CORS_HEADERS = {
 
 function getAllowedOrigin(request) {
   const origin = request.headers.get("origin") || "";
-  if (ALLOWED_ORIGINS.has(origin) || /^https:\/\/(?:[a-z0-9-]+\.)+pages\.dev$/i.test(origin)) {
-    return origin;
-  }
+  if (ALLOWED_ORIGINS.has(origin) || /^https:\/\/(?:[a-z0-9-]+\.)+pages\.dev$/i.test(origin)) return origin;
   return "https://wallet.qwertycoin.org";
 }
 
-function corsHeaders(request, contentType = "application/json") {
+export function corsHeaders(request, contentType = "application/json") {
   return {
     ...BASE_CORS_HEADERS,
     "Access-Control-Allow-Origin": getAllowedOrigin(request),
@@ -74,11 +67,11 @@ function corsHeaders(request, contentType = "application/json") {
   };
 }
 
-function json(request, status, body) {
+export function json(request, status, body) {
   return new Response(JSON.stringify(body), { status, headers: corsHeaders(request) });
 }
 
-async function readRequestBody(request, maxBytes) {
+async function readBodyWithLimit(request, maxBytes) {
   const contentLength = Number(request.headers.get("content-length") || "0");
   if (contentLength > maxBytes) throw new Error("Request too large");
 
@@ -87,7 +80,12 @@ async function readRequestBody(request, maxBytes) {
   return body;
 }
 
-async function readResponseBody(response) {
+function normalizeContentType(contentType) {
+  if (contentType && contentType.includes("application/octet-stream")) return "application/octet-stream";
+  return "application/json";
+}
+
+async function readResponseWithLimit(response) {
   const contentLength = Number(response.headers.get("content-length") || "0");
   if (contentLength > MAX_RESPONSE_BYTES) throw new Error("Response too large");
 
@@ -96,31 +94,27 @@ async function readResponseBody(response) {
   return body;
 }
 
-function responseContentType(path, upstreamContentType, requestContentType) {
-  if (path.endsWith(".bin")) return "application/octet-stream";
-  if (upstreamContentType && upstreamContentType.includes("application/octet-stream")) return "application/octet-stream";
-  return requestContentType || "application/json";
+export function isAllowedRootRpcPath(path) {
+  return ROOT_RPC_PATHS.has(path);
 }
 
-export async function onRequestOptions(context) {
-  return new Response(null, { status: 204, headers: corsHeaders(context.request) });
-}
-
-export async function onRequestPost(context) {
+export async function proxyQwcRpc(context, path) {
   const { request } = context;
-  const url = new URL(request.url);
-  const path = url.searchParams.get("path") || "/json_rpc";
-
-  if (!RPC_PATHS.has(path)) {
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: corsHeaders(request) });
+  }
+  if (request.method !== "POST") {
+    return json(request, 405, { error: "Method not allowed" });
+  }
+  if (!ROOT_RPC_PATHS.has(path)) {
     return json(request, 403, { error: "Path not allowed" });
   }
 
   const isJson = path === "/json_rpc" || !path.endsWith(".bin");
-  let body;
-  try {
-    body = await readRequestBody(request, isJson ? MAX_JSON_REQUEST_BYTES : MAX_BINARY_REQUEST_BYTES);
-  } catch (error) {
-    return json(request, 400, { error: error.message === "Request too large" ? error.message : "Invalid request body" });
+  const body = await readBodyWithLimit(request, isJson ? MAX_JSON_REQUEST_BYTES : MAX_BINARY_REQUEST_BYTES)
+    .catch(error => ({ error }));
+  if (body && body.error) {
+    return json(request, 400, { error: body.error.message === "Request too large" ? body.error.message : "Invalid request body" });
   }
 
   if (path === "/json_rpc") {
@@ -130,7 +124,6 @@ export async function onRequestPost(context) {
     } catch (error) {
       return json(request, 400, { error: "Invalid JSON" });
     }
-
     if (!payload || typeof payload.method !== "string" || !JSON_RPC_METHODS.has(payload.method)) {
       return json(request, 403, { error: "JSON-RPC method not allowed" });
     }
@@ -140,8 +133,7 @@ export async function onRequestPost(context) {
     ? request.headers.get("content-type") || "application/json"
     : "application/octet-stream";
 
-  let lastError = "No upstream nodes configured";
-  for (const node of QWC_NODES) {
+  for (const node of DEFAULT_NODES) {
     try {
       const upstream = await fetch(node + path, {
         method: "POST",
@@ -150,24 +142,15 @@ export async function onRequestPost(context) {
         signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)
       });
 
-      if (!upstream.ok) {
-        lastError = `${node} -> HTTP ${upstream.status}`;
-        continue;
-      }
+      if (!upstream.ok) continue;
 
-      const responseBody = await readResponseBody(upstream);
-      const contentType = responseContentType(path, upstream.headers.get("content-type"), requestContentType);
+      const responseBody = await readResponseWithLimit(upstream);
+      const contentType = normalizeContentType(upstream.headers.get("content-type") || requestContentType);
       return new Response(responseBody, { status: 200, headers: corsHeaders(request, contentType) });
     } catch (error) {
-      lastError = `${node} -> ${error.message}`;
+      // Never log wallet request or response bodies.
     }
   }
 
-  return json(request, 502, { error: "All upstream QWC nodes unreachable", details: lastError });
-}
-
-export async function onRequest(context) {
-  if (context.request.method === "OPTIONS") return onRequestOptions(context);
-  if (context.request.method === "POST") return onRequestPost(context);
-  return json(context.request, 405, { error: "Method not allowed" });
+  return json(request, 502, { error: "All upstream QWC nodes unreachable" });
 }

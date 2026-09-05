@@ -30,6 +30,8 @@ INCLUDED_PATTERNS=(
   "js/mymonero-core/*.wasm"
   "js/mymonero-core/LICENSE.txt"
   "js/mymonero-core/README.md"
+  "vendor/qwertycoin-ts/*.js"
+  "vendor/qwertycoin-ts/*.txt"
   "assets/*.svg"
   "assets/*.png"
   "donation-qr.svg"

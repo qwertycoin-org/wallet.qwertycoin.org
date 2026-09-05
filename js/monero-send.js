@@ -19,7 +19,7 @@
 const MoneroSend = (function () {
   'use strict';
 
-  const ATOMIC_PER_XMR = 1000000000000n;
+  const ATOMIC_PER_XMR = 100000000n;
   const DEFAULT_MIXIN = 15;
 
   // ── Address validation (no WASM needed) ───────────────────────────
@@ -29,7 +29,7 @@ const MoneroSend = (function () {
       return { valid: false, reason: 'empty' };
     }
     addr = addr.trim();
-    if (!/^[1-9A-HJ-NP-Za-km-z]{95,106}$/.test(addr)) {
+    if (!/^[1-9A-HJ-NP-Za-km-z]{95,120}$/.test(addr)) {
       return { valid: false, reason: 'wrong length or character set' };
     }
     var subaddress = false, integrated = false;
@@ -46,10 +46,10 @@ const MoneroSend = (function () {
   function xmrToAtomic (xmrStr) {
     var s = String(xmrStr).trim().replace(',', '.'); // accept comma as decimal separator
     if (!s) return '0';
-    if (!/^[0-9]+(\.[0-9]+)?$/.test(s)) throw new Error('Invalid XMR amount');
+    if (!/^[0-9]+(\.[0-9]+)?$/.test(s)) throw new Error('Invalid QWC amount');
     var parts = s.split('.');
     var whole = parts[0] || '0';
-    var frac = (parts[1] || '').padEnd(12, '0').substring(0, 12);
+    var frac = (parts[1] || '').padEnd(8, '0').substring(0, 8);
     return (BigInt(whole) * ATOMIC_PER_XMR + BigInt(frac)).toString();
   }
 
@@ -58,7 +58,7 @@ const MoneroSend = (function () {
     var whole = n / ATOMIC_PER_XMR;
     var frac = n % ATOMIC_PER_XMR;
     if (frac === 0n) return whole.toString();
-    var fracStr = frac.toString().padStart(12, '0').replace(/0+$/, '');
+    var fracStr = frac.toString().padStart(8, '0').replace(/0+$/, '');
     return whole.toString() + '.' + fracStr;
   }
 
@@ -97,6 +97,10 @@ const MoneroSend = (function () {
   // ── Send transaction ──────────────────────────────────────────────
 
   async function send (walletKeys, toAddress, xmrAmount, priority, paymentId, preview) {
+    if (paymentId && !/^(?:[0-9a-fA-F]{16}|[0-9a-fA-F]{64})$/.test(String(paymentId).trim())) {
+      throw new Error('Payment ID must be 16 or 64 hex characters');
+    }
+
     try {
       await MoneroCore.load();
     } catch (e) {
@@ -189,7 +193,7 @@ const MoneroSend = (function () {
     if (totalAvailable < amountAtomic + BigInt(estFee)) {
       throw new Error('Insufficient funds: need ' +
         atomicToXmr((amountAtomic + BigInt(estFee)).toString()) +
-        ' XMR but only have ' + atomicToXmr(totalAvailable.toString()) + ' XMR');
+        ' QWC but only have ' + atomicToXmr(totalAvailable.toString()) + ' QWC');
     }
 
     var feeAmount = BigInt(estFee);

@@ -5,7 +5,7 @@
  * Wraps the small set of HTTP endpoints monero-web's dashboard needs to
  * display balance, transaction history, and (eventually) construct send
  * transactions. The actual server lives on our Hetzner VPS at
- *   https://monero-proxy.rosawands4.workers.dev/lws/...
+ *   disabled for QWC v2; dashboard sync uses qwertycoin-ts + QWC RPC.
  * fronted by nginx + Cloudflare. The wire protocol is the legacy MyMonero
  * light-wallet protocol that monero-lws implements.
  *
@@ -39,10 +39,9 @@
 const LwsClient = (function () {
   'use strict';
 
-  // Default base URL — same origin pattern as the existing /api/proxy.
-  // The /lws/ prefix is mapped by nginx on the VPS to the local
-  // monero-lws-daemon listening on 127.0.0.1:8443.
-  let BASE_URL = 'https://monero-proxy.rosawands4.workers.dev/lws';
+  // QWC v2 does not use the legacy Monero LWS backend. Keep this client
+  // loadable for old helpers/tests, but never point it at the retired service.
+  let BASE_URL = '/lws-disabled';
 
   // Mock mode: if true, every call returns synthetic data instead of
   // hitting the network. Used for UI development before the real
@@ -79,7 +78,7 @@ const LwsClient = (function () {
   var _turnstileToken = '';
   var _turnstileReady = false;
   var _sessionToken = '';
-  var TURNSTILE_SITE_KEY = '0x4AAAAAADD59EiKpnk-yv1E';
+  var TURNSTILE_SITE_KEY = '0x4AAAAAAEkKWLZIa61TTy18';
 
   function initTurnstile () {
     if (MOCK || typeof turnstile === 'undefined') return;
@@ -433,8 +432,8 @@ const LwsClient = (function () {
   }
 
   /**
-   * Format atomic units (piconero) as a human XMR string with no trailing
-   * zeros. 1 XMR = 1e12 piconero. Accepts BigInt, string, or number.
+   * Format QWC atomic units with no trailing zeros.
+   * 1 QWC = 1e8 atomic units. Accepts BigInt, string, or number.
    */
   function formatXmr (atomic) {
     let n;
@@ -443,10 +442,10 @@ const LwsClient = (function () {
     else n = BigInt(Math.round(Number(atomic) || 0));
     const sign = n < 0n ? '-' : '';
     if (n < 0n) n = -n;
-    const whole = n / 1000000000000n;
-    const frac  = n % 1000000000000n;
+    const whole = n / 100000000n;
+    const frac  = n % 100000000n;
     if (frac === 0n) return sign + whole.toString();
-    let fracStr = frac.toString().padStart(12, '0');
+    let fracStr = frac.toString().padStart(8, '0');
     fracStr = fracStr.replace(/0+$/, '');
     return sign + whole.toString() + '.' + fracStr;
   }

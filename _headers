@@ -21,11 +21,9 @@
   # inline style="..." attributes (which would be a much larger refactor)
   # and the attack surface is significantly smaller — CSS injection cannot
   # exfiltrate keys the way JS injection can.
-  # connect-src includes the Cloudflare Worker proxy because the dashboard
-  # makes cross-origin fetch() calls to the light-wallet server (monero-lws)
-  # through it. Without this, CSP blocks the balance-polling and send-flow
-  # requests silently.
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://monero-proxy.rosawands4.workers.dev https://challenges.cloudflare.com https://api.coingecko.com; frame-src https://trocador.app https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
+  # connect-src stays same-origin for QWC RPC proxy calls; Turnstile is allowed
+  # only for the optional anti-abuse challenge.
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://explorer.qwertycoin.org https://challenges.cloudflare.com https://api.coingecko.com; frame-src https://trocador.app https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
 
   # Standard hardening
   X-Content-Type-Options: nosniff
@@ -54,6 +52,9 @@
 # both need their own block.
 
 /js/*
+  Cache-Control: public, max-age=0, must-revalidate
+
+/vendor/qwertycoin-ts/*
   Cache-Control: public, max-age=0, must-revalidate
 
 # Fonts are filename-hashed in fonts/fonts.css so a content change ALWAYS
