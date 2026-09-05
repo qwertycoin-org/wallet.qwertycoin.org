@@ -1,21 +1,14 @@
 {
-  "name": "myqwertycoin",
-  "version": "1.1.1",
-  "description": "Full client side web wallet for Qwertycoin",
-  "main": "index.js",
-  "dependencies": {
-    "typescript": "^2.9.2",
-    "workbox-build": "^3.3.0"
+  "name": "qwertycoin-web-wallet",
+  "version": "0.0.0-beta.0",
+  "private": true,
+  "description": "Qwertycoin v2 non-custodial web wallet PWA",
+  "license": "MIT",
+  "scripts": {
+    "build": "bash tools/build-manifest.sh --write",
+    "test": "node tests/test-new-paths.js"
   },
-  "devDependencies": {},
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/qwertycoin-org/myqwertycoin-com.github.io"
-  },
-  "author": "Gnock,Aiwe,Qwertycoin",
-  "license": "BSD-3",
-  "bugs": {
-    "url": "https://github.com/qwertycoin-org/myqwertycoin-com.github.io/issues"
-  },
-  "homepage": "https://github.com/qwertycoin-org/myqwertycoin-com.github.io#readme"
+  "engines": {
+    "node": ">=20"
+  }
 }

@@ -1,0 +1,78 @@
+# Security Policy
+
+## Reporting a vulnerability
+
+If you think you've found a security issue in monero-web, **please do not open
+a public GitHub issue**. Instead, report it privately so we can fix it before
+it's disclosed.
+
+**Preferred channel:** GitHub's private vulnerability reporting at
+<https://github.com/Medtabka/monero-web/security/advisories/new>
+
+This is the primary and recommended way to disclose anything sensitive. It
+gives us a private discussion thread, supports attachments, and ties cleanly
+into GitHub's security advisory + CVE workflow. You'll need a free GitHub
+account to file one.
+
+**Alternative:** if you'd rather not use GitHub, email
+[`security@monero-web.com`](mailto:security@monero-web.com). The address
+forwards to a private inbox and is read by the maintainer. If you have
+something especially sensitive and want PGP, ask for a key in your first
+message and we'll set one up.
+
+Please include:
+
+- A clear description of the issue
+- The exact files / functions / lines involved
+- Steps to reproduce (a minimal proof of concept is ideal)
+- The impact you believe it has
+- Any suggested fix, if you have one
+
+We aim to:
+
+- Acknowledge your report within **72 hours**
+- Triage and respond with an initial assessment within **7 days**
+- Ship a fix or mitigation for confirmed issues within **30 days** for
+  high-severity findings, sooner if actively exploited
+
+We do not currently run a paid bug-bounty program, but we will publicly credit
+anyone who reports a real issue (unless you'd prefer to stay anonymous).
+
+## Scope
+
+In scope:
+
+- The static site at `monero-web.com` and everything in this repository
+- The `js/` crypto engine: `keccak256.js`, `monero-ed25519.js`,
+  `monero-keys.js`, `monero-wordlist.js`, `bip39.js`, `polyseed.js`,
+  `monero-subaddress.js`, `wallet-vault.js`
+- The Cloudflare Pages Function at `functions/api/proxy.js`
+- The self-hosted monero-lws light-wallet server and its API contract
+- CSP, SRI, and any other deployment-side hardening
+
+Out of scope (please don't report these as vulnerabilities):
+
+- The browser itself, or browser-extension-based attacks (the threat model
+  in [README.md](./README.md) explicitly does not cover these)
+- Compromised operating systems / keystroke loggers
+- DNS hijacking outside our control
+- Public Monero remote nodes — they are third-party infrastructure
+- Anything that requires the user to paste their seed into an obvious phishing
+  clone of the site
+
+## Things we are particularly interested in
+
+- Any way for derived keys to leak out of the browser tab
+- Any way for an attacker to substitute a different address into the receive
+  flow without the user noticing
+- Cryptographic bugs in the key derivation, polyseed decoder, BIP-39
+  PBKDF2/SLIP-0010 path, subaddress derivation, or AES-GCM vault
+- CSP bypasses, prototype-pollution sinks, clipboard-hijacking sinks
+- Any deviation from the on-paper threat model
+
+## Disclosure
+
+Once a fix is shipped we'll publish a short advisory on the GitHub repo and
+update the changelog with the CVE (if assigned) and credit.
+
+Thank you for keeping monero-web safe.
