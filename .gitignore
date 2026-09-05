@@ -1,5 +1,8 @@
 # OS / editor / tooling cruft
 .DS_Store
+.AppleDouble
+.LSOverride
+._*
 Thumbs.db
 .vscode/
 .idea/
