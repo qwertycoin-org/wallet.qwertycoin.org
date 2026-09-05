@@ -1,0 +1,1242 @@
+// SPDX-License-Identifier: MIT
+// dashboard-page.js — moved inline so the CSP can drop 'unsafe-inline' for scripts
+document.addEventListener('DOMContentLoaded', async () => {
+
+  // ─── Wallet load (vault-aware) ───
+  // The verify page hands us the keys via WalletVault, which may be plaintext
+  // or AES-GCM encrypted with a session password. The unlock overlay handles
+  // both initial unlock and re-unlock after idle auto-lock.
+  let walletKeys = null;
+  const IDLE_TIMEOUT_MS = 3 * 60 * 60 * 1000; // 3 hours
+  let idleTimer = null;
+  let scanningActive = false; // true while LWS is still scanning the chain
+  let xmrUsdPrice = 0;       // cached XMR/USD rate
+
+  const overlay     = document.getElementById('unlock-overlay');
+  const overlayMsg  = document.getElementById('unlock-msg');
+  const overlayPw   = document.getElementById('unlock-pw');
+  const overlayErr  = document.getElementById('unlock-error');
+  const overlayBtn  = document.getElementById('unlock-btn');
+  const overlayForget = document.getElementById('unlock-forget');
+
+  function showUnlock(message) {
+    overlayMsg.textContent = message;
+    overlayErr.style.display = 'none';
+    overlayPw.value = '';
+    overlay.style.display = 'flex';
+    setTimeout(() => overlayPw.focus(), 50);
+  }
+  function hideUnlock() {
+    overlay.style.display = 'none';
+    overlayPw.value = '';
+  }
+
+  overlayForget.addEventListener('click', () => {
+    WalletVault.clear();
+    walletKeys = null;
+    window.location.href = '/verify';
+  });
+
+  overlayBtn.addEventListener('click', tryUnlock);
+  overlayPw.addEventListener('keydown', e => { if (e.key === 'Enter') tryUnlock(); });
+
+  async function tryUnlock() {
+    overlayErr.style.display = 'none';
+    overlayBtn.disabled = true;
+    overlayBtn.textContent = 'Unlocking…';
+    try {
+      walletKeys = await WalletVault.unlock(overlayPw.value);
+      hideUnlock();
+      initDashboard();
+    } catch (e) {
+      overlayErr.textContent = e.message || 'Unlock failed';
+      overlayErr.style.display = 'block';
+    } finally {
+      overlayBtn.disabled = false;
+      overlayBtn.textContent = 'Unlock';
+    }
+  }
+
+  // No vault at all → bounce to verify
+  if (!WalletVault.hasBlob()) {
+    document.getElementById('loading-state').innerHTML = `
+      <div style="text-align:center">
+        <svg width="48" height="48" fill="none" stroke="var(--text-dim)" stroke-width="1.5" viewBox="0 0 24 24" style="margin-bottom:12px;opacity:.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <p style="color:var(--text);font-size:.95rem;font-weight:500;margin-bottom:6px">No wallet connected</p>
+        <p style="color:var(--text-dim);font-size:.8rem;margin-bottom:20px">Enter your seed phrase or private key to access your wallet</p>
+        <a href="/verify" style="display:inline-block;padding:12px 28px;background:var(--xmr);color:#fff;text-decoration:none;border-radius:10px;font-weight:600;font-size:.85rem;box-shadow:0 4px 24px rgba(255,102,0,0.2)">Open Wallet →</a>
+      </div>
+    `;
+    return;
+  }
+
+  // Encrypted → prompt; plaintext → load directly
+  if (WalletVault.isLocked()) {
+    document.getElementById('loading-state').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'none';
+    showUnlock('Enter your session password to unlock this wallet.');
+    return; // initDashboard() will run after successful unlock
+  } else {
+    walletKeys = WalletVault.readPlain();
+    initDashboard();
+    return;
+  }
+
+  // ─── Auto-lock plumbing ─────────────────────────────────────────────
+  function resetIdleTimer() {
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(autoLock, IDLE_TIMEOUT_MS);
+  }
+  // Keep the session alive while the LWS is scanning the blockchain.
+  // Without this, the 10-minute idle timeout kicks the user out during
+  // multi-hour genesis scans even though the wallet is actively working.
+  function resetIdleIfScanning() {
+    if (scanningActive) resetIdleTimer();
+  }
+  function autoLock() {
+    // Drop the in-memory keys and reload the page. For an encrypted vault
+    // the ciphertext persists in sessionStorage across the reload, so the
+    // user can re-enter their password without re-deriving from a seed.
+    // For a plaintext vault we wipe and bounce to verify.
+    walletKeys = null;
+    if (WalletVault.isLocked()) {
+      window.location.reload();
+    } else {
+      WalletVault.clear();
+      window.location.href = '/verify';
+    }
+  }
+  function installIdleListeners() {
+    ['mousemove','keydown','click','touchstart','scroll'].forEach(ev => {
+      document.addEventListener(ev, resetIdleTimer, { passive: true });
+    });
+    resetIdleTimer();
+  }
+
+  // ─── Dashboard initialiser ──────────────────────────────────────────
+  function initDashboard() {
+    document.getElementById('loading-state').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    // Kick off the Turnstile→session handshake immediately so it runs in
+    // parallel with WASM/asset load instead of blocking the first balance
+    // request. Fire-and-forget; the lazy path still covers any failure.
+    if (typeof LwsClient !== 'undefined' && LwsClient.prewarm) {
+      LwsClient.prewarm();
+    }
+    // Preload WASM in background so it's ready for key_image verification
+    // and send. Don't await — let it load while the dashboard connects.
+    if (typeof MoneroCore !== 'undefined') {
+      MoneroCore.load().catch(function () {}); // fire-and-forget
+    }
+    populateWallet();
+    installIdleListeners();
+  }
+
+  async function populateWallet() {
+
+  const isWatchOnly = !!walletKeys.watchOnly;
+
+  // ─── Populate wallet info ───
+  document.getElementById('wallet-address').insertAdjacentText('afterbegin', walletKeys.address);
+  document.getElementById('receive-addr').textContent = walletKeys.address;
+  document.getElementById('key-spend').textContent = walletKeys.privateSpendKeyHex || '— not available (watch-only) —';
+  document.getElementById('key-view').textContent = walletKeys.privateViewKeyHex;
+  document.getElementById('key-pub-spend').textContent = walletKeys.publicSpendKeyHex || '— not available (watch-only) —';
+  document.getElementById('key-pub-view').textContent = walletKeys.publicViewKeyHex;
+
+  // ─── Seed phrase recovery ───
+  // For 25-word standard seeds, the mnemonic is a reversible encoding of
+  // the spend key. Reconstruct it so users can see/backup their seed.
+  // For BIP-39, polyseed, and MyMonero seeds this isn't possible (one-way KDFs).
+  (function showMnemonic () {
+    if (isWatchOnly || !walletKeys.privateSpendKeyHex) return;
+    // Only show for 25-word standard seeds. BIP-39, polyseed, and MyMonero
+    // seeds use one-way KDFs — reconstructing a mnemonic from the spend key
+    // would produce a DIFFERENT (wrong) 25-word seed.
+    var fmt = walletKeys.seedFormat;
+    if (fmt && fmt !== 'standard') return;
+    var mnemonic = walletKeys.mnemonic || null;
+    if (!mnemonic && typeof MoneroWordList !== 'undefined' && MoneroWordList.isLoaded('english')) {
+      try {
+        var spendBytes = MoneroKeys.hexToBytes(walletKeys.privateSpendKeyHex);
+        var reduced = MoneroEd25519.sc_reduce32(spendBytes);
+        var dataWords = MoneroWordList.encodeBytes('english', reduced);
+        var fullWords = MoneroWordList.appendChecksum('english', dataWords);
+        mnemonic = fullWords.join(' ');
+      } catch (e) { /* wordlist missing or encode failed */ }
+    }
+    if (mnemonic) {
+      document.getElementById('key-mnemonic').textContent = mnemonic;
+      document.getElementById('mnemonic-section').style.display = '';
+      document.getElementById('toggle-mnemonic').addEventListener('click', function () {
+        var el = document.getElementById('key-mnemonic');
+        var isHidden = el.classList.contains('hidden');
+        el.classList.toggle('hidden');
+        this.textContent = isHidden ? 'Hide' : 'Show';
+      });
+    }
+  })();
+
+  // ─── Wallet info badge (seed format + polyseed birthday) ───
+  // Polyseed encodes a wallet creation timestamp ("birthday") in 10 bits as
+  // ~1-month buckets (1/12 of a Gregorian year) since 2021-11-01 12:00 UTC.
+  // This same birthday also drives the restore-from height below.
+  (function showWalletInfo () {
+    const parts = [];
+    if (walletKeys.seedFormat === 'polyseed' && typeof walletKeys.birthday === 'number') {
+      // Decode the birthday to a UNIX timestamp, per polyseed's birthday.h:
+      //   EPOCH = 1635768000 (2021-11-01 12:00 UTC)
+      //   TIME_STEP = 2629746 s (30.436875 days = 1/12 of a Gregorian year)
+      //   birthday_decode(b) = EPOCH + b * TIME_STEP
+      const POLYSEED_EPOCH = 1635768000;
+      const TIME_STEP = 2629746;
+      const ts = (POLYSEED_EPOCH + walletKeys.birthday * TIME_STEP) * 1000;
+      const d = new Date(ts);
+      const dateStr = d.toISOString().slice(0, 10);
+      parts.push('Polyseed · birthday ~' + dateStr);
+    } else if (walletKeys.seedFormat === 'bip39') {
+      parts.push('BIP-39');
+    }
+    if (parts.length === 0) return;
+    const info = document.createElement('div');
+    info.style.cssText = 'display:inline-block;margin:6px 0;padding:4px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:100px;font-size:.68rem;color:var(--text-mid);font-family:"JetBrains Mono",monospace';
+    info.textContent = parts.join(' · ');
+    document.querySelector('.wallet-header').appendChild(info);
+  })();
+
+  // Watch-only: hide spend-key-dependent UI
+  if (isWatchOnly) {
+    const sendBtn = document.getElementById('btn-send');
+    if (sendBtn) { sendBtn.disabled = true; sendBtn.style.opacity = '0.4'; sendBtn.title = 'Watch-only wallet'; }
+    const subSection = document.getElementById('btn-sub-gen');
+    if (subSection) subSection.closest('.keys-section').style.display = 'none';
+    // Add a watch-only badge under the address
+    const badge = document.createElement('div');
+    badge.style.cssText = 'display:inline-flex;align-items:center;gap:6px;margin:8px 0;padding:4px 12px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);border-radius:100px;font-size:.7rem;font-weight:600;color:#22c55e;text-transform:uppercase;letter-spacing:.06em';
+    badge.innerHTML = '<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg> Watch-only';
+    document.querySelector('.wallet-header').appendChild(badge);
+  }
+
+  // ─── Subaddress generator (full-mode only) ───
+  // Reconstruct the raw byte buffers we need from the hex strings stored in
+  // sessionStorage. The dashboard never sees the seed phrase — only the keys.
+  const subKeys = isWatchOnly ? null : {
+    privateViewKey: MoneroKeys.hexToBytes(walletKeys.privateViewKeyHex),
+    publicSpendKey: MoneroKeys.hexToBytes(walletKeys.publicSpendKeyHex)
+  };
+  // ─── Subaddress book (persistent metadata + on-demand address derivation) ──
+  // We persist {major, minor, label, createdAt} per wallet in localStorage so
+  // the user's labeled subaddress book survives across sessions. The actual
+  // subaddress strings are NOT stored — they're recomputed from the keys
+  // every render. localStorage only ever holds index pairs and labels.
+  const subList   = document.getElementById('sub-list');
+  const subError  = document.getElementById('sub-error');
+  const subLabel  = document.getElementById('sub-label');
+  const subMajor  = document.getElementById('sub-major');
+  const subMinor  = document.getElementById('sub-minor');
+  const subBookKey = 'monero-web-subaddrs-' + walletKeys.address.slice(0, 12);
+
+  function loadSubBook () {
+    try {
+      const raw = localStorage.getItem(subBookKey);
+      if (!raw) return [];
+      const list = JSON.parse(raw);
+      return Array.isArray(list) ? list : [];
+    } catch (e) { return []; }
+  }
+  function saveSubBook (list) {
+    try { localStorage.setItem(subBookKey, JSON.stringify(list)); } catch (e) {}
+  }
+  function nextMinor (list, major) {
+    const used = list.filter(e => e.major === major).map(e => e.minor);
+    return used.length ? Math.max.apply(null, used) + 1 : 1;
+  }
+  function copyToClipboard (text, el) {
+    navigator.clipboard.writeText(text).then(() => {
+      if (el) {
+        const old = el.textContent;
+        el.textContent = 'Copied!';
+        setTimeout(() => { el.textContent = old; }, 1200);
+      }
+    });
+  }
+
+  function renderSubBook () {
+    const list = loadSubBook();
+    subList.innerHTML = '';
+    if (list.length === 0) {
+      subList.innerHTML = '<div style="font-size:.7rem;color:var(--text-dim);text-align:center;padding:14px 0">No subaddresses yet.</div>';
+    }
+    // newest first
+    list.slice().reverse().forEach((entry, displayIdx) => {
+      const realIdx = list.length - 1 - displayIdx;
+      let address = '— locked —';
+      try {
+        if (subKeys) address = MoneroSubaddress.generate(subKeys, entry.major, entry.minor).address;
+      } catch (e) { address = '(error)'; }
+
+      const row = document.createElement('div');
+      row.style.cssText = 'margin-top:10px;padding:12px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px';
+      row.innerHTML =
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px">' +
+          '<div style="font-size:.78rem;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+            (entry.label ? escapeHtml(entry.label) : '<span style="color:var(--text-dim);font-weight:400">unlabeled</span>') +
+          '</div>' +
+          '<div style="display:flex;gap:6px;flex-shrink:0">' +
+            '<span style="font-family:\'JetBrains Mono\',monospace;font-size:.62rem;color:var(--text-dim);padding:2px 8px;background:var(--surface);border-radius:100px">' + entry.major + '/' + entry.minor + '</span>' +
+            '<button class="sub-del" data-idx="' + realIdx + '" title="Delete" style="background:transparent;border:0;color:var(--text-dim);cursor:pointer;font-size:.85rem;padding:0 4px;line-height:1">✕</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="sub-addr" style="font-family:\'JetBrains Mono\',monospace;font-size:.62rem;color:var(--text-mid);word-break:break-all;line-height:1.5;cursor:pointer" title="Click to copy">' +
+          escapeHtml(address) +
+        '</div>';
+      row.querySelector('.sub-addr').addEventListener('click', (e) => copyToClipboard(address, e.currentTarget));
+      row.querySelector('.sub-del').addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = parseInt(e.currentTarget.dataset.idx, 10);
+        const updated = loadSubBook();
+        updated.splice(idx, 1);
+        saveSubBook(updated);
+        renderSubBook();
+        autoFillNextMinor();
+      });
+      subList.appendChild(row);
+    });
+  }
+
+  function escapeHtml (s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  }
+
+  function autoFillNextMinor () {
+    const list = loadSubBook();
+    const major = parseInt(subMajor.value, 10) || 0;
+    subMinor.value = nextMinor(list, major);
+  }
+  subMajor.addEventListener('input', autoFillNextMinor);
+  autoFillNextMinor();
+
+  document.getElementById('btn-sub-gen').addEventListener('click', () => {
+    subError.style.display = 'none';
+    if (!subKeys) {
+      subError.textContent = 'Watch-only wallets cannot generate subaddresses (the spend key is required).';
+      subError.style.display = 'block';
+      return;
+    }
+    try {
+      const major = parseInt(subMajor.value, 10) || 0;
+      const minor = parseInt(subMinor.value, 10) || 0;
+      if (major === 0 && minor === 0) throw new Error('Index (0,0) is your primary address — cannot be a subaddress');
+      // Validate by actually deriving
+      MoneroSubaddress.generate(subKeys, major, minor);
+      const list = loadSubBook();
+      // Don't allow exact duplicates of (major, minor)
+      if (list.some(e => e.major === major && e.minor === minor)) {
+        throw new Error('That (account, index) is already in your address book.');
+      }
+      list.push({
+        major,
+        minor,
+        label: (subLabel.value || '').trim(),
+        createdAt: new Date().toISOString(),
+      });
+      saveSubBook(list);
+      subLabel.value = '';
+      renderSubBook();
+      autoFillNextMinor();
+    } catch (e) {
+      subError.textContent = e.message;
+      subError.style.display = 'block';
+    }
+  });
+
+  renderSubBook();
+
+  // ─── Copy address on click ───
+  document.getElementById('wallet-address').addEventListener('click', () => {
+    navigator.clipboard.writeText(walletKeys.address).then(() => {
+      const toast = document.getElementById('addr-toast');
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 1500);
+    });
+  });
+
+  // ─── Key visibility toggles ───
+  ['spend', 'view'].forEach(type => {
+    const toggle = document.getElementById('toggle-' + type);
+    const value = document.getElementById('key-' + type);
+    toggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const hidden = value.classList.toggle('hidden');
+      toggle.textContent = hidden ? 'Show' : 'Hide';
+    });
+  });
+
+  // ─── Connect to node ───
+  const connDot = document.getElementById('conn-dot');
+  const connInfo = document.getElementById('conn-info');
+
+  MoneroRPC.onConnectionChange((state) => {
+    connDot.className = 'conn-dot ' + state.status;
+    if (state.status === 'connected') {
+      connInfo.innerHTML = '<span>' + escapeHtml(state.node) + '</span> · <span class="conn-height">' + (state.height ? state.height.toLocaleString() : '—') + '</span>';
+    } else if (state.status === 'connecting') {
+      connInfo.textContent = state.message || 'Connecting…';
+    } else {
+      // Disconnected — surface a retry link inline so the user doesn't have
+      // to reload the whole page to recover from a transient proxy outage.
+      connInfo.innerHTML = '<span style="color:#f87171">' + escapeHtml(state.message || 'Disconnected') + '</span> · <a href="#" id="conn-retry" style="color:var(--xmr);text-decoration:underline;cursor:pointer">retry</a>';
+      const r = document.getElementById('conn-retry');
+      if (r) r.addEventListener('click', (e) => { e.preventDefault(); connectAndPopulate(); });
+    }
+  });
+
+  // ─── XMR/USD price ───
+  async function fetchXmrPrice () {
+    try {
+      var resp = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=monero&vs_currencies=usd');
+      var data = await resp.json();
+      if (data && data.monero && data.monero.usd) {
+        xmrUsdPrice = data.monero.usd;
+      }
+    } catch (e) {
+      // Non-critical — fiat display just stays empty
+    }
+  }
+
+  function updateFiatDisplay (xmrText) {
+    var el = document.getElementById('balance-fiat');
+    if (!el || !xmrUsdPrice) { if (el) el.textContent = ''; return; }
+    var xmr = parseFloat(xmrText);
+    if (isNaN(xmr)) { el.textContent = ''; return; }
+    var usd = (xmr * xmrUsdPrice).toFixed(2);
+    el.textContent = '\u2248 $' + usd.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' USD';
+  }
+
+  // Fetch price now, then refresh every 5 minutes
+  fetchXmrPrice();
+  setInterval(fetchXmrPrice, 300000);
+
+  // ─── Light-wallet balance polling ───
+  // Polls monero-lws via js/lws-client.js for the wallet's balance, scan
+  // progress, and recent transactions. Gracefully handles the LWS being
+  // offline (still common: monerod still syncing, lws not yet started)
+  // by showing a "scanning unavailable" message instead of breaking the
+  // dashboard.
+  let balancePollTimer = null;
+  let lwsRegistered = false;
+  var _keyImageCache = {}; // tx_pub_key:out_index → real key_image
+
+  async function startBalancePolling () {
+    const balEl  = document.getElementById('balance-xmr');
+    const noteEl = document.getElementById('balance-note');
+
+    // Mark as scanning while we wait for the first response
+    balEl.textContent = '—';
+    noteEl.textContent = 'Connecting to light-wallet server…';
+
+    // First call: register the wallet with the LWS, then decide whether
+    // to trigger a historical rescan via /import_wallet_request.
+    //
+    // KEY FACT: monero-lws 1.0-alpha ignores start_height in /login.
+    // The /login endpoint ALWAYS registers wallets at the current chain
+    // tip. The ONLY way to trigger a historical scan is to call
+    // /import_wallet_request, which resets the scan to genesis (block 0).
+    // We still send start_height for forward-compatibility with newer
+    // monero-lws builds that may support it.
+    try {
+      const opts = {};
+
+      // Compute the best restore height from available sources.
+      // Currently informational only (LWS ignores it), but sent in
+      // /login for forward-compatibility with future LWS versions.
+      let restoreHeight = 0;
+      if (typeof walletKeys.restoreHeight === 'number' && walletKeys.restoreHeight > 0) {
+        restoreHeight = walletKeys.restoreHeight;
+      } else if (walletKeys.seedFormat === 'polyseed' && typeof walletKeys.birthday === 'number') {
+        // Convert the Polyseed birthday to a block height. First decode the
+        // birthday to a UNIX timestamp (polyseed birthday.h: EPOCH=1635768000,
+        // TIME_STEP=2629746s → birthday_decode(b)=EPOCH+b*TIME_STEP), then map
+        // that timestamp to a height with the same checkpoint estimate the
+        // verify page uses (~120s/block). birthday_decode floors to the start
+        // of the ~1-month birthday bucket, so the result is at or before the
+        // wallet's real creation time — a safe lower bound that never misses a
+        // transaction while still skipping years of pre-creation blocks.
+        const POLYSEED_EPOCH = 1635768000;                   // 2021-11-01 12:00 UTC
+        const TIME_STEP = 2629746;                           // 30.436875 days
+        const CHECKPOINT_HEIGHT = 3651000;
+        const CHECKPOINT_TS = Date.UTC(2026, 3, 13) / 1000;  // April 13, 2026
+        const SECS_PER_BLOCK = 120;
+        const birthdayTs = POLYSEED_EPOCH + walletKeys.birthday * TIME_STEP;
+        restoreHeight = Math.max(0, Math.floor(
+          CHECKPOINT_HEIGHT - (CHECKPOINT_TS - birthdayTs) / SECS_PER_BLOCK
+        ));
+      }
+      opts.createdAt = restoreHeight;
+
+      // Detect freshly-created wallets via two redundant signals:
+      // 1. sessionStorage flag written by verify-page.js Create flow
+      // 2. Vault flag createdAtCurrentTip (survives page refresh)
+      var freshFlag = false;
+      try { freshFlag = sessionStorage.getItem('monero-web-fresh-wallet') === '1'; } catch (e) {}
+      if (!freshFlag && walletKeys.createdAtCurrentTip === true) {
+        freshFlag = true;
+      }
+      if (freshFlag) {
+        opts.generatedLocally = true;
+        try { sessionStorage.removeItem('monero-web-fresh-wallet'); } catch (e) {}
+      }
+
+      var loginRes;
+      try {
+        loginRes = await LwsClient.login(walletKeys.address, walletKeys.privateViewKeyHex, opts);
+      } catch (loginErr) {
+        if (loginErr.statusCode === 429 && loginErr.message === 'bot_detected') {
+          showRateLimitModal();
+          return;
+        }
+        throw loginErr;
+      }
+      lwsRegistered = true;
+
+      // Record this login for the inactive-account tracker (fire-and-forget)
+      LwsClient.pingLogin(walletKeys.address);
+
+      // Decide whether to trigger a historical rescan:
+      //
+      // - new_address=true + freshFlag  → freshly created wallet. LWS
+      //   registered it at the tip. No historical scan needed.
+      //
+      // - new_address=true + !freshFlag → imported wallet, first time
+      //   on this LWS. MUST call /import_wallet_request to trigger a
+      //   full chain scan, otherwise the wallet appears "synced" with
+      //   zero balance (the LWS only registered it at the current tip).
+      //
+      // - new_address=false → account already exists on the LWS from
+      //   a previous session. Don't re-import; scan is already running
+      //   or complete.
+      var isNewAccount = loginRes && loginRes.new_address === true;
+
+      if (freshFlag) {
+        // Fresh wallet — no history to find, LWS starts from tip.
+        // If this is an existing account that somehow got an import
+        // (race condition, stale cache), don't make it worse.
+        console.log('[lws] fresh wallet — no historical scan needed');
+      } else if (isNewAccount) {
+        // Imported wallet — trigger historical scan. Pass restoreHeight
+        // so the LWS starts scanning from that block instead of genesis.
+        // If restoreHeight is 0, the LWS scans the entire chain.
+        console.log('[lws] imported wallet — requesting historical scan from ' +
+          (restoreHeight > 0 ? 'block ' + restoreHeight : 'genesis'));
+        try {
+          await LwsClient.importWalletRequest(walletKeys.address, walletKeys.privateViewKeyHex, restoreHeight);
+        } catch (e) {
+          console.warn('[lws] import request failed (non-fatal):', e);
+        }
+      } else {
+        // Existing account — scan already in progress or done
+        console.log('[lws] existing account — not re-importing');
+      }
+    } catch (e) {
+      // Server unreachable or refused. Show the note but don't break.
+      console.warn('[lws] register failed:', e);
+      balEl.textContent = '—';
+      noteEl.innerHTML = 'Balance scanning unavailable — ' +
+        '<a href="#" id="bal-retry" style="color:var(--xmr);text-decoration:underline">retry</a>';
+      const r = document.getElementById('bal-retry');
+      if (r) r.addEventListener('click', (ev) => { ev.preventDefault(); startBalancePolling(); });
+      return;
+    }
+
+    // Tight first poll to surface initial state quickly, then 30s cadence.
+    if (balancePollTimer) clearInterval(balancePollTimer);
+    pollBalanceOnce();
+    balancePollTimer = setInterval(pollBalanceOnce, 30000);
+  }
+
+  async function pollBalanceOnce () {
+    if (!lwsRegistered) return;
+    const balEl  = document.getElementById('balance-xmr');
+    const noteEl = document.getElementById('balance-note');
+    try {
+      const info = await LwsClient.getAddressInfo(walletKeys.address, walletKeys.privateViewKeyHex);
+
+      // ── Client-side key_image verification ──
+      // The LWS flags outputs as "spent" whenever their global index
+      // appears in ANY transaction's ring signature — including as a
+      // decoy in other people's transactions. We compute the REAL
+      // key_image for each output using the spend key (via WASM) and
+      // only count spends where the key_image matches. Mismatches are
+      // false positives from ring-decoy appearances.
+      if (info && Array.isArray(info.spent_outputs) && info.spent_outputs.length > 0
+          && walletKeys.privateSpendKeyHex && !walletKeys.watchOnly) {
+        var falseSpendTotal = 0n;
+        try {
+          if (!MoneroCore.isLoaded()) await MoneroCore.load();
+          for (var so of info.spent_outputs) {
+            var cacheKey = so.tx_pub_key + ':' + so.out_index;
+            if (!_keyImageCache[cacheKey]) {
+              try {
+                _keyImageCache[cacheKey] = MoneroCore.generateKeyImage(
+                  so.tx_pub_key,
+                  walletKeys.privateViewKeyHex,
+                  walletKeys.publicSpendKeyHex,
+                  walletKeys.privateSpendKeyHex,
+                  so.out_index
+                );
+              } catch (kiErr) {
+                // If key_image computation fails for this output, skip it
+                console.warn('[lws] key_image compute failed for ' + cacheKey + ':', kiErr);
+                continue;
+              }
+            }
+            if (_keyImageCache[cacheKey] !== so.key_image) {
+              falseSpendTotal += BigInt(so.amount || '0');
+            }
+          }
+          if (falseSpendTotal > 0n) {
+            var correctedSent = BigInt(info.total_sent || '0') - falseSpendTotal;
+            if (correctedSent < 0n) correctedSent = 0n;
+            info.total_sent = correctedSent.toString();
+            console.log('[lws] filtered ' + falseSpendTotal.toString() + ' piconero of false spends');
+          }
+        } catch (e) {
+          // WASM failed to load — use heuristic fallbacks
+          console.warn('[lws] key_image verification unavailable:', e.message);
+          var totalRecv = BigInt(info.total_received || '0');
+          var totalSent = BigInt(info.total_sent || '0');
+
+          // Heuristic 1: dedup by (tx_pub_key, out_index) — same output
+          // can't be spent more than once
+          if (info.spent_outputs.length > 1) {
+            var seen = {};
+            var dedupTotal = 0n;
+            for (var so of info.spent_outputs) {
+              var key = so.tx_pub_key + ':' + so.out_index;
+              if (seen[key]) {
+                dedupTotal += BigInt(so.amount || '0');
+              } else {
+                seen[key] = true;
+              }
+            }
+            if (dedupTotal > 0n) {
+              totalSent -= dedupTotal;
+              if (totalSent < 0n) totalSent = 0n;
+            }
+          }
+
+          // Heuristic 2: total_sent can never exceed total_received
+          // (you can't spend more than you received). Clamp it.
+          if (totalSent > totalRecv) {
+            totalSent = totalRecv;
+          }
+
+          info.total_sent = totalSent.toString();
+        }
+      }
+
+      // In watch-only mode we can't verify spends (no spend key to
+      // compute key images), so total_sent is full of false positives
+      // from ring-decoy appearances.  Show total_received only.
+      var avail;
+      if (isWatchOnly) {
+        var totalRecv = BigInt(info.total_received || '0');
+        var locked    = BigInt(info.locked_funds   || '0');
+        avail = totalRecv - locked;
+        if (avail < 0n) avail = 0n;
+      } else {
+        avail = LwsClient.availableBalance(info);
+      }
+      const progress = LwsClient.scanProgress(info);
+      balEl.textContent = LwsClient.formatXmr(avail);
+      updateFiatDisplay(balEl.textContent);
+
+      // Watch-only: show a note that balance is receive-only
+      if (isWatchOnly) {
+        var woNote = document.getElementById('wo-balance-note');
+        if (!woNote) {
+          woNote = document.createElement('div');
+          woNote.id = 'wo-balance-note';
+          woNote.style.cssText = 'font-size:.68rem;color:var(--text-dim);margin-top:2px;font-style:italic';
+          woNote.textContent = 'Showing received funds only — outgoing transactions require the spend key';
+          balEl.parentNode.insertBefore(woNote, balEl.nextSibling);
+        }
+      }
+
+      // Show locked (pending) balance if there is one
+      var locked = BigInt(info.locked_funds || '0');
+      var lockedEl = document.getElementById('balance-locked');
+      if (locked > 0n) {
+        if (!lockedEl) {
+          lockedEl = document.createElement('div');
+          lockedEl.id = 'balance-locked';
+          lockedEl.style.cssText = 'font-size:.72rem;color:var(--warning);margin-top:2px;font-family:"JetBrains Mono",monospace';
+          balEl.parentNode.insertBefore(lockedEl, balEl.nextSibling);
+        }
+        lockedEl.textContent = '+ ' + LwsClient.formatXmr(locked) + ' XMR locked (confirming)';
+        lockedEl.style.display = 'block';
+      } else if (lockedEl) {
+        lockedEl.style.display = 'none';
+      }
+
+      // Refresh tx history in parallel on the same cadence
+      pollTxHistoryOnce();
+      // Drive the scanning progress bar
+      var scanWrap = document.getElementById('scan-bar-wrap');
+      var scanFill = document.getElementById('scan-bar-fill');
+      var scanPct  = document.getElementById('scan-bar-pct');
+      var scanHt   = document.getElementById('scan-bar-height');
+
+      if (progress < 1) {
+        scanningActive = true;
+        resetIdleIfScanning();
+        var pct = (progress * 100).toFixed(1);
+        noteEl.textContent = 'Scanning blockchain…';
+        if (scanWrap) scanWrap.style.display = 'block';
+        if (scanFill) scanFill.style.width = pct + '%';
+        if (scanPct)  scanPct.textContent = pct + '%';
+        if (scanHt) {
+          var cur   = info.scanned_block_height || info.scanned_height || 0;
+          var tip   = info.blockchain_height || 0;
+          var start = info.start_height || 0;
+          // Show blocks scanned relative to the start point, not absolute
+          // heights. "12,300 / 639,227 blocks" is clearer than
+          // "3,024,100 / 3,651,027" when scanning from a restore height.
+          var done  = Math.max(0, cur - start);
+          var total = Math.max(1, tip - start);
+          scanHt.textContent = done.toLocaleString() + ' / ' + total.toLocaleString() + ' blocks';
+        }
+      } else {
+        scanningActive = false;
+        noteEl.textContent = 'Up to date · last checked ' + new Date().toLocaleTimeString();
+        if (scanWrap) scanWrap.style.display = 'none';
+      }
+    } catch (e) {
+      console.warn('[lws] poll failed:', e);
+      // If the LWS client already handled re-registration internally,
+      // the retry inside getAddressInfo would have succeeded. If we still
+      // land here it's a genuine connectivity issue.
+      noteEl.textContent = 'Light-wallet server temporarily unavailable';
+    }
+  }
+
+  // ─── Transaction history polling ───
+  // Runs alongside the balance poll — same 30-second cadence. Fetches
+  // the wallet's full tx list from the LWS and renders it into #tx-list.
+  // Safe to call before the LWS is up (it just shows a loading state).
+  async function pollTxHistoryOnce () {
+    if (!lwsRegistered) return;
+    const listEl = document.getElementById('tx-list');
+    if (!listEl) return;
+    try {
+      const resp = await LwsClient.getAddressTxs(walletKeys.address, walletKeys.privateViewKeyHex);
+      var txs = (resp && Array.isArray(resp.transactions)) ? resp.transactions : [];
+      const chainTip = (resp && resp.blockchain_height) || 0;
+
+      // Watch-only mode: no spend key → can't verify outgoing txs.
+      // Show only incoming transactions (those with total_received > 0).
+      if (isWatchOnly) {
+        txs = txs.filter(function (tx) {
+          return BigInt(tx.total_received || '0') > 0n;
+        });
+      }
+
+      // Filter out false-spend transactions using the key_image cache
+      // built by pollBalanceOnce(). If every spent_output in a tx has a
+      // key_image that doesn't match the computed real key_image, the
+      // tx is a false positive from ring-decoy detection — hide it.
+      if (!isWatchOnly && Object.keys(_keyImageCache).length > 0) {
+        txs = txs.filter(function (tx) {
+          if (!tx.spent_outputs || tx.spent_outputs.length === 0) return true;
+          for (var so of tx.spent_outputs) {
+            var cacheKey = so.tx_pub_key + ':' + so.out_index;
+            var real = _keyImageCache[cacheKey];
+            if (!real || real === so.key_image) return true; // real or unknown
+          }
+          return false; // all spent_outputs are false positives
+        });
+      }
+
+      if (txs.length === 0) {
+        listEl.innerHTML = '<div class="key-card" style="text-align:center;color:var(--text-dim);font-size:.75rem;padding:18px">No transactions yet. Receive some XMR and it\'ll show up here.</div>';
+        return;
+      }
+
+      // Sort newest first by height (mempool txs at top)
+      txs.sort((a, b) => {
+        if (a.mempool && !b.mempool) return -1;
+        if (b.mempool && !a.mempool) return 1;
+        return (b.height || 0) - (a.height || 0);
+      });
+
+      const rows = txs.map(tx => {
+        const received = BigInt(tx.total_received || '0');
+        const sent     = isWatchOnly ? 0n : BigInt(tx.total_sent || '0');
+        const net      = received - sent;
+        const isIn     = net >= 0n;
+        const display  = LwsClient.formatXmr(net < 0n ? -net : net);
+        const confirms = tx.mempool ? 0 : Math.max(0, chainTip - (tx.height || 0));
+        const when     = tx.timestamp ? new Date(tx.timestamp).toLocaleString() : '—';
+        const status   = tx.mempool
+          ? '<span style="color:var(--warning)">pending</span>'
+          : (confirms < 10
+            ? '<span style="color:var(--warning)">' + confirms + ' / 10 confs</span>'
+            : '<span style="color:var(--success)">confirmed</span>');
+        const arrow    = isIn ? '↓' : '↑';
+        const arrowCol = isIn ? 'var(--success)' : 'var(--xmr)';
+        const hash     = (tx.hash || '').slice(0, 16) + '…';
+        const fullHash = tx.hash || '';
+        const feeDisplay = tx.fee && tx.fee !== '0' ? LwsClient.formatXmr(tx.fee) : '—';
+        const paymentId  = tx.payment_id && tx.payment_id !== '0000000000000000' ? tx.payment_id : '';
+        const explorerUrl = 'https://www.exploremonero.com/transaction/' + encodeURIComponent(fullHash);
+
+        // Detail panel (hidden by default, toggled on click)
+        var detailRows = '';
+        detailRows += '<tr><td style="color:var(--text-dim);padding:4px 12px 4px 0;white-space:nowrap">Transaction ID</td><td style="padding:4px 0;word-break:break-all"><span class="tx-detail-copy" data-copy="' + escapeHtml(fullHash) + '" style="cursor:pointer" title="Click to copy">' + escapeHtml(fullHash) + '</span></td></tr>';
+        detailRows += '<tr><td style="color:var(--text-dim);padding:4px 12px 4px 0">Date</td><td style="padding:4px 0">' + escapeHtml(when) + '</td></tr>';
+        detailRows += '<tr><td style="color:var(--text-dim);padding:4px 12px 4px 0">Height</td><td style="padding:4px 0">' + (tx.height ? tx.height.toLocaleString() : 'mempool') + '</td></tr>';
+        detailRows += '<tr><td style="color:var(--text-dim);padding:4px 12px 4px 0">Amount</td><td style="padding:4px 0;font-weight:600;color:' + arrowCol + '">' + (isIn ? '+' : '−') + display + ' XMR</td></tr>';
+        detailRows += '<tr><td style="color:var(--text-dim);padding:4px 12px 4px 0">Fee</td><td style="padding:4px 0">' + feeDisplay + (feeDisplay !== '—' ? ' XMR' : '') + '</td></tr>';
+        detailRows += '<tr><td style="color:var(--text-dim);padding:4px 12px 4px 0">Confirmations</td><td style="padding:4px 0">' + (tx.mempool ? 'unconfirmed' : confirms.toLocaleString()) + '</td></tr>';
+        if (paymentId) {
+          detailRows += '<tr><td style="color:var(--text-dim);padding:4px 12px 4px 0">Payment ID</td><td style="padding:4px 0;word-break:break-all">' + escapeHtml(paymentId) + '</td></tr>';
+        }
+        detailRows += '<tr><td style="color:var(--text-dim);padding:4px 12px 4px 0">Direction</td><td style="padding:4px 0">' + (isIn ? 'Received' : 'Sent') + '</td></tr>';
+        detailRows += '<tr><td colspan="2" style="padding:8px 0 0 0"><a href="' + escapeHtml(explorerUrl) + '" target="_blank" rel="noopener noreferrer" style="color:var(--xmr);font-size:.72rem;text-decoration:none">View on block explorer ↗</a></td></tr>';
+
+        return '<div class="key-card" style="margin-bottom:6px;padding:0;overflow:hidden">' +
+          '<div class="tx-row" style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;cursor:pointer">' +
+            '<div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1">' +
+              '<span style="font-size:1.1rem;color:' + arrowCol + ';font-weight:700;flex-shrink:0">' + arrow + '</span>' +
+              '<div style="min-width:0">' +
+                '<div style="font-size:.82rem;font-weight:600;color:var(--text);font-family:\'JetBrains Mono\',monospace">' + (isIn ? '+' : '−') + display + ' <span style="color:var(--text-dim);font-size:.7rem;font-weight:400">XMR</span></div>' +
+                '<div style="font-size:.65rem;color:var(--text-dim);margin-top:2px">' + escapeHtml(when) + ' · ' + status + '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div style="font-family:\'JetBrains Mono\',monospace;font-size:.62rem;color:var(--text-dim)">' + escapeHtml(hash) + '</div>' +
+          '</div>' +
+          '<div class="tx-detail" style="display:none;padding:0 14px 14px;border-top:1px solid var(--border)">' +
+            '<table style="width:100%;font-size:.72rem;font-family:\'JetBrains Mono\',monospace;border-collapse:collapse;margin-top:10px">' + detailRows + '</table>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+
+      listEl.innerHTML = rows;
+
+      // Toggle detail panel on row click
+      listEl.querySelectorAll('.tx-row').forEach(row => {
+        row.addEventListener('click', () => {
+          const detail = row.nextElementSibling;
+          if (detail && detail.classList.contains('tx-detail')) {
+            detail.style.display = detail.style.display === 'none' ? 'block' : 'none';
+          }
+        });
+      });
+
+      // Click-to-copy on detail fields
+      listEl.querySelectorAll('.tx-detail-copy').forEach(el => {
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const val = el.getAttribute('data-copy');
+          if (val) navigator.clipboard.writeText(val).then(() => {
+            const old = el.textContent;
+            el.textContent = 'Copied!';
+            setTimeout(() => { el.textContent = old; }, 1200);
+          });
+        });
+      });
+    } catch (e) {
+      console.warn('[lws] tx history fetch failed:', e);
+      listEl.innerHTML = '<div class="key-card" style="text-align:center;color:var(--text-dim);font-size:.75rem;padding:18px">Could not load transactions — will retry on next poll</div>';
+    }
+  }
+
+  // Wraps the network connect + populate flow so it can be called both on
+  // initial load and from any in-page retry button without reloading.
+  async function connectAndPopulate () {
+    document.getElementById('loading-state').style.display = 'block';
+    document.getElementById('loading-state').innerHTML =
+      '<div class="spinner"></div><p>Connecting to Monero network…</p>';
+    try {
+      const node = await MoneroRPC.connect();
+
+      document.getElementById('loading-state').style.display = 'none';
+      document.getElementById('dashboard').style.display = 'block';
+
+      document.getElementById('net-node').textContent     = node.name;
+      document.getElementById('net-height').textContent   = node.height ? node.height.toLocaleString() : '—';
+      document.getElementById('net-latency').textContent  = node.latency + 'ms';
+      document.getElementById('net-pool').textContent     = node.txPoolSize || '0';
+
+      try {
+        const fee = await MoneroRPC.getFeeEstimate();
+        document.getElementById('net-fee').textContent = MoneroRPC.formatXMR(fee.feePerByte) + ' XMR/byte';
+      } catch (e) {
+        document.getElementById('net-fee').textContent = 'unavailable';
+      }
+
+      // Kick off the light-wallet scan via monero-lws. The actual UI updates
+      // are driven by startBalancePolling() below — this just registers the
+      // wallet on first load. If the LWS is unreachable (still building, sync
+      // not done, etc.) the UI shows an explanatory message and falls back
+      // to "balance unknown — scanning unavailable" rather than breaking the
+      // dashboard.
+      startBalancePolling();
+    } catch (e) {
+      // Build a structured error block with two recovery options.
+      const ls = document.getElementById('loading-state');
+      ls.style.display = 'block';
+      ls.innerHTML =
+        '<div style="text-align:center;max-width:380px;margin:0 auto">' +
+          '<svg width="40" height="40" fill="none" stroke="#f87171" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 14px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>' +
+          '<p style="color:#f87171;font-size:.92rem;font-weight:600;margin-bottom:6px">Could not reach a Monero node</p>' +
+          '<p style="color:var(--text-dim);font-size:.78rem;line-height:1.55;margin-bottom:4px">' + escapeHtml(e.message) + '</p>' +
+          '<p style="color:var(--text-dim);font-size:.72rem;line-height:1.55;margin-bottom:18px">This usually means the proxy is rate-limited, the upstream nodes are temporarily down, or your network is blocking the request. Your wallet keys are unaffected.</p>' +
+          '<button id="err-retry" class="action-btn" style="padding:10px 22px;font-size:.82rem;width:auto;display:inline-flex;margin-right:8px">Retry</button>' +
+          '<button id="err-disconnect" class="action-btn" style="padding:10px 22px;font-size:.82rem;width:auto;display:inline-flex;background:transparent">Disconnect</button>' +
+        '</div>';
+      document.getElementById('err-retry').addEventListener('click', () => connectAndPopulate());
+      document.getElementById('err-disconnect').addEventListener('click', () => {
+        WalletVault.clear();
+        window.location.href = '/';
+      });
+    }
+  }
+
+  await connectAndPopulate();
+
+  // ─── RATE LIMIT MODAL ───
+  function showRateLimitModal () {
+    document.getElementById('ratelimit-modal').classList.add('show');
+  }
+  document.getElementById('ratelimit-close').addEventListener('click', () => {
+    document.getElementById('ratelimit-modal').classList.remove('show');
+  });
+  document.getElementById('ratelimit-ok').addEventListener('click', () => {
+    document.getElementById('ratelimit-modal').classList.remove('show');
+  });
+  document.getElementById('ratelimit-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'ratelimit-modal') e.target.classList.remove('show');
+  });
+
+  // ─── RECEIVE MODAL ───
+  document.getElementById('btn-receive').addEventListener('click', () => {
+    document.getElementById('receive-modal').classList.add('show');
+    // Generate QR code as SVG using a simple QR library inline
+    generateQR(walletKeys.address);
+  });
+
+  document.getElementById('receive-close').addEventListener('click', () => {
+    document.getElementById('receive-modal').classList.remove('show');
+  });
+
+  document.getElementById('receive-copy').addEventListener('click', () => {
+    navigator.clipboard.writeText(walletKeys.address).then(() => {
+      const btn = document.getElementById('receive-copy');
+      btn.textContent = 'Copied!';
+      btn.style.borderColor = 'rgba(34,197,94,0.3)';
+      btn.style.color = '#4ade80';
+      setTimeout(() => { btn.textContent = 'Copy Address'; btn.style.borderColor = ''; btn.style.color = ''; }, 2000);
+    });
+  });
+
+  // Close modal on backdrop click
+  document.getElementById('receive-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'receive-modal') e.target.classList.remove('show');
+  });
+
+  // ─── SEND MODAL ───
+  // Multi-step: form → confirm → result. All three steps live inside
+  // #send-modal; we toggle their visibility on transition.
+  let sendPreview = null;      // cached fee estimate from Review step
+  let sendPriority = 2;
+
+  function sendShowStep (step) {
+    ['form', 'confirm', 'result'].forEach(s => {
+      const el = document.getElementById('send-step-' + s);
+      if (el) el.style.display = (s === step) ? '' : 'none';
+    });
+  }
+  function sendShowResultState (state) {
+    ['pending', 'success', 'error'].forEach(s => {
+      const el = document.getElementById('send-result-' + s);
+      if (el) el.style.display = (s === state) ? '' : 'none';
+    });
+  }
+  function sendResetForm () {
+    sendPreview = null;
+    const errEl = document.getElementById('send-error');
+    if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+    sendShowStep('form');
+  }
+
+  document.getElementById('btn-send').addEventListener('click', () => {
+    if (isWatchOnly) {
+      alert('Watch-only wallets cannot send — the spend key is required.');
+      return;
+    }
+    sendResetForm();
+    document.getElementById('send-modal').classList.add('show');
+    // Update "Available" from the latest LWS poll
+    const balText = document.getElementById('balance-xmr').textContent;
+    const availEl = document.getElementById('send-available');
+    if (availEl) availEl.textContent = balText;
+  });
+
+  document.getElementById('send-close').addEventListener('click', () => {
+    document.getElementById('send-modal').classList.remove('show');
+  });
+
+  document.getElementById('send-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'send-modal') e.target.classList.remove('show');
+  });
+
+  // Priority buttons
+  document.querySelectorAll('.send-prio-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.send-prio-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      sendPriority = parseInt(btn.dataset.priority, 10) || 2;
+    });
+  });
+
+  // Recipient address live validation + hint
+  const sendToEl = document.getElementById('send-to');
+  const sendToHintEl = document.getElementById('send-to-hint');
+  const sendAmountEl = document.getElementById('send-amount');
+  const sendReviewBtn = document.getElementById('send-review');
+  function refreshSendReviewState () {
+    const addr = (sendToEl.value || '').trim();
+    const amt  = (sendAmountEl.value || '').trim();
+    const v = MoneroSend.validateAddress(addr);
+    if (addr.length === 0) {
+      sendToHintEl.textContent = '';
+    } else if (!v.valid) {
+      sendToHintEl.textContent = 'Address doesn\'t look valid (' + v.reason + ')';
+      sendToHintEl.style.color = '#f87171';
+    } else {
+      let label = 'Primary address';
+      if (v.integrated) label = 'Integrated address (with payment ID baked in)';
+      else if (v.subaddress) label = 'Subaddress';
+      sendToHintEl.textContent = '✓ ' + label;
+      sendToHintEl.style.color = '#22c55e';
+    }
+    var amtNorm = amt.replace(',', '.'); // accept comma as decimal separator
+    const amtOk = amtNorm.length > 0 && /^\d+(\.\d+)?$/.test(amtNorm) && Number(amtNorm) > 0;
+    sendReviewBtn.disabled = !(v.valid && amtOk);
+    // Show/hide payment ID field for primary addresses only
+    const pidGroup = document.getElementById('send-pid-group');
+    if (pidGroup) pidGroup.style.display = (v.valid && !v.subaddress && !v.integrated) ? '' : 'none';
+  }
+  sendToEl.addEventListener('input', refreshSendReviewState);
+  sendAmountEl.addEventListener('input', refreshSendReviewState);
+
+  // Send max — fills amount with the current balance
+  document.getElementById('send-max').addEventListener('click', () => {
+    const bal = document.getElementById('balance-xmr').textContent;
+    if (bal && bal !== '—') {
+      sendAmountEl.value = bal;
+      refreshSendReviewState();
+    }
+  });
+
+  // Cancel
+  document.getElementById('send-cancel').addEventListener('click', () => {
+    document.getElementById('send-modal').classList.remove('show');
+  });
+
+  // Review → fetch fee estimate
+  sendReviewBtn.addEventListener('click', async () => {
+    const errEl = document.getElementById('send-error');
+    errEl.style.display = 'none';
+    sendReviewBtn.disabled = true;
+    sendReviewBtn.textContent = 'Estimating…';
+    try {
+      const toAddress = (sendToEl.value || '').trim();
+      const xmrAmount = (sendAmountEl.value || '').trim();
+      sendPreview = await MoneroSend.estimateFee(walletKeys, toAddress, xmrAmount, sendPriority);
+
+      document.getElementById('confirm-to').textContent = toAddress;
+      document.getElementById('confirm-amount').textContent = xmrAmount + ' XMR';
+      document.getElementById('confirm-fee').textContent = sendPreview.fee_xmr + ' XMR';
+      const total = (Number(xmrAmount) + Number(sendPreview.fee_xmr)).toString();
+      document.getElementById('confirm-total').textContent = total + ' XMR';
+
+      sendShowStep('confirm');
+    } catch (e) {
+      errEl.textContent = e.message || 'Estimate failed';
+      errEl.style.display = 'block';
+    }
+    sendReviewBtn.disabled = false;
+    sendReviewBtn.textContent = 'Review →';
+  });
+
+  // Back from confirm → form
+  document.getElementById('send-back').addEventListener('click', () => {
+    sendShowStep('form');
+  });
+
+  // Confirm → actually send
+  document.getElementById('send-confirm').addEventListener('click', async () => {
+    sendShowStep('result');
+    sendShowResultState('pending');
+    try {
+      const toAddress = (sendToEl.value || '').trim();
+      const xmrAmount = (sendAmountEl.value || '').trim();
+      const paymentId = (document.getElementById('send-pid').value || '').trim();
+      const result = await MoneroSend.send(walletKeys, toAddress, xmrAmount, sendPriority, paymentId, sendPreview);
+      document.getElementById('send-result-hash').textContent = result.tx_hash;
+      sendShowResultState('success');
+      // Trigger a balance refresh so the new pending tx shows up
+      if (typeof pollBalanceOnce === 'function') setTimeout(pollBalanceOnce, 2000);
+    } catch (e) {
+      console.error('[dashboard] send failed:', e);
+      document.getElementById('send-result-error-msg').textContent = e.message || 'Unknown error';
+      sendShowResultState('error');
+    }
+  });
+
+  // Result: Done → close modal
+  document.getElementById('send-done').addEventListener('click', () => {
+    document.getElementById('send-modal').classList.remove('show');
+    sendResetForm();
+    sendToEl.value = '';
+    sendAmountEl.value = '';
+  });
+
+  // Result: Retry → back to form with values intact
+  document.getElementById('send-retry').addEventListener('click', () => {
+    sendShowStep('form');
+  });
+
+  // ─── QR CODE GENERATOR (simple version using canvas→dataURL) ───
+  function generateQR(text) {
+    // Render the QR code locally with the vendored qrcodegen.js encoder.
+    // Nothing about the user's address ever leaves the browser — no third
+    // party (qrserver, googleapis, etc.) is contacted.
+    const qrContainer = document.getElementById('qr-code');
+    try {
+      // typeNumber=0 → auto-pick the smallest version that fits, EC level "M"
+      const qr = qrcode(0, 'M');
+      qr.addData('monero:' + text);
+      qr.make();
+      const count = qr.getModuleCount();
+      const size  = 220;       // pixel size of the rendered SVG
+      const quiet = 2;         // quiet-zone modules around the code
+      const total = count + quiet * 2;
+      const cell  = size / total;
+
+      let rects = '';
+      for (let r = 0; r < count; r++) {
+        for (let c = 0; c < count; c++) {
+          if (qr.isDark(r, c)) {
+            rects += '<rect x="' + ((c + quiet) * cell).toFixed(2) +
+                     '" y="' + ((r + quiet) * cell).toFixed(2) +
+                     '" width="' + cell.toFixed(2) +
+                     '" height="' + cell.toFixed(2) + '" fill="#eae8e4"/>';
+          }
+        }
+      }
+      qrContainer.innerHTML =
+        '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size +
+        '" viewBox="0 0 ' + size + ' ' + size + '" shape-rendering="crispEdges" ' +
+        'style="background:#111113;border-radius:12px">' + rects + '</svg>';
+    } catch (e) {
+      qrContainer.innerHTML = '<div style="color:#f87171;font-size:.75rem;padding:20px">QR error: ' + e.message + '</div>';
+    }
+  }
+
+  // ─── Disconnect ───
+  document.getElementById('btn-disconnect').addEventListener('click', () => {
+    WalletVault.clear();
+    MoneroRPC.disconnect();
+    window.location.href = '/';
+  });
+
+  // ─── Custom node settings ───
+  const customNodeInput = document.getElementById('custom-node');
+  const nodeMsg = document.getElementById('node-msg');
+  customNodeInput.value = MoneroRPC.getCustomNode();
+  if (customNodeInput.value) {
+    nodeMsg.textContent = 'Using custom node — proxy bypassed.';
+  }
+  document.getElementById('btn-node-save').addEventListener('click', () => {
+    const v = customNodeInput.value.trim();
+    if (v && !/^https?:\/\//.test(v)) {
+      nodeMsg.textContent = 'URL must start with http:// or https://';
+      nodeMsg.style.color = '#f87171';
+      return;
+    }
+    MoneroRPC.setCustomNode(v);
+    nodeMsg.style.color = 'var(--success)';
+    nodeMsg.textContent = v ? 'Saved. Reload to reconnect.' : 'Cleared.';
+  });
+  document.getElementById('btn-node-clear').addEventListener('click', () => {
+    MoneroRPC.setCustomNode('');
+    customNodeInput.value = '';
+    nodeMsg.style.color = 'var(--text-dim)';
+    nodeMsg.textContent = 'Reverted to monero-web proxy. Reload to reconnect.';
+  });
+
+  // ─── QR scanner ───
+  document.getElementById('btn-scan-qr').addEventListener('click', () => {
+    const resultEl = document.getElementById('scan-result');
+    resultEl.style.display = 'none';
+    QrScanner.open({
+      onResult: (parsed) => {
+        const lines = [];
+        if (parsed.address)     lines.push('<div><span style="color:var(--text-dim)">addr:</span> ' + escapeHtml(parsed.address) + '</div>');
+        if (parsed.amount)      lines.push('<div><span style="color:var(--text-dim)">amount:</span> ' + escapeHtml(parsed.amount) + ' XMR</div>');
+        if (parsed.recipient)   lines.push('<div><span style="color:var(--text-dim)">recipient:</span> ' + escapeHtml(parsed.recipient) + '</div>');
+        if (parsed.description) lines.push('<div><span style="color:var(--text-dim)">memo:</span> ' + escapeHtml(parsed.description) + '</div>');
+        if (parsed.paymentId)   lines.push('<div><span style="color:var(--text-dim)">payment id:</span> ' + escapeHtml(parsed.paymentId) + '</div>');
+        if (lines.length === 0) lines.push('<div style="color:var(--text-dim)">' + escapeHtml(parsed.raw) + '</div>');
+        lines.push('<button id="scan-copy" class="action-btn" style="margin-top:10px;padding:6px 12px;font-size:.7rem;width:auto">Copy address</button>');
+        resultEl.innerHTML = lines.join('');
+        resultEl.style.display = 'block';
+        const copyBtn = document.getElementById('scan-copy');
+        if (copyBtn && parsed.address) {
+          copyBtn.addEventListener('click', () => copyToClipboard(parsed.address, copyBtn));
+        }
+      },
+      onError: (err) => {
+        alert('Scanner error: ' + err.message);
+      },
+    });
+  });
+
+  // ─── Export wallet (JSON) ───
+  document.getElementById('btn-export').addEventListener('click', () => {
+    const dump = {
+      format: 'monero-web-wallet-backup',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      network: walletKeys.network || 'mainnet',
+      watchOnly: !!walletKeys.watchOnly,
+      address: walletKeys.address,
+      privateSpendKeyHex: walletKeys.privateSpendKeyHex || null,
+      privateViewKeyHex:  walletKeys.privateViewKeyHex,
+      publicSpendKeyHex:  walletKeys.publicSpendKeyHex || null,
+      publicViewKeyHex:   walletKeys.publicViewKeyHex,
+    };
+    const blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'monero-web-' + walletKeys.address.slice(0, 8) + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+
+  // ─── Auto-refresh height every 30s ───
+  setInterval(async () => {
+    try {
+      const height = await MoneroRPC.getHeight();
+      document.getElementById('net-height').textContent = height.toLocaleString();
+      connInfo.innerHTML = `<span>${MoneroRPC.getConnectionState().node}</span> · <span class="conn-height">${height.toLocaleString()}</span>`;
+    } catch(e) {}
+  }, 30000);
+  } // end populateWallet
+});

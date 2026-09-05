@@ -1,0 +1,63 @@
+# Cloudflare Pages security headers
+# Documentation: https://developers.cloudflare.com/pages/configuration/headers/
+#
+# These apply to every response served from monero-web.com.
+
+/*
+  # Content Security Policy — strict, no 'unsafe-inline' for scripts.
+  # Every script the browser executes must come from our own origin.
+  # Inline <script> blocks are forbidden; use external .js files.
+  #
+  # 'wasm-unsafe-eval' is needed for the vendored mymonero-core WebAssembly
+  # module that builds and signs Monero transactions client-side.
+  # 'unsafe-eval' is required because the Emscripten-generated JS glue code
+  # (MyMoneroCoreCpp_WASM.js) uses new Function() internally for error type
+  # registration. This is an Emscripten limitation — the WASM binary itself
+  # only needs 'wasm-unsafe-eval', but the JS bootstrap won't load without
+  # 'unsafe-eval'. All scripts still must come from 'self', so eval() of
+  # attacker-controlled strings is not possible.
+  #
+  # We still allow 'unsafe-inline' for STYLES because the codebase has many
+  # inline style="..." attributes (which would be a much larger refactor)
+  # and the attack surface is significantly smaller — CSS injection cannot
+  # exfiltrate keys the way JS injection can.
+  # connect-src includes the Cloudflare Worker proxy because the dashboard
+  # makes cross-origin fetch() calls to the light-wallet server (monero-lws)
+  # through it. Without this, CSP blocks the balance-polling and send-flow
+  # requests silently.
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://monero-proxy.rosawands4.workers.dev https://challenges.cloudflare.com https://api.coingecko.com; frame-src https://trocador.app https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
+
+  # Standard hardening
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(self), microphone=(), geolocation=(), payment=()
+
+  # HSTS — tell browsers to only ever connect over HTTPS for the next 2 years.
+  # `preload` makes us eligible for the HSTS preload list (apply at hstspreload.org).
+  Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+
+  # Cache-Control on the catch-all so deployed fixes reach users immediately.
+  # Cloudflare Pages defaults to max-age=14400 (4 hours), which means every
+  # push to main needs users to hard-reload before they see the change. For
+  # an actively-developing wallet that's wrong. With max-age=0, the browser
+  # asks Cloudflare on every reload; Cloudflare's edge cache still serves
+  # the response (no extra origin load) and returns 304 via ETag if the
+  # file hasn't changed. Net cost: ~50ms per page reload. Net benefit:
+  # every git push lands in users' browsers on their next visit.
+  Cache-Control: public, max-age=0, must-revalidate
+
+# ── Per-directory cache overrides ───────────────────────────────────
+# Cloudflare Pages applies its own default 4-hour browser cache to known
+# static asset types (.js, .css) and that default WINS over the catch-all
+# /* rule unless we explicitly target the directory. /js/* and /functions/*
+# both need their own block.
+
+/js/*
+  Cache-Control: public, max-age=0, must-revalidate
+
+# Fonts are filename-hashed in fonts/fonts.css so a content change ALWAYS
+# changes the URL. Safe to cache for a year and tell the browser it's
+# immutable (won't even ask for revalidation).
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable

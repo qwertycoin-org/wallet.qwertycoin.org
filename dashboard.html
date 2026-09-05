@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="robots" content="noindex, nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<meta property="og:title" content="Wallet dashboard — monero-web.com">
+<meta property="og:description" content="Your non-custodial Monero wallet, running entirely in your browser. View your address, generate subaddresses, receive XMR.">
+<meta property="og:url" content="https://monero-web.com/dashboard">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://monero-web.com/assets/social-card.png">
+<link rel="preload" href="js/mymonero-core/MyMoneroCoreCpp_WASM.wasm" as="fetch" crossorigin>
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://monero-web.com/assets/social-card.png">
+<title>Monero Web — Wallet Dashboard</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/x-icon" href="/favicon.ico" sizes="any">
+<link rel="stylesheet" href="/fonts/fonts.css">
+<style>
+:root {
+  --bg:#0a0a0a; --surface:#111113; --surface-2:#19191d; --border:rgba(255,255,255,0.06);
+  --border-focus:rgba(255,130,47,0.4); --text:#eae8e4; --text-dim:#6e6c6a; --text-mid:#9a9894;
+  --xmr:#ff6600; --xmr-dim:rgba(255,102,0,0.12); --xmr-glow:rgba(255,102,0,0.2);
+  --success:#22c55e; --danger:#ef4444; --warning:#f59e0b; --radius-sm:10px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+/* Stop the I-beam text caret from appearing on decorative UI when clicked.
+   Wallet address, keys, subaddresses and inputs stay copy-selectable. */
+body{user-select:none;-webkit-user-select:none;cursor:default}
+input,textarea{user-select:text;-webkit-user-select:text;cursor:text}
+.wallet-address,.receive-address,.key-value,#sub-list,#sub-list *{user-select:text;-webkit-user-select:text;cursor:text}
+button,a,.action-btn,.tab,.key-toggle,.copy-btn,.modal-close,.disconnect-btn{cursor:pointer}
+html{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;font-size:16px;-webkit-font-smoothing:antialiased}
+body{min-height:100dvh;display:flex;flex-direction:column;overflow-x:hidden}
+.page{position:relative;z-index:2;flex:1;display:flex;flex-direction:column}
+.container{width:100%;max-width:500px;margin:0 auto;padding:0 20px}
+
+nav{padding:16px 0;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
+.logo{display:flex;align-items:center;gap:10px}
+.logo svg{width:28px;height:28px}
+.logo-text{font-size:1rem;font-weight:600;letter-spacing:-0.02em}
+.logo-text span{color:var(--xmr)}
+.nav-links{display:flex;gap:4px}
+.nav-links a{color:var(--text-dim);text-decoration:none;font-size:.75rem;font-weight:500;padding:6px 12px;border-radius:100px;transition:all .25s}
+.nav-links a:hover{color:var(--text);background:var(--surface-2)}
+.nav-links a.active{color:var(--xmr)}
+
+/* Connection bar */
+.conn-bar{display:flex;align-items:center;gap:8px;padding:10px 0;font-size:.72rem;color:var(--text-dim)}
+.conn-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.conn-dot.connected{background:var(--success);box-shadow:0 0 6px rgba(34,197,94,0.4)}
+.conn-dot.connecting{background:var(--warning);animation:blink 1s infinite}
+.conn-dot.disconnected{background:var(--danger)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+.conn-info{flex:1}
+.conn-height{font-family:'JetBrains Mono',monospace;color:var(--text-mid)}
+
+/* Wallet header */
+.wallet-header{padding:24px 0 16px;text-align:center}
+.wallet-address{font-family:'JetBrains Mono',monospace;font-size:.65rem;color:var(--text-dim);word-break:break-all;line-height:1.5;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:16px;user-select:all;cursor:pointer;position:relative}
+.wallet-address:hover{border-color:rgba(255,255,255,0.12)}
+.wallet-address .copy-toast{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--xmr);color:#fff;font-family:'Outfit',sans-serif;font-size:.7rem;font-weight:600;padding:4px 12px;border-radius:100px;opacity:0;transition:opacity .2s}
+.wallet-address .copy-toast.show{opacity:1}
+
+.balance-section{text-align:center;margin-bottom:24px}
+.balance-label{font-size:.72rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px}
+.balance-value{font-size:2rem;font-weight:700;letter-spacing:-0.03em;color:var(--text)}
+.balance-value .xmr-symbol{color:var(--xmr);font-size:1rem;font-weight:500;margin-left:6px}
+.balance-note{font-size:.7rem;color:var(--text-dim);margin-top:4px}
+
+/* Action buttons */
+.actions{display:flex;gap:10px;margin-bottom:24px}
+.action-btn{flex:1;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:'Outfit',sans-serif;font-size:.85rem;font-weight:500;cursor:pointer;transition:all .25s;display:flex;align-items:center;justify-content:center;gap:8px}
+.action-btn:hover{background:var(--surface-2);border-color:rgba(255,255,255,0.12)}
+.action-btn.primary{background:var(--xmr);border-color:var(--xmr);color:#fff;box-shadow:0 4px 16px var(--xmr-glow)}
+.action-btn.primary:hover{background:#e85d00}
+.action-btn svg{width:18px;height:18px}
+
+/* Info cards */
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:24px}
+.info-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px}
+.info-card .info-label{font-size:.68rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+.info-card .info-value{font-family:'JetBrains Mono',monospace;font-size:.85rem;color:var(--text);font-weight:500}
+
+/* Network status */
+.network-section{margin-bottom:24px}
+.section-title{font-size:.78rem;font-weight:600;color:var(--text-mid);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em}
+.network-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px}
+.network-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:.78rem}
+.network-row:not(:last-child){border-bottom:1px solid var(--border)}
+.network-row .label{color:var(--text-dim)}
+.network-row .value{font-family:'JetBrains Mono',monospace;color:var(--text)}
+
+/* Keys section */
+.keys-section{margin-bottom:24px}
+.key-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:all .25s}
+.key-card:hover{border-color:rgba(255,255,255,0.12)}
+.key-card .key-label{font-size:.68rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between}
+.key-card .key-value{font-family:'JetBrains Mono',monospace;font-size:.7rem;color:var(--text-mid);word-break:break-all;line-height:1.5}
+.key-card .key-value.hidden{filter:blur(6px);user-select:none}
+.key-toggle{font-size:.65rem;color:var(--xmr);cursor:pointer;font-family:'Outfit',sans-serif}
+
+/* Disconnect */
+.disconnect-btn{width:100%;padding:12px;background:none;border:1px solid rgba(239,68,68,0.2);border-radius:var(--radius-sm);color:#f87171;font-family:'Outfit',sans-serif;font-size:.8rem;font-weight:500;cursor:pointer;transition:all .25s;margin-bottom:24px}
+.disconnect-btn:hover{background:rgba(239,68,68,0.06);border-color:rgba(239,68,68,0.3)}
+
+footer{padding:16px 0;text-align:center;border-top:1px solid var(--border)}
+footer p{font-size:.65rem;color:var(--text-dim)}
+
+/* Loading state */
+.loading{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 0;gap:16px}
+.loading .spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--xmr);border-radius:50%;animation:spin 1s linear infinite}
+.loading p{font-size:.85rem;color:var(--text-dim)}
+
+/* ─── Modals ─── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);z-index:100;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.show{display:flex}
+.modal{background:var(--bg);border:1px solid var(--border);border-radius:16px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto;animation:fadeIn .25s ease-out}
+.modal-header{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--border)}
+.modal-header h2{font-size:1rem;font-weight:600}
+.modal-close{background:none;border:none;color:var(--text-dim);font-size:1.2rem;cursor:pointer;padding:4px 8px;border-radius:6px;transition:all .2s}
+.modal-close:hover{color:var(--text);background:var(--surface-2)}
+.modal-body{padding:20px}
+
+.receive-address{font-family:'JetBrains Mono',monospace;font-size:.62rem;word-break:break-all;line-height:1.6;color:var(--text-mid);padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:12px;user-select:all;text-align:left}
+.btn-outline{width:100%;padding:12px;background:none;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:'Outfit',sans-serif;font-size:.85rem;font-weight:500;cursor:pointer;transition:all .25s}
+.btn-outline:hover{background:var(--surface-2);border-color:rgba(255,255,255,0.12)}
+.receive-warning{display:flex;align-items:center;gap:6px;margin-top:14px;font-size:.7rem;color:var(--warning);justify-content:center}
+
+.send-coming-soon{text-align:center;padding:8px 0}
+.send-coming-soon svg{margin-bottom:12px;opacity:.6}
+.send-coming-soon h3{font-size:1.1rem;font-weight:600;margin-bottom:8px}
+.send-coming-soon p{font-size:.78rem;color:var(--text-dim);line-height:1.6;margin-bottom:8px}
+
+/* Send priority tier buttons */
+.send-prio-btn{background:var(--surface-2);border:1px solid var(--border);color:var(--text-dim);font-family:'Outfit',sans-serif;font-size:.72rem;padding:8px 4px;border-radius:6px;cursor:pointer;transition:all .2s}
+.send-prio-btn:hover{color:var(--text);border-color:var(--border-strong)}
+.send-prio-btn.active{background:var(--xmr-dim);border-color:rgba(255,102,0,0.3);color:var(--xmr);font-weight:600}
+.send-options{text-align:left;margin:12px 0}
+.send-option{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:8px}
+.send-option strong{display:block;font-size:.78rem;color:var(--text);margin-bottom:2px}
+.send-option span{font-size:.72rem;color:var(--text-dim);line-height:1.5}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.fade-in{animation:fadeIn .4s ease-out}
+
+/* ── Mobile polish ─────────────────────────────────────────────────── */
+@media (max-width:520px){
+  .container{padding:0 16px}
+  .wallet-header{padding:18px 0 10px}
+  .wallet-address{font-size:.58rem;padding:10px 12px}
+  .balance-value{font-size:1.7rem}
+  .actions{gap:8px;margin-bottom:18px}
+  .action-btn{padding:12px;font-size:.8rem}
+  .info-grid{gap:8px}
+  .info-card{padding:12px}
+  .keys-section{margin-bottom:18px}
+  .key-card{padding:12px}
+  .modal{padding:20px;max-width:calc(100vw - 32px)}
+  #qr-code svg,#qr-code img{max-width:100%;height:auto !important}
+  #unlock-overlay > div{padding:22px 18px;max-width:calc(100vw - 32px)}
+  #sub-major,#sub-minor{font-size:.72rem;padding:8px}
+}
+@media (max-width:380px){
+  .wallet-address{font-size:.55rem}
+  .actions .action-btn{padding:10px;font-size:.75rem}
+  .conn-bar{font-size:.66rem}
+}
+</style>
+</head>
+<body>
+
+<div class="page">
+  <div class="container">
+    <nav>
+      <a href="/" class="logo" style="text-decoration:none;color:inherit;cursor:pointer" title="Back to home">
+        <svg viewBox="0 0 256 256"><circle cx="128" cy="128" r="128" fill="#ff6600"/><path d="M63.5 178.2V105.7l64.5 64.5 64.5-64.5v72.5h29.8v-99.9c0-6.7-5.4-12.1-12.1-12.1-3.2 0-6.3 1.3-8.6 3.5L128 143.3 54.4 69.7c-2.3-2.3-5.3-3.5-8.6-3.5-6.7 0-12.1 5.4-12.1 12.1v99.9h29.8z" fill="#fff"/></svg>
+        <div class="logo-text">monero<span>web</span></div>
+      </a>
+      <div class="nav-links">
+        <a href="/" class="active">Wallet</a>
+        <a href="/verify">Verify</a>
+        <a href="#" class="swap-popup-trigger">Swap crypto</a>
+        <a href="https://github.com/Medtabka/monero-web" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </nav>
+
+    <!-- Connection bar -->
+    <div class="conn-bar">
+      <div class="conn-dot connecting" id="conn-dot"></div>
+      <div class="conn-info" id="conn-info">Connecting to network...</div>
+    </div>
+
+    <!-- Loading state -->
+    <div class="loading" id="loading-state">
+      <div class="spinner"></div>
+      <p>Connecting to Monero network...</p>
+    </div>
+
+    <!-- Dashboard (hidden until connected) -->
+    <div id="dashboard" style="display:none">
+
+      <!-- Address -->
+      <div class="wallet-header fade-in">
+        <div class="wallet-address" id="wallet-address" title="Click to copy">
+          <span class="copy-toast" id="addr-toast">Copied!</span>
+        </div>
+      </div>
+
+      <!-- Balance -->
+      <div class="balance-section fade-in">
+        <div class="balance-label">Balance</div>
+        <div class="balance-value">
+          <span id="balance-xmr">—</span>
+          <span class="xmr-symbol">XMR</span>
+        </div>
+        <div id="balance-fiat" style="font-size:.85rem;color:var(--text-dim);margin-top:2px;font-family:'JetBrains Mono',monospace"></div>
+        <div class="balance-note" id="balance-note">Scanning blockchain...</div>
+        <div id="scan-bar-wrap" style="display:none;margin:10px auto 0;max-width:280px">
+          <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:100px;height:8px;overflow:hidden">
+            <div id="scan-bar-fill" style="height:100%;width:0%;background:var(--xmr);border-radius:100px;transition:width 1s ease-out"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:5px;font-size:.62rem;font-family:'JetBrains Mono',monospace;color:var(--text-dim)">
+            <span id="scan-bar-pct">0%</span>
+            <span id="scan-bar-height">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="actions fade-in">
+        <button class="action-btn primary" id="btn-send">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
+          Send
+        </button>
+        <button class="action-btn" id="btn-receive">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Receive
+        </button>
+      </div>
+
+      <!-- Network Info -->
+      <div class="network-section fade-in">
+        <div class="section-title">Network</div>
+        <div class="network-card">
+          <div class="network-row">
+            <span class="label">Node</span>
+            <span class="value" id="net-node">—</span>
+          </div>
+          <div class="network-row">
+            <span class="label">Height</span>
+            <span class="value" id="net-height">—</span>
+          </div>
+          <div class="network-row">
+            <span class="label">Latency</span>
+            <span class="value" id="net-latency">—</span>
+          </div>
+          <div class="network-row">
+            <span class="label">Est. Fee</span>
+            <span class="value" id="net-fee">—</span>
+          </div>
+          <div class="network-row">
+            <span class="label">Tx Pool</span>
+            <span class="value" id="net-pool">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Transactions -->
+      <div class="keys-section fade-in">
+        <div class="section-title">Recent transactions</div>
+        <div id="tx-list">
+          <div class="key-card" style="text-align:center;color:var(--text-dim);font-size:.75rem;padding:18px">Loading…</div>
+        </div>
+      </div>
+
+      <!-- Seed Phrase (hidden by default) -->
+      <div class="keys-section fade-in" id="mnemonic-section" style="display:none">
+        <div class="section-title">Seed Phrase</div>
+        <div class="key-card" style="border-color:rgba(255,102,0,0.2);background:rgba(255,102,0,0.04)">
+          <div class="key-label" style="color:var(--xmr)">Mnemonic Seed <span class="key-toggle" id="toggle-mnemonic">Show</span></div>
+          <div class="key-value hidden" id="key-mnemonic" style="font-size:.82rem;line-height:2;word-spacing:.15em"></div>
+        </div>
+      </div>
+
+      <!-- Wallet Keys (hidden by default) -->
+      <div class="keys-section fade-in">
+        <div class="section-title">Wallet Keys</div>
+        <div class="key-card" id="card-spend">
+          <div class="key-label">Private Spend Key <span class="key-toggle" id="toggle-spend">Show</span></div>
+          <div class="key-value hidden" id="key-spend"></div>
+        </div>
+        <div class="key-card" id="card-view">
+          <div class="key-label">Private View Key <span class="key-toggle" id="toggle-view">Show</span></div>
+          <div class="key-value hidden" id="key-view"></div>
+        </div>
+        <div class="key-card">
+          <div class="key-label">Public Spend Key</div>
+          <div class="key-value" id="key-pub-spend" style="font-size:.65rem"></div>
+        </div>
+        <div class="key-card">
+          <div class="key-label">Public View Key</div>
+          <div class="key-value" id="key-pub-view" style="font-size:.65rem"></div>
+        </div>
+      </div>
+
+      <!-- Subaddresses -->
+      <div class="keys-section fade-in">
+        <div class="section-title">Subaddresses</div>
+        <div class="key-card">
+          <div class="key-label" style="margin-bottom:8px">Generate a labeled subaddress</div>
+          <input id="sub-label" type="text" placeholder="Label (optional, e.g. Donations)" maxlength="40" style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:'Outfit',sans-serif;font-size:.78rem;outline:none;margin-bottom:8px">
+          <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:10px">
+            <input id="sub-major" type="number" min="0" value="0" title="account index" placeholder="account" style="min-width:0;width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.78rem;outline:none">
+            <input id="sub-minor" type="number" min="1" value="1" title="address index (auto-fills)" placeholder="index" style="min-width:0;width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.78rem;outline:none">
+            <button id="btn-sub-gen" class="action-btn" style="flex:0 0 auto;padding:8px 14px;font-size:.78rem;white-space:nowrap">Generate</button>
+          </div>
+          <div id="sub-error" style="display:none;color:#f87171;font-size:.72rem;margin-top:6px"></div>
+          <div id="sub-list"></div>
+        </div>
+      </div>
+
+      <!-- Custom node + export -->
+      <div class="keys-section fade-in">
+        <div class="section-title">Settings</div>
+        <div class="key-card">
+          <div class="key-label" style="margin-bottom:6px">Custom node URL <span style="color:var(--text-dim)">· optional, must use HTTPS &amp; CORS</span></div>
+          <div style="display:grid;grid-template-columns:1fr auto auto;gap:8px">
+            <input id="custom-node" type="text" placeholder="https://my-node.example:18089" style="min-width:0;width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.75rem;outline:none">
+            <button id="btn-node-save" class="action-btn" style="padding:8px 14px;font-size:.78rem;white-space:nowrap">Save</button>
+            <button id="btn-node-clear" class="action-btn" style="padding:8px 14px;font-size:.78rem;white-space:nowrap">Reset</button>
+          </div>
+          <div id="node-msg" style="font-size:.7rem;color:var(--text-dim);margin-top:6px"></div>
+        </div>
+        <div class="key-card" style="margin-top:8px">
+          <div class="key-label" style="margin-bottom:8px">Scan QR code</div>
+          <button id="btn-scan-qr" class="action-btn" style="width:100%;padding:10px;font-size:.78rem">Open camera scanner</button>
+          <div id="scan-result" style="display:none;margin-top:10px;padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:.7rem;line-height:1.6;text-align:left;word-break:break-all"></div>
+          <div style="font-size:.7rem;color:var(--text-dim);margin-top:8px;line-height:1.5">Decodes <code>monero:</code> URIs entirely in your browser. Used by the (upcoming) send flow; for now you can scan and copy.</div>
+        </div>
+
+        <div class="key-card" style="margin-top:8px">
+          <div class="key-label" style="margin-bottom:8px">Export wallet</div>
+          <button id="btn-export" class="action-btn" style="width:100%;padding:10px;font-size:.78rem">Download JSON backup</button>
+          <div style="font-size:.7rem;color:var(--text-dim);margin-top:8px;line-height:1.5">Contains your address and keys in a portable JSON file. Treat it like your seed phrase — anyone with this file can spend your funds.</div>
+        </div>
+      </div>
+
+      <!-- Disconnect -->
+      <button class="disconnect-btn" id="btn-disconnect">Disconnect Wallet</button>
+    </div>
+  </div>
+
+  <!-- ═══ RATE LIMIT MODAL ═══ -->
+  <div class="modal-overlay" id="ratelimit-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Limit Reached</h2>
+        <button class="modal-close" id="ratelimit-close">✕</button>
+      </div>
+      <div class="modal-body" style="text-align:center">
+        <svg width="48" height="48" fill="none" stroke="var(--xmr)" stroke-width="1.5" viewBox="0 0 24 24" style="margin-bottom:12px"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <p style="font-size:.95rem;margin-bottom:8px;font-weight:600">Daily wallet limit reached</p>
+        <p style="font-size:.8rem;color:var(--text-dim);margin-bottom:20px">Too many new wallets have been registered today. Please try again tomorrow.</p>
+        <button class="btn-primary" id="ratelimit-ok" style="width:100%">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ RECEIVE MODAL ═══ -->
+  <div class="modal-overlay" id="receive-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Receive XMR</h2>
+        <button class="modal-close" id="receive-close">✕</button>
+      </div>
+      <div class="modal-body" style="text-align:center">
+        <div id="qr-code" style="margin:16px auto;width:220px;height:220px;background:var(--surface-2);border-radius:12px;display:flex;align-items:center;justify-content:center">
+          <div class="spinner" style="width:24px;height:24px"></div>
+        </div>
+        <p style="font-size:.7rem;color:var(--text-dim);margin-bottom:12px">Scan this QR code or copy the address below</p>
+        <div class="receive-address" id="receive-addr"></div>
+        <button class="btn-outline" id="receive-copy">Copy Address</button>
+        <div class="receive-warning">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          Only send Monero (XMR) to this address
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SEND MODAL ═══ -->
+  <div class="modal-overlay" id="send-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Send XMR</h2>
+        <button class="modal-close" id="send-close">✕</button>
+      </div>
+      <div class="modal-body">
+
+        <!-- ── STEP 1: Form ── -->
+        <div id="send-step-form">
+          <div style="margin-bottom:14px">
+            <label style="display:block;font-size:.72rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Recipient address</label>
+            <textarea id="send-to" placeholder="4..., 8..., or integrated (106 chars)" spellcheck="false" autocomplete="off" style="width:100%;min-height:64px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.68rem;line-height:1.5;resize:none;outline:none"></textarea>
+            <div id="send-to-hint" style="font-size:.68rem;color:var(--text-dim);margin-top:6px;min-height:14px"></div>
+          </div>
+
+          <div style="margin-bottom:14px">
+            <label style="display:block;font-size:.72rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Amount (XMR)</label>
+            <input id="send-amount" type="text" inputmode="decimal" placeholder="0.0" autocomplete="off" style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.95rem;outline:none">
+            <div style="display:flex;justify-content:space-between;font-size:.68rem;color:var(--text-dim);margin-top:6px">
+              <span>Available: <span id="send-available">—</span> XMR</span>
+              <button type="button" id="send-max" style="background:transparent;border:0;color:var(--xmr);font-size:.68rem;cursor:pointer;padding:0">Send max</button>
+            </div>
+          </div>
+
+          <div style="margin-bottom:14px">
+            <label style="display:block;font-size:.72rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Priority</label>
+            <div id="send-priority" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px">
+              <button type="button" data-priority="1" class="send-prio-btn">Slow</button>
+              <button type="button" data-priority="2" class="send-prio-btn active">Normal</button>
+              <button type="button" data-priority="3" class="send-prio-btn">Fast</button>
+              <button type="button" data-priority="4" class="send-prio-btn">Fastest</button>
+            </div>
+          </div>
+
+          <div style="margin-bottom:14px;display:none" id="send-pid-group">
+            <label style="display:block;font-size:.72rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Payment ID <span style="text-transform:none;letter-spacing:0">(if the recipient asked for one)</span></label>
+            <input id="send-pid" type="text" placeholder="16-char hex" autocomplete="off" style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.75rem;outline:none">
+          </div>
+
+          <div id="send-error" style="display:none;color:#f87171;font-size:.72rem;margin-bottom:10px;padding:10px 12px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.15);border-radius:8px"></div>
+
+          <div style="display:flex;gap:8px">
+            <button id="send-cancel" class="action-btn" style="flex:1;background:transparent">Cancel</button>
+            <button id="send-review" class="action-btn primary" style="flex:2" disabled>Review →</button>
+          </div>
+        </div>
+
+        <!-- ── STEP 2: Confirm ── -->
+        <div id="send-step-confirm" style="display:none">
+          <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:14px">
+            <div style="font-size:.68rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Sending to</div>
+            <div id="confirm-to" style="font-family:'JetBrains Mono',monospace;font-size:.62rem;word-break:break-all;color:var(--text);line-height:1.5"></div>
+          </div>
+
+          <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:14px;font-family:'JetBrains Mono',monospace;font-size:.82rem">
+            <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="color:var(--text-dim)">Amount</span><span id="confirm-amount" style="color:var(--text);font-weight:500">—</span></div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="color:var(--text-dim)">Fee</span><span id="confirm-fee" style="color:var(--text-mid)">—</span></div>
+            <div style="display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid var(--border)"><span style="color:var(--text-dim)">Total</span><span id="confirm-total" style="color:var(--xmr);font-weight:600">—</span></div>
+          </div>
+
+          <div style="font-size:.7rem;color:var(--text-dim);line-height:1.5;margin-bottom:14px;padding:10px 12px;background:rgba(255,102,0,0.06);border:1px solid rgba(255,102,0,0.15);border-radius:8px">
+            <strong style="color:var(--xmr)">This is irreversible.</strong> Once broadcast, the transaction cannot be cancelled. Your spend key is used locally in this tab to sign the transaction; it is not sent to any server.
+          </div>
+
+          <div style="display:flex;gap:8px">
+            <button id="send-back" class="action-btn" style="flex:1;background:transparent">← Back</button>
+            <button id="send-confirm" class="action-btn primary" style="flex:2">Send</button>
+          </div>
+        </div>
+
+        <!-- ── STEP 3: Result ── -->
+        <div id="send-step-result" style="display:none;text-align:center;padding:8px 0">
+          <div id="send-result-pending" style="display:none">
+            <div class="spinner" style="margin:0 auto 14px;width:40px;height:40px"></div>
+            <h3 style="font-size:1rem;font-weight:600;margin-bottom:6px">Sending…</h3>
+            <p style="font-size:.72rem;color:var(--text-dim);line-height:1.5">Building and broadcasting your transaction. This takes a few seconds.</p>
+          </div>
+          <div id="send-result-success" style="display:none">
+            <svg width="48" height="48" fill="none" stroke="#22c55e" stroke-width="1.8" viewBox="0 0 24 24" style="margin:0 auto 12px"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg>
+            <h3 style="font-size:1rem;font-weight:600;margin-bottom:6px;color:#22c55e">Sent!</h3>
+            <p style="font-size:.72rem;color:var(--text-dim);line-height:1.5;margin-bottom:12px">Your transaction has been broadcast to the Monero network. It will appear in your history after ~2 minutes of confirmations.</p>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:.62rem;color:var(--text-mid);word-break:break-all;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;margin-bottom:14px" id="send-result-hash"></div>
+            <button id="send-done" class="action-btn primary" style="width:100%">Done</button>
+          </div>
+          <div id="send-result-error" style="display:none">
+            <svg width="48" height="48" fill="none" stroke="#f87171" stroke-width="1.8" viewBox="0 0 24 24" style="margin:0 auto 12px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <h3 style="font-size:1rem;font-weight:600;margin-bottom:6px;color:#f87171">Send failed</h3>
+            <p id="send-result-error-msg" style="font-size:.72rem;color:var(--text-dim);line-height:1.5;margin-bottom:14px"></p>
+            <button id="send-retry" class="action-btn" style="width:100%">Back to form</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="container">
+      <p>monero-web.com — Open source · MIT License · Your keys never leave your browser · <a href="/privacy" style="color:inherit;text-decoration:underline">Privacy</a> · <a href="/self-host" style="color:inherit;text-decoration:underline">Self-Host</a> · <a href="https://github.com/Medtabka/monero-web" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">GitHub</a></p>
+    </div>
+  </footer>
+</div>
+
+<!-- ═══ UNLOCK OVERLAY (encrypted vault / idle auto-lock) ═══ -->
+<div id="unlock-overlay" style="display:none;position:fixed;inset:0;background:rgba(10,10,10,0.92);backdrop-filter:blur(8px);z-index:9999;align-items:center;justify-content:center;padding:24px">
+  <div style="width:100%;max-width:380px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:28px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+      <svg width="22" height="22" fill="none" stroke="var(--xmr)" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      <h2 style="font-size:1.05rem;font-weight:600;letter-spacing:-0.01em">Wallet locked</h2>
+    </div>
+    <p id="unlock-msg" style="color:var(--text-dim);font-size:.78rem;line-height:1.5;margin-bottom:16px">Enter your session password to unlock this tab.</p>
+    <input id="unlock-pw" type="password" autocomplete="current-password" placeholder="Session password" style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.82rem;outline:none;margin-bottom:10px">
+    <div id="unlock-error" style="display:none;color:#f87171;font-size:.74rem;margin-bottom:10px"></div>
+    <button id="unlock-btn" style="width:100%;background:var(--xmr);border:none;color:#fff;font-family:'Outfit',sans-serif;font-size:.86rem;font-weight:600;padding:12px;border-radius:10px;cursor:pointer">Unlock</button>
+    <button id="unlock-forget" style="width:100%;background:transparent;border:none;color:var(--text-dim);font-family:'Outfit',sans-serif;font-size:.74rem;padding:10px;margin-top:6px;cursor:pointer">Forget wallet & start over</button>
+  </div>
+</div>
+
+<!-- Scripts -->
+<script src="js/keccak256.js"></script>
+<script src="js/monero-ed25519.js"></script>
+<script src="js/monero-wordlist.js"></script>
+<script src="js/monero-keys.js"></script>
+<script src="js/monero-subaddress.js"></script>
+<script src="js/qrcodegen.js"></script>
+<script src="js/jsqr.js"></script>
+<script src="js/qr-scanner.js"></script>
+<script src="js/wallet-vault.js"></script>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
+<div id="turnstile-box"></div>
+<script src="js/lws-client.js"></script>
+<script src="js/mymonero-core/MyMoneroCoreCpp_WASM.js"></script>
+<script src="js/mymonero-loader.js"></script>
+<script src="js/monero-send.js"></script>
+<script src="js/monero-english-wordlist.js"></script>
+<script src="js/monero-rpc.js"></script>
+
+<script src="js/dashboard-page.js"></script>
+<script src="js/swap-popup.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+[Unit]
+Description=MoneroWeb Login Tracker
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/monero-web/login-tracker.py
+Environment=LOGIN_DB_PATH=/var/lib/monero-web/logins.db
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

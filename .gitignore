@@ -1,20 +1,27 @@
+# OS / editor / tooling cruft
+.DS_Store
+Thumbs.db
+.vscode/
 .idea/
-*.iml
-node_modules
-src/**/*.js
-!src/lib/*.js
-!src/lib/**/*.js
-src/lib/numbersLab/*.js
-debug/
+.claude/
+*.swp
+*~
 
-src/*.js
-src/d/*.js
-src/lib/numberslab/*.js
-src/model/*.js
-src/model/blockchain/*.js
-src/pages/*.js
-src/providers/*.js
-src/utils/*.js
-src/workers/*.js
+# Node / build artifacts (we don't have a build step, but just in case)
+node_modules/
+npm-debug.log
+yarn-error.log
 
-package-lock.json
+# Cloudflare / Wrangler local dev artifacts
+.wrangler/
+dist/
+
+# Legacy Netlify (no longer used)
+.netlify/
+
+# Secrets — never commit these
+.env
+.env.local
+*.key
+*.pem
+secrets/
