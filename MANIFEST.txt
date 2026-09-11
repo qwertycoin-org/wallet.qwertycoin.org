@@ -1,5 +1,5 @@
 # monero-web build manifest
-# Generated 2026-09-05T18:39:21Z from commit f802787
+# Generated 2026-09-11T21:38:40Z from commit ccdcfa5
 #
 # Verify the live deployment matches a specific git tag with:
 #   git checkout v0.1.0
@@ -54,13 +54,14 @@ ecbb9fca8238f7c0fe3edf2d7901fe4e2501e96512c68901225cc8180119eccd  js/mymonero-lo
 a89e09d29278744721e647b205a9a85f6dd3622a1f0d2d4c3804333cf28e5061  js/polyseed.js
 4695ae6ccba75eb2775e6eadab605cad283256ba1866fe78f458baf65b5a5f85  js/qr-scanner.js
 5f5e2c80f5ba8b2b68d771fc44da7b5fd4a3e256526f78f985644f99e0df84c4  js/qrcodegen.js
-a8cd090a7793afe49198e0984ca824c3cf6fe44bf4b07ea3e18be8d9da8879b3  js/qwc-wallet-engine.js
+c1f1a120b6d3ad3a6a4bc39762ff0f406fa8e21c594adfe4e2a90c6428ef6b37  js/qwc-wallet-engine.js
 d1f721f6bcf4d59577cdec34aef9db81b98d5f41d7f5310a8b01c6c81cb96991  js/swap-popup.js
 da6e6a67d83899a486ac74da21479e2564f55e7c37bd389e2fd375d242bb3f7a  js/verify-page.js
 0d6c10b0b50d782d9a988cb2d90efb96f91f66618fbf06805193dd8a60722e04  js/wallet-vault.js
 ef2ae9e6d42c61d7382ff31eaec5202f018d8735ff3905de4fb237dd7b5603fc  privacy.html
 01f045ee86ab982da7c6930ee2ffdd89e9cb6c6ad2ad7afb0ac06b6a853a1837  self-host.html
-976cf7f41200b38a03383623dab9e151f44d297468bfd265f1ddcd3d333cfffe  vendor/qwertycoin-ts/monero.js
-8289d09e18e372c554786106d98cd4452244635d5f948271e08a46cfd134ff1e  vendor/qwertycoin-ts/monero.worker.js
+ca86caa016bb5a60d42bbcc6ddd5dfe6fd92ffbef793082f14aa7e9bc63db3ec  vendor/qwertycoin-ts/BUILDINFO.txt
+bb9bcb4fd70ef19fe7d9839013bedc10d889eaa3e916f33dc5cac27f3a3e305d  vendor/qwertycoin-ts/monero.js
+0b45f17228cf256b6e0638f471a7320c2b661bc2b3c1b826736341badb1c8332  vendor/qwertycoin-ts/monero.worker.js
 b56b6cbccbd5a0370d840ea4000f0267499febfdf00897d50e948aceb71d5d87  vendor/qwertycoin-ts/monero.worker.js.LICENSE.txt
 02b3fc32e5e7507847722a1991f0ecf6251bdfe88a3990ddb6324c1117948d83  verify.html
