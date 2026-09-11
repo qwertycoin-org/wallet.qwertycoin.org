@@ -325,6 +325,31 @@ function assertEq(actual, expected, msg) {
     assert(lws.includes('0x4AAAAAAEkKWLZIa61TTy18'), 'Turnstile site key missing');
   });
 
+  await test('Bundled QWC wallet worker is bound to the final mainnet genesis', () => {
+    const buildInfo = fs.readFileSync(path.join(__dirname, '../vendor/qwertycoin-ts/BUILDINFO.txt'), 'utf8');
+    const engine = fs.readFileSync(path.join(__dirname, '../js/qwc-wallet-engine.js'), 'utf8');
+
+    assert(buildInfo.includes('genesis_hash=906629482787e94cb00463696a0e95ec75a480da09257c6270c65ba1a74a76b0'),
+      'final mainnet genesis is missing from bundled worker provenance');
+    assert(buildInfo.includes('core_revision=e6e0b46b6603bc5c1402df63696b514ba735f8ee'),
+      'merged final core revision is missing from bundled worker provenance');
+    assert(buildInfo.includes('qwertycoin_cpp_revision=aec06c375866a2a6cdee68fa6d45cd49e662bf22'),
+      'qwertycoin-cpp final-genesis binding is missing');
+    assert(buildInfo.includes('qwertycoin_ts_revision=be5ccc8b35271a1a53096ab4336deb7a83cc55d1'),
+      'qwertycoin-ts final-genesis binding is missing');
+    assert(buildInfo.includes('unbound_1_22_0_source_sha256=c5dd1bdef5d5685b2cedb749158dd152c52d44f65529a34ac15cd88d4b1b3d43'),
+      'verified Unbound source provenance is missing');
+    assert(buildInfo.includes('translation_files_sha256=320ecf8874eaad13b97c2d98f5f6bdde5fa3e37fbfac21a78ea4184a63b57dcb'),
+      'generated translation header provenance is missing');
+    assert(buildInfo.includes('monero_js_sha256=bb9bcb4fd70ef19fe7d9839013bedc10d889eaa3e916f33dc5cac27f3a3e305d'),
+      'monero.js artifact hash is missing');
+    assert(buildInfo.includes('monero_worker_js_sha256=0b45f17228cf256b6e0638f471a7320c2b661bc2b3c1b826736341badb1c8332'),
+      'worker artifact hash is missing');
+    assert(!buildInfo.includes('=pending'), 'WASM provenance contains unresolved hashes');
+    assert(engine.includes('monero.worker.js?v=0b45f17228cf256b'),
+      'wallet worker cache key is not final-genesis-specific');
+  });
+
   await test('Dashboard QWC history sums wallet transfers and miner outputs', () => {
     const dashboard = fs.readFileSync(path.join(__dirname, '../js/dashboard-page.js'), 'utf8');
 
