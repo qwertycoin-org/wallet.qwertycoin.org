@@ -85,9 +85,6 @@ nav{min-height:86px;padding:16px 0;display:flex;align-items:center;justify-conte
 .word-count .count{color:var(--xmr);font-weight:600}
 .word-count.valid .count{color:var(--success)}
 .seed-format-badge{font-size:.68rem;font-weight:600;padding:3px 10px;border-radius:100px;letter-spacing:.03em}
-.seed-format-badge.bip39{background:rgba(56,189,248,0.1);border:1px solid rgba(56,189,248,0.2);color:#38bdf8}
-.seed-format-badge.mymonero{background:rgba(168,85,247,0.12);border:1px solid rgba(168,85,247,0.2);color:#c084fc}
-.seed-format-badge.polyseed{background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);color:#4ade80}
 .seed-format-badge.standard{background:var(--xmr-dim);border:1px solid rgba(255,175,0,0.15);color:var(--xmr)}
 
 .btn-primary{width:100%;padding:15px;background:var(--xmr);color:#201200;font-family:var(--font-display);font-size:.9rem;font-weight:800;border:none;border-radius:var(--radius-sm);cursor:pointer;transition:all .25s;box-shadow:0 10px 28px var(--xmr-glow);display:flex;align-items:center;justify-content:center;gap:8px;text-transform:uppercase}
@@ -174,17 +171,16 @@ footer p{font-size:.7rem;color:var(--text-dim)}
         </div>
 
         <!-- Advanced settings — collapsed by default. Privacy-conscious
-             users can point the wallet at their own QWC node / LWS
-             BEFORE deriving keys, so the view key never touches our
-             default proxy. -->
+             users can point the browser scanner at their own restricted
+             QWC RPC endpoint before opening a wallet. -->
         <details style="margin-bottom:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px">
           <summary style="cursor:pointer;font-size:.76rem;color:var(--text-mid);list-style:none;display:flex;align-items:center;gap:8px;user-select:none">
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 008 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H2a2 2 0 010-4h.09A1.65 1.65 0 004.6 8a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V2a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H22a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
             <span>Advanced · use your own QWC node</span>
           </summary>
           <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
-            <p style="font-size:.68rem;color:var(--text-dim);line-height:1.5;margin-bottom:8px">Point the wallet at a QWC node you control. The view key is sent to this node for balance scanning — leave it at the default Qwertycoin proxy unless you're running your own QWC daemon.</p>
-            <input id="adv-node-url" type="text" placeholder="https://my-node.example:18089" autocomplete="off" spellcheck="false" style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.72rem;outline:none;margin-bottom:6px">
+            <p style="font-size:.68rem;color:var(--text-dim);line-height:1.5;margin-bottom:8px">Point the browser scanner at a restricted QWC RPC endpoint you control. Your seed and private keys still remain inside this browser tab.</p>
+            <input id="adv-node-url" type="text" placeholder="http://127.0.0.1:8198" autocomplete="off" spellcheck="false" style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.72rem;outline:none;margin-bottom:6px">
             <div style="display:flex;gap:6px">
               <button id="adv-node-save" type="button" class="btn-secondary" style="flex:1;padding:8px;font-size:.72rem;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer">Save</button>
               <button id="adv-node-reset" type="button" class="btn-secondary" style="flex:1;padding:8px;font-size:.72rem;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--text-dim);cursor:pointer">Reset to default</button>
@@ -203,36 +199,16 @@ footer p{font-size:.7rem;color:var(--text-dim)}
         <!-- SEED TAB -->
         <div class="form-section active" id="tab-seed">
           <div class="input-group">
-            <label>Mnemonic Seed <span class="hint">QWC standard: 25 words · legacy imports: 12, 13 or 16 words</span></label>
-            <textarea id="seed-input" placeholder="Enter your seed phrase separated by spaces..." spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+            <label>Mnemonic Seed <span class="hint">Qwertycoin standard · exactly 25 words</span></label>
+            <textarea id="seed-input" placeholder="Enter your 25-word Qwertycoin seed phrase..." spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
             <div class="seed-status-row">
               <div class="word-count" id="word-counter"><span class="count" id="wc-num">0</span> words</div>
               <div class="seed-format-badge" id="seed-format" style="display:none"></div>
             </div>
           </div>
 
-          <div class="input-group" id="bip39-pass-group" style="display:none">
-            <label>BIP-39 Passphrase <span class="hint">Optional · only for 12-word seeds</span></label>
-            <input type="password" id="bip39-pass" placeholder="Leave empty if you didn't set one" autocomplete="off" spellcheck="false" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;font-family:'JetBrains Mono',monospace;font-size:.78rem;color:var(--text);outline:none">
-          </div>
-
-          <div class="input-group" id="restore-height-group">
-            <label>When was this wallet created? <span class="hint">Speeds up scanning · auto-detected for Polyseed</span></label>
-            <div id="wallet-age-buttons" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
-              <button type="button" class="wallet-age-btn" data-age="week"  style="flex:1 1 auto;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font-display);font-size:.75rem;font-weight:500;cursor:pointer;transition:all .2s;min-width:80px;text-align:center">This week</button>
-              <button type="button" class="wallet-age-btn" data-age="month" style="flex:1 1 auto;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font-display);font-size:.75rem;font-weight:500;cursor:pointer;transition:all .2s;min-width:80px;text-align:center">This month</button>
-              <button type="button" class="wallet-age-btn" data-age="3months" style="flex:1 1 auto;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font-display);font-size:.75rem;font-weight:500;cursor:pointer;transition:all .2s;min-width:80px;text-align:center">~3 months</button>
-              <button type="button" class="wallet-age-btn" data-age="6months" style="flex:1 1 auto;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font-display);font-size:.75rem;font-weight:500;cursor:pointer;transition:all .2s;min-width:80px;text-align:center">~6 months</button>
-              <button type="button" class="wallet-age-btn" data-age="year"  style="flex:1 1 auto;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font-display);font-size:.75rem;font-weight:500;cursor:pointer;transition:all .2s;min-width:80px;text-align:center">~1 year</button>
-              <button type="button" class="wallet-age-btn" data-age="2years" style="flex:1 1 auto;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font-display);font-size:.75rem;font-weight:500;cursor:pointer;transition:all .2s;min-width:80px;text-align:center">~2 years</button>
-              <button type="button" class="wallet-age-btn" data-age="unknown" style="flex:1 1 auto;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font-display);font-size:.75rem;font-weight:500;cursor:pointer;transition:all .2s;min-width:80px;text-align:center">I don't know</button>
-            </div>
-            <div id="restore-height-selected" style="display:none;font-size:.72rem;color:var(--success);margin-bottom:6px"></div>
-            <details style="margin-top:4px">
-              <summary style="font-size:.68rem;color:var(--text-dim);cursor:pointer;user-select:none">Advanced: enter exact block height</summary>
-              <input type="text" id="restore-height" inputmode="numeric" placeholder="e.g. 3500000" autocomplete="off" spellcheck="false" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;font-family:'JetBrains Mono',monospace;font-size:.78rem;color:var(--text);outline:none;margin-top:6px">
-            </details>
-          </div>
+          <input type="hidden" id="restore-height" value="0">
+          <p class="hint" style="font-size:.72rem;color:var(--text-dim);line-height:1.5;margin:-2px 0 14px">Imported Qwertycoin wallets are scanned safely from the QWC v2 genesis block.</p>
 
           <div class="security-notice">
             <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
@@ -384,9 +360,6 @@ footer p{font-size:.7rem;color:var(--text-dim)}
 <script src="js/keccak256.js"></script>
 <script src="js/monero-ed25519.js"></script>
 <script src="js/monero-wordlist.js"></script>
-<script src="js/bip39-wordlist.js"></script>
-<script src="js/bip39.js"></script>
-<script src="js/polyseed.js"></script>
 <script src="js/monero-keys.js"></script>
 <script src="js/wallet-vault.js"></script>
 <script src="js/lws-client.js"></script>

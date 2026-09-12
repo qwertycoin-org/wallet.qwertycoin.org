@@ -1,15 +1,17 @@
 # Cloudflare Pages security headers
 # Documentation: https://developers.cloudflare.com/pages/configuration/headers/
 #
-# These apply to every response served from monero-web.com.
+# These apply to every response served from wallet.qwertycoin.org.
 
 /*
   # Content Security Policy — strict, no 'unsafe-inline' for scripts.
   # Every script the browser executes must come from our own origin.
   # Inline <script> blocks are forbidden; use external .js files.
   #
-  # 'wasm-unsafe-eval' is needed for the vendored mymonero-core WebAssembly
-  # module that builds and signs Monero transactions client-side.
+  # 'wasm-unsafe-eval' is needed for the vendored, CryptoNote-compatible
+  # MyMonero Core WebAssembly module that builds and signs Qwertycoin
+  # transactions client-side. The inherited upstream name is retained for
+  # compatibility and attribution.
   # 'unsafe-eval' is required because the Emscripten-generated JS glue code
   # (MyMoneroCoreCpp_WASM.js) uses new Function() internally for error type
   # registration. This is an Emscripten limitation — the WASM binary itself

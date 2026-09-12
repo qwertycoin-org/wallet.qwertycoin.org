@@ -3,18 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta property="og:title" content="Privacy — monero-web.com">
-<meta property="og:description" content="What monero-web collects (nothing), what it stores (nothing), what it sees (nothing). The honest privacy story for a wallet that runs entirely in your browser.">
-<meta property="og:url" content="https://monero-web.com/privacy">
+<meta property="og:title" content="Privacy — Qwertycoin Web Wallet">
+<meta property="og:description" content="How the Qwertycoin Web Wallet handles keys, browser storage, RPC traffic and third-party infrastructure.">
+<meta property="og:url" content="https://wallet.qwertycoin.org/privacy">
 <meta property="og:type" content="website">
-<meta property="og:image" content="https://monero-web.com/assets/social-card.png">
+<meta property="og:image" content="https://wallet.qwertycoin.org/assets/social-card.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="https://monero-web.com/assets/social-card.png">
-<title>Privacy — Monero Web</title>
-<meta name="description" content="monero-web.com privacy statement: we collect nothing, store nothing, see nothing.">
-<link rel="canonical" href="https://monero-web.com/privacy">
+<meta name="twitter:image" content="https://wallet.qwertycoin.org/assets/social-card.png">
+<title>Privacy — Qwertycoin Web Wallet</title>
+<meta name="description" content="Privacy information for the official Qwertycoin Web Wallet.">
+<link rel="canonical" href="https://wallet.qwertycoin.org/privacy">
 <meta name="robots" content="index, follow">
 
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
@@ -87,7 +87,7 @@ footer a:hover{color:var(--text)}
       <div class="nav-links">
         <a href="/">Home</a>
         <a href="/verify">Open Wallet</a>
-        <a href="https://github.com/Medtabka/monero-web" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/qwertycoin-org/wallet.qwertycoin.org" target="_blank" rel="noopener">GitHub</a>
       </div>
     </nav>
   </div>
@@ -96,77 +96,78 @@ footer a:hover{color:var(--text)}
 <main>
   <div class="container">
     <h1>Privacy</h1>
-    <p class="lead">monero-web is a non-custodial wallet. We do not collect, store, or transmit anything that could be used to identify you, recover your funds, or link you to your Monero activity.</p>
+    <p class="lead">The Qwertycoin Web Wallet is non-custodial. Your seed and private keys are processed in your browser, while network requests pass through Qwertycoin RPC infrastructure or a node you configure.</p>
 
     <div class="callout">
-      <strong>The short version:</strong> your seed phrase and private spend key never leave your browser tab. Your private view key is sent to our light-wallet server so it can scan the blockchain for your incoming payments — that server cannot spend your funds. We have no analytics, no cookies, no trackers, no email signup, no accounts.
+      <strong>The short version:</strong> your 25-word seed phrase, private spend key and private view key remain in your browser tab. The browser scanner sends blockchain queries—not private keys—to the restricted QWC RPC gateway. There are no accounts, advertising trackers or email signups.
     </div>
 
     <h2>What we do not collect</h2>
     <ul>
       <li><strong>Your seed phrase</strong> — never transmitted, never logged, never leaves your browser tab. All key derivation runs locally inside your tab using JavaScript that you can read in DevTools.</li>
       <li><strong>Your private spend key</strong> — stays in your browser tab. Used locally to sign transactions. Never transmitted to any server.</li>
-      <li><strong>Cookies, fingerprints, or analytics IDs</strong> — there are no third-party scripts or cookies on this site at all. Open DevTools → Application → Cookies on any page and the list is empty.</li>
+      <li><strong>Your private view key</strong> — used by the browser scanner and never transmitted to the RPC gateway.</li>
+      <li><strong>Analytics IDs</strong> — the wallet contains no analytics or advertising tracker.</li>
       <li><strong>Email addresses</strong> — there is no signup, no newsletter, no waitlist.</li>
       <li><strong>IP addresses</strong> — Cloudflare (our CDN) sees the IP that requests each page, like every web host on the planet does, but we have no logging on top of that and never inspect Cloudflare's analytics for individual visitors.</li>
     </ul>
 
     <h2>What the wallet does send over the network</h2>
 
-    <h3>1. Blockchain queries (no wallet data)</h3>
-    <p>The dashboard makes read-only RPC calls to our own Monero node (or public fallback nodes) through a same-origin proxy at <code>/api/proxy</code>:</p>
+    <h3>1. Blockchain scanning requests</h3>
+    <p>The dashboard scans the Qwertycoin chain in your browser and sends restricted RPC requests through same-origin endpoints such as <code>/qwc-rpc</code> and <code>/gethashes.bin</code>:</p>
     <ul>
       <li><code>get_info</code> and <code>get_block_count</code> — current network height and connection state.</li>
       <li><code>get_fee_estimate</code> — the recommended transaction fee.</li>
     </ul>
-    <p>None of these calls include your address, view key, or any wallet-identifying information.</p>
+    <p>These requests can reveal network-access patterns to the endpoint operator, but do not include your seed or private keys.</p>
 
-    <h3>2. Light-wallet server (view key sent)</h3>
-    <p>To show your balance and transaction history, the dashboard sends your <strong>private view key</strong> and <strong>primary address</strong> to our light-wallet server at <code>node.monero-web.com/lws/</code>. The server uses these to scan the blockchain for outputs that belong to your wallet.</p>
+    <h3>2. Transaction broadcast</h3>
+    <p>When you send QWC, the wallet constructs and signs the transaction inside your browser. Only the completed signed transaction is submitted to the restricted RPC gateway for broadcast.</p>
     <div class="callout">
-      <strong>What the light-wallet server sees:</strong>
+      <strong>What the RPC gateway can see:</strong>
       <ul style="margin-top:8px;margin-bottom:0">
-        <li>Your <strong>view key</strong> — needed to identify your incoming payments</li>
-        <li>Your <strong>primary address</strong> — paired with the view key for scanning</li>
-        <li>Your <strong>signed transaction hex</strong> when you send XMR — needed to broadcast to the network</li>
+        <li>Restricted blockchain queries sent by your browser</li>
+        <li>Your <strong>signed transaction</strong> when you choose to broadcast QWC</li>
+        <li>Standard request metadata such as IP address and user agent at the CDN edge</li>
       </ul>
     </div>
     <div class="callout" style="border-left-color:#22c55e;margin-top:12px">
       <strong>What it does NOT see:</strong>
       <ul style="margin-top:8px;margin-bottom:0">
-        <li>Your <strong>spend key</strong> — never sent. The server cannot spend your XMR.</li>
+        <li>Your <strong>private spend key</strong> or <strong>private view key</strong></li>
         <li>Your <strong>seed phrase</strong> — never sent.</li>
         <li>Your <strong>session password</strong> — used client-side only.</li>
       </ul>
     </div>
-    <p>The view key alone cannot spend your Monero — it can only scan for incoming payments. This is the same trust model as MyMonero (which ran for 12 years), Cake Wallet's light-wallet mode, and Edge Wallet. The server is self-hosted on infrastructure we control, not a third-party service.</p>
-    <p>If you want to avoid sending your view key to our server, you can self-host the <a href="https://github.com/Medtabka/monero-web" target="_blank" rel="noopener">entire stack</a> (static site + monerod + monero-lws) on your own hardware.</p>
+    <p>You can point the wallet at your own restricted <code>qwertycoind</code> RPC endpoint or follow the <a href="/self-host">self-hosting guide</a> to control this network path yourself.</p>
 
     <h2>What Cloudflare can see</h2>
-    <p>monero-web.com is hosted on Cloudflare Pages and sits behind Cloudflare's CDN. As with any CDN, Cloudflare's edge servers see:</p>
+    <p><code>wallet.qwertycoin.org</code> is hosted on Cloudflare Pages and sits behind Cloudflare's CDN. As with any CDN, Cloudflare's edge servers see:</p>
     <ul>
       <li>The HTTP requests for the static files (HTML, JS, fonts, images)</li>
-      <li>The HTTP requests for the proxy endpoint (the JSON-RPC payloads going to public Monero nodes)</li>
+      <li>The HTTP requests for the restricted Qwertycoin RPC endpoints</li>
       <li>Visitor IP addresses and standard request metadata</li>
     </ul>
     <p>None of the information that flows through Cloudflare contains your seed, your keys, or your wallet contents. It is exactly the same set of information any visit to any website on the public internet exposes.</p>
-    <p>If your threat model requires hiding even the fact that you visited monero-web.com, route your browser through Tor Browser. The site works fine over Tor — there are no captchas, no JavaScript that breaks under Tor, and no server-side checks that block .onion-style traffic.</p>
+    <p>If your threat model requires hiding that you visited <code>wallet.qwertycoin.org</code>, use a suitable privacy network or self-host the wallet and RPC endpoint.</p>
 
     <h2>Sessions and storage</h2>
     <p>When you derive a wallet, the resulting keys are stored in your browser's <code>sessionStorage</code> — which means they live only in the current tab and are wiped automatically when you close it. You can also set an optional <strong>session password</strong>; if you do, your keys are AES-GCM encrypted in <code>sessionStorage</code> using a key derived from that password (PBKDF2-SHA256, 250 000 iterations) and decrypted only on demand.</p>
     <p>The wallet has an idle auto-lock that fires after 10 minutes of inactivity. With a session password set, locking only wipes the in-memory keys — you can re-unlock by re-entering the password without re-deriving from your seed. Without a password, locking wipes everything and bounces you back to the seed entry screen.</p>
 
     <h2>Third parties</h2>
-    <p>The site itself loads from one origin only: <code>monero-web.com</code> (served by Cloudflare). It does not load any external JavaScript, fonts, analytics scripts, or images. Specifically:</p>
+    <p>The application assets and fonts are self-hosted. Cloudflare Turnstile may load from <code>challenges.cloudflare.com</code> as an abuse-control step for transaction submission. Specifically:</p>
     <ul>
       <li><strong>No Google Analytics, Plausible, Fathom, or any other analytics service</strong></li>
       <li><strong>No Google Fonts</strong> — fonts are self-hosted at <code>/fonts/</code></li>
       <li><strong>No external QR generator</strong> — the QR code in the receive modal is rendered by a vendored pure-JavaScript library</li>
       <li><strong>No CDN-hosted libraries</strong> — every script comes from our own origin</li>
+      <li><strong>Cloudflare Turnstile</strong> — used only where configured to protect transaction submission from abuse</li>
     </ul>
 
     <h2>For the curious</h2>
-    <p>Everything described here can be verified by reading the source code on <a href="https://github.com/Medtabka/monero-web" target="_blank" rel="noopener">GitHub</a> or by opening DevTools → Network on any page of monero-web.com and watching exactly which requests are made. The full security and threat model is documented in <a href="https://github.com/Medtabka/monero-web#threat-model" target="_blank" rel="noopener">the README</a> and the disclosure policy is in <a href="https://github.com/Medtabka/monero-web/blob/main/SECURITY.md" target="_blank" rel="noopener">SECURITY.md</a>.</p>
+    <p>Everything described here can be verified in the <a href="https://github.com/qwertycoin-org/wallet.qwertycoin.org" target="_blank" rel="noopener">public source repository</a> or in your browser's DevTools network panel. The disclosure policy is in <a href="https://github.com/qwertycoin-org/wallet.qwertycoin.org/blob/master/SECURITY.md" target="_blank" rel="noopener">SECURITY.md</a>.</p>
 
     <h2>Changes to this page</h2>
     <p>If anything on this page changes, the change will be visible in the git history of <code>privacy.html</code> in the public repository. There is no other notification mechanism because there is no mailing list and no user accounts.</p>
@@ -178,11 +179,11 @@ footer a:hover{color:var(--text)}
     <div class="footer-row">
       <a href="/">Home</a>
       <a href="/verify">Open Wallet</a>
-      <a href="https://github.com/Medtabka/monero-web" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/qwertycoin-org/wallet.qwertycoin.org" target="_blank" rel="noopener">GitHub</a>
       <a href="/self-host">Self-Host</a>
-      <a href="https://github.com/Medtabka/monero-web/blob/main/SECURITY.md" target="_blank" rel="noopener">Security</a>
+      <a href="https://github.com/qwertycoin-org/wallet.qwertycoin.org/blob/master/SECURITY.md" target="_blank" rel="noopener">Security</a>
     </div>
-    <div>monero-web.com · MIT licensed · Not affiliated with The Monero Project</div>
+    <div>wallet.qwertycoin.org · MIT licensed · Official Qwertycoin web wallet</div>
   </div>
 </footer>
 

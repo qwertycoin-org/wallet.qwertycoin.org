@@ -16,7 +16,7 @@
 
     // If there's already an active wallet session in this tab, redirect every
     // "Open Wallet" CTA on the landing page straight to the dashboard. This
-    // way clicking the moneroweb logo on /dashboard, then clicking "Open
+    // way clicking the Qwertycoin logo on /dashboard, then clicking "Open
     // Wallet", takes the user back to where they were instead of forcing them
     // to re-enter their seed.
     (function () {

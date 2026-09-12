@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // functions/_middleware.js — Cloudflare Pages middleware
 //
-// Runs on every request to every URL on monero-web.com. We use it to
+// Runs on every request to every URL on wallet.qwertycoin.org. We use it to
 // override Cloudflare Pages' built-in static-asset Cache-Control default
 // (which sets max-age=14400 / 4 hours on .js files and ignores _headers
 // rules for those paths). For an actively-developing wallet that default

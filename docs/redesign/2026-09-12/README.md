@@ -12,15 +12,21 @@ This change aligns presentation and self-hosting guidance. It adds the approved 
 Archivo/Inter fonts, the cream/black/gold/violet visual system, responsive
 layout rules, a complete favicon matrix, and QWC-specific verification and
 self-hosting instructions. It also removes the unsupported third-party swap
-navigation, widget, provider permission, and roadmap entry. Wallet creation/restoration,
-session storage, encryption, RPC, scanning, amounts, fees, transaction
-construction/signing/relay, and all functional event handlers are unchanged.
+navigation, widget, provider permission, and roadmap entry. A follow-up makes
+the public wallet surface Qwertycoin-native: restore accepts exactly the
+25-word QWC seed format, payment URIs use `qwertycoin:`, and explorer links use
+the official Qwertycoin explorer. Session storage, encryption, scanning,
+amounts, fees, transaction construction/signing/relay, and cryptographic
+primitives are unchanged.
 
-The 43 retained JavaScript/Worker/server files listed in
-[`protected-logic.sha256`](protected-logic.sha256) remain byte-identical to the
-baseline. The only removed script is the unsupported, presentation-only
-`js/swap-popup.js`; wallet, RPC, cryptographic, storage, and transaction logic
-is unchanged.
+Of the 43 retained JavaScript/Worker/server files listed in
+[`protected-logic.sha256`](protected-logic.sha256), 38 remain byte-identical to
+the original redesign baseline. Five have narrow reviewed QWC-facing changes:
+`js/verify-page.js` enforces the 25-word format, `js/qr-scanner.js` accepts the
+Qwertycoin URI scheme, `js/dashboard-page.js` emits Qwertycoin URIs and explorer
+links, and `js/index-page.js` plus `functions/_middleware.js` have comment-only
+terminology updates. The hash file records the new reviewed state. The
+unsupported presentation-only `js/swap-popup.js` remains removed.
 
 The redesign intentionally preserves functional IDs/classes and inline
 `display`/`hidden` state ownership. The shared stylesheet is loaded after the
@@ -83,9 +89,12 @@ privacy, and self-host pages.
 | Check | Result |
 | --- | --- |
 | Existing wallet tests | 44/44 PASS |
-| Presentation-contract tests | 9/9 PASS |
-| Manifest build and `--check` | 65/65 files PASS |
-| Retained protected logic hash comparison | 43/43 byte-identical PASS |
+| Presentation-contract tests | 12/12 PASS |
+| Manifest build and `--check` | 64/64 files PASS |
+| Protected logic review | 38/43 byte-identical; 5 narrow QWC-facing diffs reviewed |
+| Legal/copyright file hashes | 4/4 unchanged PASS |
+| Generated 25-word wallet restore | PASS |
+| Visible legacy-brand scan | 0 occurrences across 5 public pages |
 | Responsive overflow matrix | 24/24 page/viewport combinations PASS |
 | Browser interaction/state checks | PASS |
 | Unexpected failed asset requests | 0 |
@@ -104,8 +113,8 @@ Performance / Accessibility / Best Practices / SEO.
 
 | Page/profile | Scores | LCP | CLS | TBT |
 | --- | --- | ---: | ---: | ---: |
-| Verify / mobile | 87 / 100 / 100 / 100 | 3,990 ms | 0.0037 | 23 ms |
-| Verify / desktop | 99 / 100 / 100 / 100 | 847 ms | 0.0013 | 0 ms |
+| Verify / mobile | 88 / 100 / 100 / 100 | 3,835 ms | 0.0023 | 0 ms |
+| Verify / desktop | 100 / 100 / 100 / 100 | 777 ms | 0.0023 | 0 ms |
 | Privacy / mobile | 100 / 100 / 100 / 100 | 1,656 ms | 0.0146 | 0 ms |
 | Privacy / desktop | 100 / 100 / 100 / 100 | 363 ms | 0.0107 | 0 ms |
 | Self-host / mobile | 99 / 100 / 100 / 100 | 1,808 ms | 0.0268 | 0 ms |
@@ -128,10 +137,9 @@ release-facing measurement.
 - Presentation assets remain same-origin; no font CDN, analytics, or new
   runtime dependency is introduced.
 
-## Known limitations outside this visual scope
+## Compatibility and provenance
 
-The existing `privacy.html` prose still contains inherited Monero-era wording
-and URLs. The self-host guide is now Qwertycoin-specific and describes the
-current local browser scanner, restricted RPC gateway, and `qwertycoind`
-architecture. Privacy copy remains a separate editorial follow-up.
-No new theme switch was added because the wallet has no existing theme control.
+Internal dependency filenames, legacy storage keys, and third-party license
+notices retain upstream names where changing them would break compatibility or
+erase attribution. They are not shown as supported wallet formats or public
+Qwertycoin branding. Copyright and license texts remain byte-identical.

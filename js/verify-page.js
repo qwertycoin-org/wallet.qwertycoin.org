@@ -29,18 +29,14 @@ document.addEventListener('DOMContentLoaded', () => {
   })();
 
   const formats = {
-    12: { name:'BIP-39',          cls:'mymonero', icon:'◇' },
-    13: { name:'MyMonero Legacy', cls:'mymonero', icon:'◈' },
-    16: { name:'Polyseed',        cls:'mymonero', icon:'◉' },
-    25: { name:'Monero Standard', cls:'standard', icon:'◆' },
+    25: { name:'Qwertycoin Standard', cls:'standard', icon:'◆' },
   };
 
   // ─── Advanced: custom QWC node URL ───
   // Reads and writes the same localStorage key that js/monero-rpc.js uses,
   // so whatever the user sets here on the verify page is automatically
-  // picked up by the dashboard's MoneroRPC calls. Letting users configure
-  // this BEFORE deriving keys means the view key can go straight to their
-  // own node on the first LWS /login call — it never touches our default.
+  // picked up by the dashboard's compatibility RPC client. Keep the legacy
+  // storage key so existing users do not lose their configured endpoint.
   const NODE_KEY = 'monero-web-node-url';
   const advInput = $el('adv-node-url');
   const advMsg   = $el('adv-node-msg');
@@ -111,98 +107,10 @@ document.addEventListener('DOMContentLoaded', () => {
       seedFormat.style.display = 'inline-block';
       seedFormat.classList.add(fmt.cls);
       seedFormat.textContent = fmt.icon + ' ' + fmt.name;
-      // Polyseed (16 words) has embedded birthday — no age selection needed.
-      // For all other formats, require a wallet-age button click first.
-      if (count === 16 || walletAgeSelected) {
-        btnSeed.disabled = false;
-      }
+      btnSeed.disabled = false;
     }
-    // BIP-39 passphrase row only shown for 12-word seeds
-    document.getElementById('bip39-pass-group').style.display =
-      (count === 12) ? 'block' : 'none';
   }
   seedInput.addEventListener('input', refreshDeriveBtn);
-
-  // ─── WALLET AGE BUTTONS → restore height ───
-  // Each button computes an approximate block height based on how old the
-  // wallet is. Monero blocks are ~2 min apart → 720/day → ~5,040/week.
-  //
-  // We use a known checkpoint to estimate the current tip accurately,
-  // then subtract blocks for the chosen time period. Computing from
-  // genesis forward is inaccurate because Monero's average block time
-  // over 12 years drifts from the target 120s.
-  const CHECKPOINT_HEIGHT = 3651000;
-  const CHECKPOINT_TS = Date.UTC(2026, 3, 13) / 1000; // April 13, 2026
-  const SECS_PER_BLOCK = 120;
-  const BLOCKS_PER_DAY = 720;
-
-  function estimatedCurrentHeight() {
-    var secsSinceCheckpoint = Date.now() / 1000 - CHECKPOINT_TS;
-    return Math.max(CHECKPOINT_HEIGHT, CHECKPOINT_HEIGHT + Math.floor(secsSinceCheckpoint / SECS_PER_BLOCK));
-  }
-
-  function ageToHeight(age) {
-    var tip = estimatedCurrentHeight();
-    switch (age) {
-      case 'week':    return Math.max(0, tip - 7 * BLOCKS_PER_DAY);
-      case 'month':   return Math.max(0, tip - 30 * BLOCKS_PER_DAY);
-      case '3months': return Math.max(0, tip - 91 * BLOCKS_PER_DAY);
-      case '6months': return Math.max(0, tip - 182 * BLOCKS_PER_DAY);
-      case 'year':    return Math.max(0, tip - 365 * BLOCKS_PER_DAY);
-      case '2years':  return Math.max(0, tip - 730 * BLOCKS_PER_DAY);
-      case 'unknown': return 0;
-      default:        return 0;
-    }
-  }
-
-  var restoreHeightEl = $el('restore-height');
-  var selectedLabel = $el('restore-height-selected');
-  var walletAgeSelected = false;
-
-  document.querySelectorAll('.wallet-age-btn').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      walletAgeSelected = true;
-      // Remove active state from all buttons
-      document.querySelectorAll('.wallet-age-btn').forEach(function(b) {
-        b.style.background = 'var(--surface)';
-        b.style.borderColor = 'var(--border)';
-        b.style.color = 'var(--text)';
-      });
-      // Highlight the clicked button
-      btn.style.background = 'var(--xmr-dim)';
-      btn.style.borderColor = 'rgba(255,102,0,0.4)';
-      btn.style.color = 'var(--xmr)';
-      // Re-evaluate derive button state
-      refreshDeriveBtn();
-
-      var age = btn.dataset.age;
-      var height = ageToHeight(age);
-      if (restoreHeightEl) restoreHeightEl.value = String(height);
-      if (selectedLabel) {
-        if (age === 'unknown') {
-          selectedLabel.textContent = 'Will scan from genesis — finds everything, may take 1-3 hours for old wallets';
-          selectedLabel.style.color = 'var(--text-dim)';
-        } else {
-          selectedLabel.textContent = 'Restore point set to ~block ' + height.toLocaleString() + ' — full scan required to find historical transactions';
-          selectedLabel.style.color = 'var(--success)';
-        }
-        selectedLabel.style.display = 'block';
-      }
-    });
-  });
-
-  // Auto-hide the wallet-age section for polyseed (birthday is embedded)
-  // and show it for all other formats. Also hide for BIP-39 passphrase row.
-  seedInput.addEventListener('input', function() {
-    var words = seedInput.value.trim().split(/\s+/).filter(function(w) { return w.length > 0; });
-    var count = words.length;
-    var rhGroup = $el('restore-height-group');
-    if (rhGroup) {
-      // Polyseed (16 words) has an embedded birthday — no need to ask.
-      // For 12/13/25/other, show the age picker.
-      rhGroup.style.display = (count === 16) ? 'none' : 'block';
-    }
-  });
 
   // ─── SPEND KEY INPUT ───
   const spendKeyInput = document.getElementById('spend-key-input');
@@ -276,17 +184,13 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(async () => {
       try {
         const mnemonic = (seedInput && seedInput.value || '').trim();
-        // Language is auto-detected by MoneroKeys.detectLanguage(); we pass
+        const wordCount = mnemonic.split(/\s+/).filter(Boolean).length;
+        if (wordCount !== 25) throw new Error('Qwertycoin seed phrases contain exactly 25 words.');
+        // Language is auto-detected by the compatibility key engine; we pass
         // null so the engine picks whichever wordlist actually matches.
         const network    = 'mainnet';
-        const passphrase = $val('bip39-pass');
-        const keys = await MoneroKeys.deriveFromAnyMnemonic(mnemonic, null, network, passphrase);
-        // Attach the user-supplied restore height (if any) so the dashboard
-        // can pass it to the LWS to avoid scanning from genesis.
-        const rhVal = $val('restore-height').replace(/[^0-9]/g, '');
-        if (rhVal.length > 0) {
-          keys.restoreHeight = parseInt(rhVal, 10);
-        }
+        const keys = MoneroKeys.deriveFromMnemonic(mnemonic, null, network);
+        keys.restoreHeight = 0;
         showResults(keys);
       } catch(e) {
         errorEl.textContent = 'Error: ' + e.message;
@@ -324,9 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ─── SHOW RESULTS ───
   function showResults(keys) {
-    // Reveal the recovered mnemonic card only when we have one (spend-key
-    // import paths attach it; BIP-39 / polyseed / MyMonero don't because
-    // those formats are one-way and can't be reconstructed from the keys)
+    // Reveal the recovered mnemonic card when the standard QWC seed is known.
     const mnemCard = document.getElementById('res-mnemonic-card');
     if (keys.mnemonic && keys.wordCount === 25) {
       document.getElementById('res-mnemonic').textContent = keys.mnemonic;
@@ -494,7 +396,7 @@ document.addEventListener('DOMContentLoaded', () => {
               var url = URL.createObjectURL(blob);
               var a = document.createElement('a');
               a.href = url;
-              a.download = 'monero-wallet-' + wallet.address.slice(0, 8) + '.json';
+              a.download = 'qwertycoin-wallet-' + wallet.address.slice(0, 8) + '.json';
               a.click();
               URL.revokeObjectURL(url);
             });

@@ -36,7 +36,6 @@ INCLUDED_PATTERNS=(
   "assets/*.svg"
   "assets/*.png"
   "assets/*.css"
-  "donation-qr.svg"
   "favicon.svg"
   "favicon.ico"
   "_redirects"

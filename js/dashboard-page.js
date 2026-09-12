@@ -1171,7 +1171,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const fullHash = tx.hash || '';
         const feeDisplay = tx.fee && tx.fee !== '0' ? LwsClient.formatXmr(tx.fee) : '—';
         const paymentId  = tx.payment_id && tx.payment_id !== '0000000000000000' ? tx.payment_id : '';
-        const explorerUrl = 'https://www.exploremonero.com/transaction/' + encodeURIComponent(fullHash);
+        const explorerUrl = 'https://explorer.qwertycoin.org/tx/' + encodeURIComponent(fullHash);
 
         // Detail panel (hidden by default, toggled on click)
         var detailRows = '';
@@ -1524,7 +1524,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       // typeNumber=0 → auto-pick the smallest version that fits, EC level "M"
       const qr = qrcode(0, 'M');
-      qr.addData('monero:' + text);
+      qr.addData('qwertycoin:' + text);
       qr.make();
       const count = qr.getModuleCount();
       const size  = 220;       // pixel size of the rendered SVG

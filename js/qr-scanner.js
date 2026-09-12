@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 /**
- * qr-scanner.js — Camera-based QR code scanner for Monero URIs
+ * qr-scanner.js — Camera-based QR code scanner for Qwertycoin URIs
  *
  * Wraps the vendored jsQR decoder with a self-contained UI: opens a fullscreen
  * modal, requests camera permission, runs the rear camera (preferred) into a
  * <video> element, and on every animation frame snapshots the video to a
- * <canvas> and feeds the pixel data to jsQR. When a Monero URI is detected
+ * <canvas> and feeds the pixel data to jsQR. When a Qwertycoin URI is detected
  * (or any QR code is detected, if no URI filter is set), the configured
  * `onResult` callback fires once and the scanner stops.
  *
@@ -15,14 +15,14 @@
  *     onResult: function (parsed) { ... },
  *     onCancel: function () { ... },        // optional
  *     onError:  function (err)    { ... },  // optional
- *     filter:   'monero',                   // 'monero' (default) or 'any'
+ *     filter:   'qwertycoin',               // 'qwertycoin' (default) or 'any'
  *   })
  *
  * The `parsed` object passed to onResult has shape:
  *   {
- *     raw:        'monero:4ABC...?tx_amount=0.5&recipient_name=Alice',
- *     address:    '4ABC...',                // empty string for non-monero filter='any'
- *     amount:     '0.5',                    // string in XMR or null
+ *     raw:        'qwertycoin:QWC...?tx_amount=0.5&recipient_name=Alice',
+ *     address:    'QWC...',                 // empty string for filter='any'
+ *     amount:     '0.5',                    // string in QWC or null
  *     paymentId:  'abc...' or null,
  *     recipient:  'Alice' or null,
  *     description:'Coffee' or null,
@@ -57,7 +57,7 @@ const QrScanner = (function () {
           '<video id="qr-scanner-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;display:block"></video>' +
           '<div style="position:absolute;inset:14%;border:2px solid #ff6600;border-radius:8px;box-shadow:0 0 0 9999px rgba(0,0,0,0.35);pointer-events:none"></div>' +
         '</div>' +
-        '<p id="qr-scanner-status" style="font-size:.74rem;color:#9a9894;line-height:1.5;margin-bottom:0">Point the camera at a Monero QR code</p>' +
+        '<p id="qr-scanner-status" style="font-size:.74rem;color:#9a9894;line-height:1.5;margin-bottom:0">Point the camera at a Qwertycoin QR code</p>' +
       '</div>';
     document.body.appendChild(modal);
 
@@ -84,14 +84,14 @@ const QrScanner = (function () {
   }
 
   /**
-   * Parse a `monero:` URI into its parts.
+   * Parse a `qwertycoin:` URI into its parts.
    * Returns { raw, address, amount, paymentId, recipient, description }
-   * or null if the input is not a Monero URI.
+   * or null if the input is not a Qwertycoin URI.
    */
-  function parseMoneroUri (text) {
+  function parseQwertycoinUri (text) {
     if (!text || typeof text !== 'string') return null;
-    if (!/^monero:/i.test(text)) return null;
-    const without = text.replace(/^monero:/i, '');
+    if (!/^qwertycoin:/i.test(text)) return null;
+    const without = text.replace(/^qwertycoin:/i, '');
     const qIdx = without.indexOf('?');
     const address = (qIdx >= 0 ? without.slice(0, qIdx) : without).trim();
     const params = {};
@@ -137,7 +137,7 @@ const QrScanner = (function () {
       inversionAttempts: 'dontInvert',
     });
     if (code && code.data) {
-      const parsed = parseMoneroUri(code.data);
+      const parsed = parseQwertycoinUri(code.data);
       if (opts.filter === 'any' || parsed) {
         const result = parsed || {
           raw: code.data,
@@ -148,15 +148,15 @@ const QrScanner = (function () {
         if (cb) cb(result);
         return;
       }
-      // Detected a non-Monero QR — keep scanning
-      setStatus('Detected a non-Monero QR. Point at a monero: code.');
+      // Detected a non-Qwertycoin QR — keep scanning
+      setStatus('Detected a non-Qwertycoin QR. Point at a qwertycoin: code.');
     }
     rafId = requestAnimationFrame(tick);
   }
 
   async function open (options) {
     opts = options || {};
-    if (!opts.filter) opts.filter = 'monero';
+    if (!opts.filter) opts.filter = 'qwertycoin';
     if (typeof jsQR !== 'function') {
       const err = new Error('jsQR library not loaded — include js/jsqr.js first');
       if (opts.onError) opts.onError(err);
@@ -182,7 +182,7 @@ const QrScanner = (function () {
       return;
     }
     video.srcObject = stream;
-    setStatus('Point the camera at a Monero QR code');
+    setStatus('Point the camera at a Qwertycoin QR code');
     active = true;
     rafId = requestAnimationFrame(tick);
   }
@@ -199,7 +199,7 @@ const QrScanner = (function () {
     if (modal) modal.style.display = 'none';
   }
 
-  return { open, stop, parseMoneroUri };
+  return { open, stop, parseQwertycoinUri };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = QrScanner;
