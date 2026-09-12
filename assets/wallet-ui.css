@@ -424,6 +424,48 @@ body.wallet-app::after,
   box-shadow: 2px 2px 0 var(--border);
 }
 
+.wallet-app .wallet-age-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 8px 0 10px;
+}
+
+.wallet-app .wallet-age-btn {
+  min-width: 0;
+  min-height: 46px;
+  padding: 10px 8px;
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 750;
+  line-height: 1.2;
+  text-align: center;
+  transition: background-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.wallet-app .wallet-age-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.wallet-app .wallet-age-btn:focus-visible {
+  outline: 3px solid var(--xmr);
+  outline-offset: 2px;
+}
+
+.wallet-app .wallet-age-btn.active {
+  background: var(--xmr) !important;
+  box-shadow: 3px 3px 0 var(--border);
+}
+
+.wallet-app .restore-height-status {
+  display: block;
+  min-height: 1.1rem;
+  margin-bottom: 8px;
+  color: var(--text-dim);
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
 .wallet-app .security-notice {
   background: var(--success-bg);
   border-color: #6ca77f;
@@ -914,6 +956,10 @@ body.wallet-app::after,
 
   .wallet-app .input-group label {
     align-items: flex-start;
+  }
+
+  .wallet-app .wallet-age-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .wallet-dashboard .network-row {

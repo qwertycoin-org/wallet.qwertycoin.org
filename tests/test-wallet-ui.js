@@ -156,6 +156,9 @@ test('seed import exposes only the canonical 25-word Qwertycoin format', () => {
   const controller = read('js/verify-page.js');
   linked(verify, 'Qwertycoin standard · exactly 25 words');
   linked(verify, 'id="restore-height" inputmode="numeric" value="0"');
+  linked(verify, 'class="wallet-age-btn active" data-age-days="0" role="radio" aria-checked="true"');
+  linked(verify, 'class="wallet-age-options" role="radiogroup"');
+  linked(verify, 'Scanning from QWC v2 genesis — no history can be skipped.');
   linked(verify, 'data-age-days="7"');
   linked(verify, 'data-age-days="365"');
   linked(verify, "I don't know");
@@ -167,6 +170,8 @@ test('seed import exposes only the canonical 25-word Qwertycoin format', () => {
   linked(controller, 'const QWC_RESTORE_SAFETY_BLOCKS = QWC_BLOCKS_PER_DAY');
   linked(controller, "method: 'get_info'");
   linked(controller, 'estimateQwcRestoreHeight(tipHeight, ageDays)');
+  linked(controller, 'setSelectedWalletAge(btn)');
+  linked(controller, "setSelectedWalletAge(height === 0 ? genesisButton : null)");
   linked(controller, 'Number.isSafeInteger(restoreHeight) && restoreHeight > 0');
   assert(!controller.includes('CHECKPOINT_HEIGHT'), 'foreign-chain restore checkpoint remains');
   assert(!controller.includes('CHECKPOINT_TS'), 'foreign-chain restore timestamp remains');

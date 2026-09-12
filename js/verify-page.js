@@ -130,6 +130,14 @@ document.addEventListener('DOMContentLoaded', () => {
     restoreHeightStatus.style.display = 'block';
   }
 
+  function setSelectedWalletAge(selectedButton) {
+    document.querySelectorAll('.wallet-age-btn').forEach(function(item) {
+      const isSelected = item === selectedButton;
+      item.classList.toggle('active', isSelected);
+      item.setAttribute('aria-checked', isSelected ? 'true' : 'false');
+    });
+  }
+
   async function getLiveQwcHeight() {
     const customNode = (() => {
       try { return localStorage.getItem(NODE_KEY) || ''; } catch (e) { return ''; }
@@ -166,10 +174,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.wallet-age-btn').forEach(function(btn) {
     btn.addEventListener('click', async function() {
       document.querySelectorAll('.wallet-age-btn').forEach(function(item) {
-        item.classList.remove('active');
         item.disabled = true;
       });
-      btn.classList.add('active');
+      setSelectedWalletAge(btn);
       const ageDays = Number(btn.dataset.ageDays);
 
       if (ageDays === 0) {
@@ -204,6 +211,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const digits = restoreHeightEl.value.replace(/[^0-9]/g, '');
       restoreHeightEl.value = digits || '0';
       const height = Number(restoreHeightEl.value);
+      const genesisButton = document.querySelector('.wallet-age-btn[data-age-days="0"]');
+      setSelectedWalletAge(height === 0 ? genesisButton : null);
       setRestoreStatus(
         height > 0
           ? 'Exact QWC restore height set to block ' + height.toLocaleString() + '.'
