@@ -112,6 +112,17 @@ test('functional wallet anchors remain present', () => {
   ]) linked(dashboard, `id="${id}"`);
 });
 
+test('unsupported swap integration is absent from the shipped wallet', () => {
+  for (const file of [...Object.keys(appPages), 'index.html']) {
+    const html = read(file);
+    assert(!/swap crypto/i.test(html), `${file}: unsupported swap navigation remains`);
+    assert(!html.includes('swap-popup'), `${file}: unsupported swap widget remains`);
+  }
+  assert(!fs.existsSync(path.join(root, 'js/swap-popup.js')), 'unsupported swap widget is still shipped');
+  assert(!read('_headers').includes('trocador.app'), 'swap provider remains allowed by CSP');
+  assert(!read('README.md').includes('Swap integration'), 'unsupported swap integration remains on the roadmap');
+});
+
 test('asset build and cache policy cover the new local presentation files', () => {
   const build = read('tools/build-manifest.sh');
   const headers = read('_headers');

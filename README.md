@@ -198,7 +198,6 @@ can't afford to lose, use Monero CLI on an air-gapped machine.
 - [x] DNSSEC end-to-end (Cloudflare + Porkbun)
 - [x] Self-hosted monerod (pruned) + monero-lws on Hetzner CAX21
 - [x] Smart RPC proxy (auto-fails over to public nodes when own node is down)
-- [ ] Swap integration (ChangeNow / Majestic Bank)
 - [ ] PWA support (install on home screen)
 
 ## Why?

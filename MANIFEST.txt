@@ -1,5 +1,5 @@
 # Qwertycoin Web Wallet build manifest
-# Generated 2026-09-12T06:25:57Z from commit 57c9456
+# Generated 2026-09-12T06:32:30Z from commit cd984b6
 #
 # Verify the live deployment matches a specific git tag with:
 #   git checkout v0.1.0
@@ -19,7 +19,7 @@ b83c4b9a436236620b4107628799459f778c35b7aa45b1dd389c97b9649bb592  assets/favicon
 abb3acca2bb26bd0ec2fb8b840f141392cc58c55ab857fc9ddb584c822aae473  assets/social-card.png
 1a4cedee0f410818aad3391cc0f38fb9a36847b9eac181f97031287c06b25f19  assets/social-card.svg
 68bb79520f1a6d9b9dadc21b09ee103dccb836838e93863bf81efd63afdb22eb  assets/wallet-ui.css
-d2bfc84a9952e280fec778bfe921c52166534f78a44e539eee7ee2a577f4b621  dashboard.html
+08cdd671701aaf065377dc8b9eb55279065b7f1b4a7087dfec11ddd72a819d46  dashboard.html
 a2d9e1c683d93f50460f9c99fb780717bfaeac2a77cdc198a0aba106e80910d5  donation-qr.svg
 49845fb6edd4109c5f9aa61feaf105f9125f5c10c00e7d1c6726b0c2f5594ec9  favicon.ico
 a81550eef33de480531b7220d41a0ddc46129b36c1b6d2875d170de441d5da66  favicon.svg
@@ -36,7 +36,7 @@ db5ff4db83e580426280e9337a58dc57d3a83784a1b03ad80914651594441d52  fonts/c8b23d7b
 609ca812bb040a558fbcd7e24b1da8ee11669697042bb08e49b7ed44c50d9c3d  fonts/fonts.css
 8909904ab6c872eb994093482a88a28eca2cd95912d7b6fecd72103b0dc07edc  fonts/inter-latin-400.8909904ab6c8.woff2
 f9a06e79cd3a2a20951c0f0e28f66dd0e6d3fda73911d640a2125c8fcb78f21a  fonts/inter-latin-600.f9a06e79cd3a.woff2
-a220d7a878758a08fbc0229f420d519c2934a8e13c6149bd00fba47226d746ee  index.html
+e6ef81463a71cdba0bb55074b21fbfcc7b68adc945a138c0f09b4e95713ce961  index.html
 a0bf069d19922a0df40c278c40bc82a8edc55658b587d1bb5a09b5a06ec98244  js/bip39-wordlist.js
 f5d61babe30ae09ed28b1b5183e45fbf17941fcbb208bd4c47e1abfed4494a3e  js/bip39.js
 101d40f1ebce1d3345436ca388eacc523432ff0021eda9676f31a4130488bf1d  js/dashboard-page.js
@@ -64,7 +64,6 @@ a89e09d29278744721e647b205a9a85f6dd3622a1f0d2d4c3804333cf28e5061  js/polyseed.js
 4695ae6ccba75eb2775e6eadab605cad283256ba1866fe78f458baf65b5a5f85  js/qr-scanner.js
 5f5e2c80f5ba8b2b68d771fc44da7b5fd4a3e256526f78f985644f99e0df84c4  js/qrcodegen.js
 c1f1a120b6d3ad3a6a4bc39762ff0f406fa8e21c594adfe4e2a90c6428ef6b37  js/qwc-wallet-engine.js
-d1f721f6bcf4d59577cdec34aef9db81b98d5f41d7f5310a8b01c6c81cb96991  js/swap-popup.js
 da6e6a67d83899a486ac74da21479e2564f55e7c37bd389e2fd375d242bb3f7a  js/verify-page.js
 0d6c10b0b50d782d9a988cb2d90efb96f91f66618fbf06805193dd8a60722e04  js/wallet-vault.js
 c4aab8eeb3dfa9193708721209819e01a056ac512fc7d89e600b10aa8f11d12c  privacy.html
@@ -73,4 +72,4 @@ ca86caa016bb5a60d42bbcc6ddd5dfe6fd92ffbef793082f14aa7e9bc63db3ec  vendor/qwertyc
 bb9bcb4fd70ef19fe7d9839013bedc10d889eaa3e916f33dc5cac27f3a3e305d  vendor/qwertycoin-ts/monero.js
 0b45f17228cf256b6e0638f471a7320c2b661bc2b3c1b826736341badb1c8332  vendor/qwertycoin-ts/monero.worker.js
 b56b6cbccbd5a0370d840ea4000f0267499febfdf00897d50e948aceb71d5d87  vendor/qwertycoin-ts/monero.worker.js.LICENSE.txt
-43ab574503e926e8a819a7c5a339e3d30949ef6348d18e14feadf0dd43cb1b92  verify.html
+f7f5cd26d1bc17ba6c640404863b1de916a5a8aff3e626416a5c3ddfd1e1a23b  verify.html
