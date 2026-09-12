@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // so whatever the user sets here on the verify page is automatically
   // picked up by the dashboard's compatibility RPC client. Keep the legacy
   // storage key so existing users do not lose their configured endpoint.
-  const NODE_KEY = 'monero-web-node-url';
+  const NODE_KEY = 'qwertycoin-web-node-url';
   const advInput = $el('adv-node-url');
   const advMsg   = $el('adv-node-msg');
   const advSave  = $el('adv-node-save');
@@ -111,6 +111,107 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   seedInput.addEventListener('input', refreshDeriveBtn);
+
+  // ─── QWC WALLET AGE → conservative restore height ───
+  // Never derive this value from a foreign-chain checkpoint. Query the live
+  // QWC tip and subtract the selected age at QWC's 120-second block target,
+  // plus one full day as a safety margin. A failed lookup always falls back
+  // to genesis so the optimisation can never hide wallet history.
+  const QWC_SECS_PER_BLOCK = 120;
+  const QWC_BLOCKS_PER_DAY = 86400 / QWC_SECS_PER_BLOCK;
+  const QWC_RESTORE_SAFETY_BLOCKS = QWC_BLOCKS_PER_DAY;
+  const restoreHeightEl = $el('restore-height');
+  const restoreHeightStatus = $el('restore-height-selected');
+
+  function setRestoreStatus(message, isSafeFallback) {
+    if (!restoreHeightStatus) return;
+    restoreHeightStatus.textContent = message;
+    restoreHeightStatus.style.color = isSafeFallback ? 'var(--text-dim)' : 'var(--success)';
+    restoreHeightStatus.style.display = 'block';
+  }
+
+  async function getLiveQwcHeight() {
+    const customNode = (() => {
+      try { return localStorage.getItem(NODE_KEY) || ''; } catch (e) { return ''; }
+    })();
+    const endpoint = customNode
+      ? customNode.replace(/\/$/, '') + '/json_rpc'
+      : '/api/proxy?path=/json_rpc';
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 'restore-height', method: 'get_info' }),
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const payload = await response.json();
+      const height = payload && payload.result && Number(payload.result.height);
+      if (!Number.isSafeInteger(height) || height < 1) throw new Error('invalid QWC height');
+      return height;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  function estimateQwcRestoreHeight(tipHeight, ageDays) {
+    if (!Number.isSafeInteger(tipHeight) || tipHeight < 1) return 0;
+    if (!Number.isSafeInteger(ageDays) || ageDays <= 0) return 0;
+    const ageBlocks = ageDays * QWC_BLOCKS_PER_DAY;
+    return Math.max(0, tipHeight - ageBlocks - QWC_RESTORE_SAFETY_BLOCKS);
+  }
+
+  document.querySelectorAll('.wallet-age-btn').forEach(function(btn) {
+    btn.addEventListener('click', async function() {
+      document.querySelectorAll('.wallet-age-btn').forEach(function(item) {
+        item.classList.remove('active');
+        item.disabled = true;
+      });
+      btn.classList.add('active');
+      const ageDays = Number(btn.dataset.ageDays);
+
+      if (ageDays === 0) {
+        restoreHeightEl.value = '0';
+        setRestoreStatus('Scanning from QWC v2 genesis — no history can be skipped.', true);
+      } else {
+        setRestoreStatus('Reading the live Qwertycoin height…', true);
+        try {
+          const tipHeight = await getLiveQwcHeight();
+          const height = estimateQwcRestoreHeight(tipHeight, ageDays);
+          restoreHeightEl.value = String(height);
+          setRestoreStatus(
+            height > 0
+              ? 'Restore point set to QWC block ' + height.toLocaleString() + ' (live tip ' + tipHeight.toLocaleString() + ', including safety margin).'
+              : 'The chain is newer than this wallet age; scanning safely from QWC v2 genesis.',
+            height === 0
+          );
+        } catch (error) {
+          restoreHeightEl.value = '0';
+          setRestoreStatus('Could not read the live QWC height. Falling back safely to QWC v2 genesis.', true);
+        }
+      }
+
+      document.querySelectorAll('.wallet-age-btn').forEach(function(item) {
+        item.disabled = false;
+      });
+    });
+  });
+
+  if (restoreHeightEl) {
+    restoreHeightEl.addEventListener('input', function() {
+      const digits = restoreHeightEl.value.replace(/[^0-9]/g, '');
+      restoreHeightEl.value = digits || '0';
+      const height = Number(restoreHeightEl.value);
+      setRestoreStatus(
+        height > 0
+          ? 'Exact QWC restore height set to block ' + height.toLocaleString() + '.'
+          : 'Scanning from QWC v2 genesis — no history can be skipped.',
+        height === 0
+      );
+    });
+  }
 
   // ─── SPEND KEY INPUT ───
   const spendKeyInput = document.getElementById('spend-key-input');
@@ -190,7 +291,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // null so the engine picks whichever wordlist actually matches.
         const network    = 'mainnet';
         const keys = MoneroKeys.deriveFromMnemonic(mnemonic, null, network);
-        keys.restoreHeight = 0;
+        const restoreHeight = Number($val('restore-height'));
+        keys.restoreHeight = Number.isSafeInteger(restoreHeight) && restoreHeight > 0
+          ? restoreHeight
+          : 0;
         showResults(keys);
       } catch(e) {
         errorEl.textContent = 'Error: ' + e.message;

@@ -603,17 +603,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (typeof walletKeys.restoreHeight === 'number' && walletKeys.restoreHeight > 0) {
       return walletKeys.restoreHeight;
     }
-    if (walletKeys.seedFormat === 'polyseed' && typeof walletKeys.birthday === 'number') {
-      const POLYSEED_EPOCH = 1635768000;
-      const TIME_STEP = 2629746;
-      const CHECKPOINT_HEIGHT = 3651000;
-      const CHECKPOINT_TS = Date.UTC(2026, 3, 13) / 1000;
-      const SECS_PER_BLOCK = 120;
-      const birthdayTs = POLYSEED_EPOCH + walletKeys.birthday * TIME_STEP;
-      return Math.max(0, Math.floor(
-        CHECKPOINT_HEIGHT - (CHECKPOINT_TS - birthdayTs) / SECS_PER_BLOCK
-      ));
-    }
+    // Legacy browser sessions may still contain an unsupported polyseed
+    // birthday. Never map it through the former foreign-chain checkpoint;
+    // scanning from QWC v2 genesis is slower but cannot hide QWC history.
+    if (walletKeys.seedFormat === 'polyseed') return 0;
     return 0;
   }
 
@@ -790,24 +783,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       let restoreHeight = 0;
       if (typeof walletKeys.restoreHeight === 'number' && walletKeys.restoreHeight > 0) {
         restoreHeight = walletKeys.restoreHeight;
-      } else if (walletKeys.seedFormat === 'polyseed' && typeof walletKeys.birthday === 'number') {
-        // Convert the Polyseed birthday to a block height. First decode the
-        // birthday to a UNIX timestamp (polyseed birthday.h: EPOCH=1635768000,
-        // TIME_STEP=2629746s → birthday_decode(b)=EPOCH+b*TIME_STEP), then map
-        // that timestamp to a height with the same checkpoint estimate the
-        // verify page uses (~120s/block). birthday_decode floors to the start
-        // of the ~1-month birthday bucket, so the result is at or before the
-        // wallet's real creation time — a safe lower bound that never misses a
-        // transaction while still skipping years of pre-creation blocks.
-        const POLYSEED_EPOCH = 1635768000;                   // 2021-11-01 12:00 UTC
-        const TIME_STEP = 2629746;                           // 30.436875 days
-        const CHECKPOINT_HEIGHT = 3651000;
-        const CHECKPOINT_TS = Date.UTC(2026, 3, 13) / 1000;  // April 13, 2026
-        const SECS_PER_BLOCK = 120;
-        const birthdayTs = POLYSEED_EPOCH + walletKeys.birthday * TIME_STEP;
-        restoreHeight = Math.max(0, Math.floor(
-          CHECKPOINT_HEIGHT - (CHECKPOINT_TS - birthdayTs) / SECS_PER_BLOCK
-        ));
       }
       opts.createdAt = restoreHeight;
 

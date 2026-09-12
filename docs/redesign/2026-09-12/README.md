@@ -22,11 +22,13 @@ primitives are unchanged.
 Of the 43 retained JavaScript/Worker/server files listed in
 [`protected-logic.sha256`](protected-logic.sha256), 38 remain byte-identical to
 the original redesign baseline. Five have narrow reviewed QWC-facing changes:
-`js/verify-page.js` enforces the 25-word format, `js/qr-scanner.js` accepts the
-Qwertycoin URI scheme, `js/dashboard-page.js` emits Qwertycoin URIs and explorer
-links, and `js/index-page.js` plus `functions/_middleware.js` have comment-only
-terminology updates. The hash file records the new reviewed state. The
-unsupported presentation-only `js/swap-popup.js` remains removed.
+`js/verify-page.js` enforces the 25-word format and estimates an optional restore
+height from the live QWC tip, `js/qr-scanner.js` accepts the Qwertycoin URI
+scheme, `js/dashboard-page.js` emits Qwertycoin URIs and explorer links while
+failing legacy foreign-chain restore metadata back to genesis, and
+`js/index-page.js` plus `functions/_middleware.js` have comment-only terminology
+updates. The hash file records the new reviewed state. The unsupported
+presentation-only `js/swap-popup.js` remains removed.
 
 The redesign intentionally preserves functional IDs/classes and inline
 `display`/`hidden` state ownership. The shared stylesheet is loaded after the

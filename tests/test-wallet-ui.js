@@ -155,12 +155,24 @@ test('seed import exposes only the canonical 25-word Qwertycoin format', () => {
   const verify = read('verify.html');
   const controller = read('js/verify-page.js');
   linked(verify, 'Qwertycoin standard · exactly 25 words');
-  linked(verify, 'id="restore-height" value="0"');
+  linked(verify, 'id="restore-height" inputmode="numeric" value="0"');
+  linked(verify, 'data-age-days="7"');
+  linked(verify, 'data-age-days="365"');
+  linked(verify, "I don't know");
   linked(controller, "25: { name:'Qwertycoin Standard'");
   linked(controller, 'wordCount !== 25');
   linked(controller, 'MoneroKeys.deriveFromMnemonic(mnemonic, null, network)');
-  linked(controller, 'keys.restoreHeight = 0');
-  for (const legacy of ['legacy imports:', 'Monero Standard', 'BIP-39 Passphrase', 'wallet-age-btn']) {
+  linked(controller, "const NODE_KEY = 'qwertycoin-web-node-url'");
+  linked(controller, 'const QWC_SECS_PER_BLOCK = 120');
+  linked(controller, 'const QWC_RESTORE_SAFETY_BLOCKS = QWC_BLOCKS_PER_DAY');
+  linked(controller, "method: 'get_info'");
+  linked(controller, 'estimateQwcRestoreHeight(tipHeight, ageDays)');
+  linked(controller, 'Number.isSafeInteger(restoreHeight) && restoreHeight > 0');
+  assert(!controller.includes('CHECKPOINT_HEIGHT'), 'foreign-chain restore checkpoint remains');
+  assert(!controller.includes('CHECKPOINT_TS'), 'foreign-chain restore timestamp remains');
+  assert(!read('js/dashboard-page.js').includes('CHECKPOINT_HEIGHT'), 'dashboard retains foreign-chain restore checkpoint');
+  assert(!read('js/dashboard-page.js').includes('CHECKPOINT_TS'), 'dashboard retains foreign-chain restore timestamp');
+  for (const legacy of ['legacy imports:', 'Monero Standard', 'BIP-39 Passphrase']) {
     assert(!verify.includes(legacy), `verify.html: unsupported seed UI remains: ${legacy}`);
   }
   for (const count of ['12:', '13:', '16:']) {
