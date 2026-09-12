@@ -8,9 +8,10 @@ Design reference: `qwertycoin-org/qwertycoin-org.github.io@cad291f45602e44c94f75
 
 ## Scope and invariants
 
-This change is presentation-only. It adds the approved Qwertycoin mark, local
+This change aligns presentation and self-hosting guidance. It adds the approved Qwertycoin mark, local
 Archivo/Inter fonts, the cream/black/gold/violet visual system, responsive
-layout rules, and a complete favicon matrix. Wallet creation/restoration,
+layout rules, a complete favicon matrix, and QWC-specific verification and
+self-hosting instructions. Wallet creation/restoration,
 session storage, encryption, RPC, scanning, amounts, fees, transaction
 construction/signing/relay, and all functional event handlers are unchanged.
 
@@ -69,12 +70,18 @@ Additional evidence is in [`screenshots/after`](screenshots/after), including
 mobile dialogs, create/watch-only states, unlock, rate-limit, QR scanner,
 privacy, and self-host pages.
 
+### Qwertycoin self-host guide
+
+| Desktop | 390 px |
+| --- | --- |
+| ![Qwertycoin self-host guide](screenshots/after/self-host-desktop.webp) | ![Qwertycoin self-host guide on mobile](screenshots/after/self-host-mobile.webp) |
+
 ## Verification
 
 | Check | Result |
 | --- | --- |
 | Existing wallet tests | 44/44 PASS |
-| Presentation-contract tests | 7/7 PASS |
+| Presentation-contract tests | 8/8 PASS |
 | Manifest build and `--check` | 66/66 files PASS |
 | Protected logic hash comparison | byte-identical PASS |
 | Responsive overflow matrix | 24/24 page/viewport combinations PASS |
@@ -99,6 +106,8 @@ Performance / Accessibility / Best Practices / SEO.
 | Verify / desktop | 99 / 100 / 100 / 100 | 847 ms | 0.0013 | 0 ms |
 | Privacy / mobile | 100 / 100 / 100 / 100 | 1,656 ms | 0.0146 | 0 ms |
 | Privacy / desktop | 100 / 100 / 100 / 100 | 363 ms | 0.0107 | 0 ms |
+| Self-host / mobile | 99 / 100 / 100 / 100 | 1,808 ms | 0.0268 | 0 ms |
+| Self-host / desktop | 100 / 100 / 100 / 100 | 409 ms | 0.0066 | 0 ms |
 
 The local mobile Verify result is dominated by the existing synchronous wallet
 and wordlist payload on Lighthouse's throttled profile, served without edge
@@ -119,8 +128,8 @@ release-facing measurement.
 
 ## Known limitations outside this visual scope
 
-The existing `privacy.html` and `self-host.html` prose still contains inherited
-Monero-era wording and URLs. The brief explicitly requires their factual
-content/instructions to remain unchanged in this presentation-only change, so
-the issue is documented instead of silently mixing editorial and visual work.
+The existing `privacy.html` prose still contains inherited Monero-era wording
+and URLs. The self-host guide is now Qwertycoin-specific and describes the
+current local browser scanner, restricted RPC gateway, and `qwertycoind`
+architecture. Privacy copy remains a separate editorial follow-up.
 No new theme switch was added because the wallet has no existing theme control.

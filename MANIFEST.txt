@@ -1,5 +1,5 @@
 # Qwertycoin Web Wallet build manifest
-# Generated 2026-09-12T00:03:46Z from commit 69eb5e1
+# Generated 2026-09-12T06:25:57Z from commit 57c9456
 #
 # Verify the live deployment matches a specific git tag with:
 #   git checkout v0.1.0
@@ -68,7 +68,7 @@ d1f721f6bcf4d59577cdec34aef9db81b98d5f41d7f5310a8b01c6c81cb96991  js/swap-popup.
 da6e6a67d83899a486ac74da21479e2564f55e7c37bd389e2fd375d242bb3f7a  js/verify-page.js
 0d6c10b0b50d782d9a988cb2d90efb96f91f66618fbf06805193dd8a60722e04  js/wallet-vault.js
 c4aab8eeb3dfa9193708721209819e01a056ac512fc7d89e600b10aa8f11d12c  privacy.html
-9739e6a1a5c1de0a0556f7e53e1c21cc4636084c502114cba546ca4cd970151a  self-host.html
+e56e9ba85405af1d0a6a5d571d119faee5e6339e8d26cd8dcfc7450b7c4e141f  self-host.html
 ca86caa016bb5a60d42bbcc6ddd5dfe6fd92ffbef793082f14aa7e9bc63db3ec  vendor/qwertycoin-ts/BUILDINFO.txt
 bb9bcb4fd70ef19fe7d9839013bedc10d889eaa3e916f33dc5cac27f3a3e305d  vendor/qwertycoin-ts/monero.js
 0b45f17228cf256b6e0638f471a7320c2b661bc2b3c1b826736341badb1c8332  vendor/qwertycoin-ts/monero.worker.js

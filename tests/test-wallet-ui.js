@@ -120,4 +120,24 @@ test('asset build and cache policy cover the new local presentation files', () =
   linked(headers, '/assets/*');
 });
 
+test('self-host guide is Qwertycoin-specific and describes the current RPC architecture', () => {
+  const guide = read('self-host.html');
+  for (const value of [
+    'https://wallet.qwertycoin.org/self-host',
+    'https://github.com/qwertycoin-org/wallet.qwertycoin.org',
+    'https://github.com/qwertycoin-org/qwertycoin.git',
+    'qwertycoind',
+    '--rpc-restricted-bind-port 8198',
+    'functions/_qwcRpcProxy.js',
+    'functions/api/proxy.js',
+  ]) linked(guide, value);
+  for (const legacy of [
+    'monero-web.com',
+    'Medtabka/monero-web',
+    'monerod',
+    'monero-lws',
+    'node.monero-web.com',
+  ]) assert(!guide.includes(legacy), `self-host.html: legacy reference remains: ${legacy}`);
+});
+
 console.log(`\n  ${passed} presentation-contract tests passed\n`);
