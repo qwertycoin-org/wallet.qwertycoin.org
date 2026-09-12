@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="description" content="Open your Qwertycoin web wallet in the browser. Enter a QWC seed phrase or private key — keys derive locally and never leave your device. Non-custodial, open source, no downloads.">
 <link rel="canonical" href="https://wallet.qwertycoin.org/verify">
 <meta property="og:title" content="Open your Qwertycoin wallet — wallet.qwertycoin.org">
@@ -15,9 +15,13 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://wallet.qwertycoin.org/assets/social-card.png">
 <title>Qwertycoin Web Wallet — Verify Your Wallet</title>
-<link rel="icon" type="image/png" sizes="192x192" href="/assets/favicon-192x192.png">
-<link rel="apple-touch-icon" sizes="192x192" href="/assets/favicon-192x192.png">
-<link rel="icon" type="image/x-icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16x16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="preload" href="/fonts/archivo-latin-900.e915040a27c5.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/inter-latin-400.8909904ab6c8.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/fonts/fonts.css">
 <style>
 :root {
@@ -144,22 +148,24 @@ footer p{font-size:.7rem;color:var(--text-dim)}
   .security-notice p{font-size:.7rem}
 }
 </style>
+<link rel="stylesheet" href="/assets/wallet-ui.css">
 </head>
-<body>
+<body class="wallet-app wallet-verify">
 
 <div class="ambient"></div>
 
 <div class="page">
   <div class="container">
-    <nav>
+    <nav aria-label="Primary">
       <a href="/verify" class="logo" style="text-decoration:none;color:inherit;cursor:pointer" title="Open wallet">
-        <img class="logo-img" src="/assets/classic/logo.png" alt="Qwertycoin">
+        <img class="logo-img" src="/assets/qwertycoin-mark.svg" width="42" height="42" alt="">
+        <span class="brand-lockup"><strong>QWERTYCOIN</strong><span>Web Wallet</span></span>
       </a>
       <div class="nav-links"><a href="/verify">Wallet</a><a href="https://qwertycoin.org/">Mainnet</a><a href="/self-host">Self-Host</a><a href="#" class="swap-popup-trigger">Swap crypto</a><a href="https://github.com/qwertycoin-org/wallet.qwertycoin.org" target="_blank" rel="noopener">GitHub</a></div>
     </nav>
   </div>
 
-  <div class="main-area">
+  <main class="main-area" id="main-content">
     <div class="container">
       <div class="card">
         <div class="card-header">
@@ -365,7 +371,7 @@ footer p{font-size:.7rem;color:var(--text-dim)}
 
       </div>
     </div>
-  </div>
+  </main>
 
   <footer>
     <div class="container">

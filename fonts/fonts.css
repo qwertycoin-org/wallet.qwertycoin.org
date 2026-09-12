@@ -1,3 +1,29 @@
+/* Qwertycoin brand faces. Files are copied byte-for-byte from the approved
+   qwertycoin.org design release and are content-addressed for immutable cache. */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url(archivo-latin-900.e915040a27c5.woff2) format('woff2');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(inter-latin-400.8909904ab6c8.woff2) format('woff2');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(inter-latin-600.f9a06e79cd3a.woff2) format('woff2');
+}
+
 /* cyrillic-ext */
 @font-face {
   font-family: 'JetBrains Mono';

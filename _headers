@@ -57,6 +57,9 @@
 /vendor/qwertycoin-ts/*
   Cache-Control: public, max-age=0, must-revalidate
 
+/assets/*
+  Cache-Control: public, max-age=0, must-revalidate
+
 # Fonts are filename-hashed in fonts/fonts.css so a content change ALWAYS
 # changes the URL. Safe to cache for a year and tell the browser it's
 # immutable (won't even ask for revalidation).

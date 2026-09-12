@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="robots" content="noindex, nofollow">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta property="og:title" content="Qwertycoin Wallet Dashboard — wallet.qwertycoin.org">
 <meta property="og:description" content="Your non-custodial Qwertycoin wallet, running entirely in your browser. View your address, receive QWC, and prepare transactions.">
 <meta property="og:url" content="https://wallet.qwertycoin.org/dashboard">
@@ -15,9 +15,13 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://wallet.qwertycoin.org/assets/social-card.png">
 <title>Qwertycoin Web Wallet — Dashboard</title>
-<link rel="icon" type="image/png" sizes="192x192" href="/assets/favicon-192x192.png">
-<link rel="apple-touch-icon" sizes="192x192" href="/assets/favicon-192x192.png">
-<link rel="icon" type="image/x-icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16x16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="preload" href="/fonts/archivo-latin-900.e915040a27c5.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/inter-latin-400.8909904ab6c8.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/fonts/fonts.css">
 <style>
 :root {
@@ -177,14 +181,16 @@ footer p{font-size:.65rem;color:var(--text-dim)}
   .conn-bar{font-size:.66rem}
 }
 </style>
+<link rel="stylesheet" href="/assets/wallet-ui.css">
 </head>
-<body>
+<body class="wallet-app wallet-dashboard">
 
 <div class="page">
   <div class="container">
-    <nav>
+    <nav aria-label="Primary">
       <a href="/dashboard" class="logo" style="text-decoration:none;color:inherit;cursor:pointer" title="Open wallet dashboard">
-        <img class="logo-img" src="/assets/classic/logo.png" alt="Qwertycoin">
+        <img class="logo-img" src="/assets/qwertycoin-mark.svg" width="42" height="42" alt="">
+        <span class="brand-lockup"><strong>QWERTYCOIN</strong><span>Web Wallet</span></span>
       </a>
       <div class="nav-links">
         <a href="/dashboard" class="active">Wallet</a>
@@ -195,6 +201,7 @@ footer p{font-size:.65rem;color:var(--text-dim)}
       </div>
     </nav>
 
+    <main id="main-content">
     <!-- Connection bar -->
     <div class="conn-bar">
       <div class="conn-dot connecting" id="conn-dot"></div>
@@ -360,6 +367,7 @@ footer p{font-size:.65rem;color:var(--text-dim)}
       <!-- Disconnect -->
       <button class="disconnect-btn" id="btn-disconnect">Disconnect Wallet</button>
     </div>
+    </main>
   </div>
 
   <!-- ═══ RATE LIMIT MODAL ═══ -->
