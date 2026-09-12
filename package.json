@@ -6,7 +6,7 @@
   "license": "MIT",
   "scripts": {
     "build": "bash tools/build-manifest.sh --write",
-    "test": "node tests/test-new-paths.js"
+    "test": "node tests/test-new-paths.js && node tests/test-wallet-ui.js"
   },
   "engines": {
     "node": ">=20"

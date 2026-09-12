@@ -3,37 +3,41 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta property="og:title" content="Self-Host & Verify — monero-web.com">
-<meta property="og:description" content="Don't trust us. Verify. Run monero-web entirely on your own hardware, or check that what's live matches the open-source code.">
-<meta property="og:url" content="https://monero-web.com/self-host">
+<meta property="og:title" content="Self-Host & Verify — Qwertycoin Web Wallet">
+<meta property="og:description" content="Verify wallet.qwertycoin.org against its public source or run the Qwertycoin Web Wallet with your own restricted QWC node.">
+<meta property="og:url" content="https://wallet.qwertycoin.org/self-host">
 <meta property="og:type" content="website">
-<meta property="og:image" content="https://monero-web.com/assets/social-card.png">
+<meta property="og:image" content="https://wallet.qwertycoin.org/assets/social-card.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="https://monero-web.com/assets/social-card.png">
-<title>Self-Host & Verify — Monero Web</title>
-<meta name="description" content="Run monero-web on your own machine. Verify the live site matches the open-source code. Step-by-step guide.">
-<link rel="canonical" href="https://monero-web.com/self-host">
+<meta name="twitter:image" content="https://wallet.qwertycoin.org/assets/social-card.png">
+<title>Self-Host & Verify — Qwertycoin Web Wallet</title>
+<meta name="description" content="Verify the official Qwertycoin Web Wallet deployment or run the wallet frontend and restricted QWC RPC stack on your own infrastructure.">
+<link rel="canonical" href="https://wallet.qwertycoin.org/self-host">
 <meta name="robots" content="index, follow">
 
-<link rel="icon" type="image/png" sizes="192x192" href="/assets/favicon-192x192.png">
-<link rel="apple-touch-icon" sizes="192x192" href="/assets/favicon-192x192.png">
-<link rel="icon" type="image/x-icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16x16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="preload" href="/fonts/archivo-latin-900.e915040a27c5.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/inter-latin-400.8909904ab6c8.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/fonts/fonts.css">
 
 <style>
 :root {
   --bg:#0a0a0a; --surface:#111113; --surface-2:#17171b; --border:rgba(255,255,255,0.06);
   --text:#eae8e4; --text-mid:#9a9894; --text-dim:#6e6c6a;
-  --xmr:#ff6600; --xmr-dim:rgba(255,102,0,0.12); --xmr-glow:rgba(255,102,0,0.25);
+  --qwc:#ff6600; --qwc-dim:rgba(255,102,0,0.12); --qwc-glow:rgba(255,102,0,0.25);
   --success:#22c55e; --success-dim:rgba(34,197,94,0.1); --radius:14px;
 }
 *{margin:0;padding:0;box-sizing:border-box}
 body{user-select:none;-webkit-user-select:none;cursor:default;background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;font-size:16px;line-height:1.65;-webkit-font-smoothing:antialiased;min-height:100dvh;display:flex;flex-direction:column}
 p,li,h1,h2,h3,code,pre{user-select:text;-webkit-user-select:text;cursor:text}
-a{color:var(--xmr);text-decoration:none;border-bottom:1px solid rgba(255,102,0,0.3);cursor:pointer}
-a:hover{border-bottom-color:var(--xmr)}
+a{color:var(--qwc);text-decoration:none;border-bottom:1px solid rgba(255,102,0,0.3);cursor:pointer}
+a:hover{border-bottom-color:var(--qwc)}
 button,.btn,nav a{cursor:pointer}
 
 .ambient{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
@@ -47,7 +51,7 @@ nav{padding:20px 0;display:flex;align-items:center;justify-content:space-between
 .logo{display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit;border:0}
 .logo svg{width:30px;height:30px}
 .logo-text{font-size:1.05rem;font-weight:700;letter-spacing:-0.02em}
-.logo-text span{color:var(--xmr)}
+.logo-text span{color:var(--qwc)}
 .nav-links{display:flex;gap:6px}
 .nav-links a{color:var(--text-mid);font-size:.82rem;font-weight:500;padding:8px 14px;border:0;border-radius:100px;transition:all .25s;text-decoration:none}
 .nav-links a:hover{color:var(--text);background:var(--surface-2)}
@@ -61,8 +65,8 @@ p{margin-bottom:14px;color:var(--text-mid)}
 ul,ol{padding-left:22px;margin-bottom:14px;color:var(--text-mid)}
 li{margin-bottom:8px;line-height:1.55}
 
-.callout{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--xmr);border-radius:10px;padding:18px 22px;margin:24px 0;color:var(--text)}
-.callout strong{color:var(--xmr)}
+.callout{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--qwc);border-radius:10px;padding:18px 22px;margin:24px 0;color:var(--text)}
+.callout strong{color:var(--qwc)}
 .callout-green{border-left-color:var(--success);background:var(--success-dim)}
 .callout-green strong{color:var(--success)}
 
@@ -70,7 +74,7 @@ li{margin-bottom:8px;line-height:1.55}
 .steps{display:flex;flex-direction:column;gap:0;margin:24px 0}
 .step{display:flex;gap:18px;padding:20px 0;border-bottom:1px solid var(--border)}
 .step:last-child{border-bottom:none}
-.step-num{flex-shrink:0;width:32px;height:32px;border-radius:50%;background:var(--xmr-dim);border:1px solid rgba(255,102,0,0.2);color:var(--xmr);font-size:.82rem;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:2px}
+.step-num{flex-shrink:0;width:32px;height:32px;border-radius:50%;background:var(--qwc-dim);border:1px solid rgba(255,102,0,0.2);color:var(--qwc);font-size:.82rem;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:2px}
 .step-body h3{margin-top:0}
 .step-body p{margin-bottom:8px}
 
@@ -83,6 +87,10 @@ pre code{background:none;border:none;padding:0;font-size:inherit}
 .code-wrap{position:relative}
 .copy-code{position:absolute;top:10px;right:10px;background:var(--surface-2);border:1px solid var(--border);color:var(--text-dim);font-size:.68rem;padding:4px 10px;border-radius:6px;cursor:pointer;font-family:'Outfit',sans-serif;transition:all .2s}
 .copy-code:hover{color:var(--text);border-color:rgba(255,255,255,0.15)}
+
+@media (max-width:640px){
+  .wallet-article .code-wrap pre{padding-top:48px}
+}
 
 /* Trust table */
 .trust-table{width:100%;border-collapse:collapse;margin:16px 0;font-size:.85rem}
@@ -97,22 +105,23 @@ footer a{color:var(--text-mid);border:0}
 footer a:hover{color:var(--text)}
 .footer-row{display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-bottom:14px}
 </style>
+<link rel="stylesheet" href="/assets/wallet-ui.css">
 </head>
-<body>
+<body class="wallet-app wallet-article">
 
 <div class="ambient"><div class="orb orb-1"></div><div class="orb orb-2"></div></div>
 
 <header>
   <div class="container">
     <nav>
-      <a href="/" class="logo" title="Back to home">
-        <svg viewBox="0 0 256 256"><circle cx="128" cy="128" r="128" fill="#ff6600"/><path d="M63.5 178.2V105.7l64.5 64.5 64.5-64.5v72.5h29.8v-99.9c0-6.7-5.4-12.1-12.1-12.1-3.2 0-6.3 1.3-8.6 3.5L128 143.3 54.4 69.7c-2.3-2.3-5.3-3.5-8.6-3.5-6.7 0-12.1 5.4-12.1 12.1v99.9h29.8z" fill="#fff"/></svg>
-        <div class="logo-text">monero<span>web</span></div>
+      <a href="/verify" class="logo" title="Open wallet">
+        <img class="logo-img" src="/assets/qwertycoin-mark.svg" width="42" height="42" alt="">
+        <span class="brand-lockup"><strong>QWERTYCOIN</strong><span>Web Wallet</span></span>
       </a>
       <div class="nav-links">
-        <a href="/">Home</a>
+        <a href="https://qwertycoin.org/">Mainnet</a>
         <a href="/verify">Open Wallet</a>
-        <a href="https://github.com/Medtabka/monero-web" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/qwertycoin-org/wallet.qwertycoin.org" target="_blank" rel="noopener">GitHub</a>
       </div>
     </nav>
   </div>
@@ -122,45 +131,47 @@ footer a:hover{color:var(--text)}
   <div class="container">
 
     <h1>Self-Host & Verify</h1>
-    <p class="lead">Don't trust us — verify. This page explains exactly how to check that what's running at monero-web.com matches the public source code, and how to run the entire stack on your own hardware.</p>
+    <p class="lead">Don't trust us — verify. This page explains how to compare <code>wallet.qwertycoin.org</code> with the official public source and how to run the Qwertycoin Web Wallet with your own restricted QWC node.</p>
 
     <div class="callout">
-      <strong>The short version:</strong> the frontend is a static site — clone the repo and serve it with <code>python3 -m http.server 8080</code>. No build step, no npm, no installs. Your keys are derived locally either way. The only thing that changes when you self-host is whose light-wallet server scans the chain with your view key.
+      <strong>The short version:</strong> wallet keys, blockchain scanning and transaction signing stay inside your browser. The official site reaches a restricted <code>qwertycoind</code> endpoint through a same-origin, allowlisted RPC gateway. A static local copy is enough to inspect the frontend; a fully working self-hosted wallet also needs that gateway and a synced QWC node.
     </div>
 
     <!-- ── OPTION 1: Verify live site ── -->
     <h2>Option 1 — Verify the live site</h2>
-    <p>Every file served at monero-web.com is SHA-256 hashed in <a href="https://github.com/Medtabka/monero-web/blob/main/MANIFEST.txt" target="_blank" rel="noopener">MANIFEST.txt</a>, which is committed to GitHub. You can verify the live deployment matches the source code like this:</p>
+    <p>Every deployed wallet file is SHA-256 hashed in the repository's <a href="https://github.com/qwertycoin-org/wallet.qwertycoin.org/blob/master/MANIFEST.txt" target="_blank" rel="noopener">MANIFEST.txt</a>. Compare the manifest served by <code>wallet.qwertycoin.org</code> with the official repository, then verify the checked-out files:</p>
 
     <div class="code-wrap">
-      <pre><code># 1. Fetch the MANIFEST from the live site
-curl -sf https://monero-web.com/MANIFEST.txt -o live-manifest.txt
+      <pre><code># 1. Clone the official wallet repository
+git clone https://github.com/qwertycoin-org/wallet.qwertycoin.org.git
+cd wallet.qwertycoin.org
 
-# 2. Check the commit it was generated from (line 2 of the file)
-head -3 live-manifest.txt
+# 2. Fetch the manifest from the live wallet
+curl -fsS https://wallet.qwertycoin.org/MANIFEST.txt \
+  -o ../live-manifest.txt
 
-# 3. Clone the repo and check out that exact commit
-git clone https://github.com/Medtabka/monero-web.git
-cd monero-web
-git checkout &lt;commit from step 2&gt;
+# 3. Confirm GitHub and the live site publish the same manifest
+cmp MANIFEST.txt ../live-manifest.txt
 
-# 4. Compare — should return nothing if the files match
-diff MANIFEST.txt ../live-manifest.txt</code></pre>
+# 4. Verify every deployed file against the signed-off hashes
+sha256sum -c ../live-manifest.txt</code></pre>
       <button class="copy-code" onclick="copyCode(this)">Copy</button>
     </div>
 
-    <p>If <code>diff</code> returns nothing, the live files are byte-for-byte identical to that commit. Any difference means something on the live site doesn't match the published code.</p>
+    <p><code>cmp</code> prints nothing when both manifests are identical. <code>sha256sum</code> must report <code>OK</code> for every file. Any other result means the checked-out source and live deployment do not match.</p>
 
-    <p>To verify a single file (e.g. the signing module):</p>
+    <p>To verify one QWC-specific file, such as the browser wallet engine:</p>
     <div class="code-wrap">
-      <pre><code>curl -sf https://monero-web.com/js/monero-send.js | sha256sum</code></pre>
+      <pre><code>curl -fsS https://wallet.qwertycoin.org/js/qwc-wallet-engine.js \
+  | sha256sum
+grep 'js/qwc-wallet-engine.js' MANIFEST.txt</code></pre>
       <button class="copy-code" onclick="copyCode(this)">Copy</button>
     </div>
-    <p>Compare the output against the hash in <code>MANIFEST.txt</code> for <code>js/monero-send.js</code>.</p>
+    <p>The two SHA-256 values must match exactly.</p>
 
     <!-- ── OPTION 2: Run locally ── -->
     <h2>Option 2 — Run the frontend locally</h2>
-    <p>The frontend has zero build dependencies. Clone and serve with any static file server:</p>
+    <p>The frontend itself has no build step. Clone the official repository and serve it with any static file server:</p>
 
     <div class="steps">
       <div class="step">
@@ -168,8 +179,8 @@ diff MANIFEST.txt ../live-manifest.txt</code></pre>
         <div class="step-body">
           <h3>Clone the repo</h3>
           <div class="code-wrap">
-            <pre><code>git clone https://github.com/Medtabka/monero-web.git
-cd monero-web</code></pre>
+            <pre><code>git clone https://github.com/qwertycoin-org/wallet.qwertycoin.org.git
+cd wallet.qwertycoin.org</code></pre>
             <button class="copy-code" onclick="copyCode(this)">Copy</button>
           </div>
         </div>
@@ -183,36 +194,34 @@ cd monero-web</code></pre>
             <pre><code>python3 -m http.server 8080</code></pre>
             <button class="copy-code" onclick="copyCode(this)">Copy</button>
           </div>
-          <p>Then open <code>http://localhost:8080</code> in your browser. You can't open <code>index.html</code> directly as a file — the WASM signing module uses absolute paths and won't load from a <code>file://</code> URL.</p>
+          <p>Open <code>http://localhost:8080/verify</code> in your browser. Do not open the HTML files through a <code>file://</code> URL: the QWC WebAssembly worker uses origin-relative paths.</p>
         </div>
       </div>
 
       <div class="step">
         <div class="step-num">3</div>
         <div class="step-body">
-          <h3>Point at your own node (optional)</h3>
-          <p>By default the dashboard calls our light-wallet server at <code>node.monero-web.com</code>. To use your own monero-lws instance, open the browser console on the dashboard and run:</p>
-          <div class="code-wrap">
-            <pre><code>LwsClient.setBaseUrl('https://your-lws.example.com')</code></pre>
-            <button class="copy-code" onclick="copyCode(this)">Copy</button>
-          </div>
-          <p>Your monero-lws must serve CORS headers and use HTTPS. Note: this resets on every page reload — full self-hosting (Option 3) is the permanent solution.</p>
+          <h3>Understand the local limit</h3>
+          <p>The Python server only serves static files. It does not execute the repository's Cloudflare Pages Functions, so network sync and transaction relay through <code>/api/proxy</code> are unavailable. Use this mode for source inspection and interface testing. Use Option 3 for a complete wallet stack.</p>
         </div>
       </div>
     </div>
 
     <!-- ── OPTION 3: Full self-host ── -->
     <h2>Option 3 — Full self-hosted stack</h2>
-    <p>To eliminate all third-party trust you need to run three things: the static frontend, a Monero full node (<code>monerod</code>), and a light-wallet server (<code>monero-lws</code>).</p>
+    <p>A complete Qwertycoin setup has three parts: the static Web Wallet, its restricted same-origin RPC gateway, and a synced QWC full node (<code>qwertycoind</code>). QWC wallet scanning runs locally in the browser; no separate light-wallet server receives your view key.</p>
 
     <div class="steps">
       <div class="step">
         <div class="step-num">1</div>
         <div class="step-body">
-          <h3>Run monerod</h3>
-          <p>Install and sync a full Monero node. The initial sync takes 1–3 days depending on your hardware. See the <a href="https://www.getmonero.org/downloads/" target="_blank" rel="noopener">official Monero downloads</a> for binaries.</p>
+          <h3>Build Qwertycoin Core</h3>
+          <p>There are currently no official Qwertycoin v2 binary releases. Build from the <a href="https://github.com/qwertycoin-org/qwertycoin" target="_blank" rel="noopener">official Qwertycoin Core repository</a> and review its platform-specific instructions:</p>
           <div class="code-wrap">
-            <pre><code>monerod --detach --log-file monerod.log</code></pre>
+            <pre><code>git clone --recursive https://github.com/qwertycoin-org/qwertycoin.git
+cd qwertycoin
+git submodule update --init --recursive
+make release</code></pre>
             <button class="copy-code" onclick="copyCode(this)">Copy</button>
           </div>
         </div>
@@ -221,29 +230,38 @@ cd monero-web</code></pre>
       <div class="step">
         <div class="step-num">2</div>
         <div class="step-body">
-          <h3>Run monero-lws</h3>
-          <p><a href="https://github.com/vtnerd/monero-lws" target="_blank" rel="noopener">monero-lws</a> is the light-wallet server that scans the chain for your outputs using your view key. Point it at your running monerod:</p>
+          <h3>Run a restricted QWC RPC</h3>
+          <p>Start <code>qwertycoind</code> with unrestricted RPC on localhost only and a separate restricted wallet RPC on port <code>8198</code>. Keep the restricted endpoint behind your firewall or an authenticated/TLS reverse proxy:</p>
           <div class="code-wrap">
-            <pre><code>monero-lws-daemon \
-  --daemon http://127.0.0.1:18081 \
-  --rest-server http://127.0.0.1:8443 \
-  --db-path ./lws-db \
-  --network main</code></pre>
+            <pre><code>./build/release/bin/qwertycoind \
+  --p2p-bind-ip 0.0.0.0 \
+  --p2p-bind-port 8196 \
+  --rpc-bind-ip 127.0.0.1 \
+  --rpc-bind-port 8197 \
+  --rpc-restricted-bind-ip 127.0.0.1 \
+  --rpc-restricted-bind-port 8198 \
+  --zmq-rpc-bind-port 8199</code></pre>
             <button class="copy-code" onclick="copyCode(this)">Copy</button>
           </div>
+          <p>Never expose unrestricted RPC port <code>8197</code> to the public internet. The Web Wallet needs only the restricted sync and transaction-relay methods enforced by its gateway.</p>
         </div>
       </div>
 
       <div class="step">
         <div class="step-num">3</div>
         <div class="step-body">
-          <h3>Serve the frontend</h3>
-          <p>Any static file server works:</p>
+          <h3>Run the wallet gateway and frontend</h3>
+          <p>The wallet repository includes Cloudflare Pages Functions that allow only the QWC RPC paths required by the browser wallet, apply request/response limits and reject mining or daemon-administration methods. Point both gateway upstream lists at your restricted RPC, then run the Pages development server:</p>
           <div class="code-wrap">
-            <pre><code>python3 -m http.server 8080</code></pre>
+            <pre><code># In the wallet repository, configure your restricted QWC upstream in:
+#   functions/_qwcRpcProxy.js
+#   functions/api/proxy.js
+# Local-only upstream: http://127.0.0.1:8198
+
+npx wrangler pages dev .</code></pre>
             <button class="copy-code" onclick="copyCode(this)">Copy</button>
           </div>
-          <p>Open <code>http://localhost:8080</code> and point the LWS URL at your local monero-lws via the browser console: <code>LwsClient.setBaseUrl('http://127.0.0.1:8443')</code></p>
+          <p>Open the URL printed by Wrangler. For an internet-facing deployment, protect the restricted RPC with HTTPS and keep the browser on the same origin as the gateway. Review the allowlists in both Function files before deployment; do not replace them with an unrestricted pass-through proxy.</p>
         </div>
       </div>
     </div>
@@ -255,38 +273,38 @@ cd monero-web</code></pre>
         <tr>
           <th>Setup</th>
           <th>Frontend</th>
-          <th>View key goes to</th>
-          <th>Spend key</th>
+          <th>RPC path</th>
+          <th>Wallet secrets</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td>monero-web.com (default)</td>
-          <td>Cloudflare CDN</td>
-          <td>Our server</td>
+          <td>wallet.qwertycoin.org</td>
+          <td>Cloudflare Pages</td>
+          <td>Official restricted QWC gateway</td>
           <td class="yes">Browser only</td>
         </tr>
         <tr>
-          <td>Local frontend + our LWS</td>
+          <td>Local frontend only</td>
           <td>Your machine</td>
-          <td>Our server</td>
+          <td class="no">No local gateway</td>
           <td class="yes">Browser only</td>
         </tr>
         <tr>
           <td>Full self-hosted</td>
           <td>Your machine</td>
-          <td>Your server</td>
+          <td>Your restricted <code>qwertycoind</code></td>
           <td class="yes">Browser only</td>
         </tr>
       </tbody>
     </table>
 
     <div class="callout callout-green" style="margin-top:24px">
-      <strong>In every setup:</strong> your spend key and seed phrase never leave your browser tab. Transaction signing happens locally using the bundled WebAssembly module. This is true whether you use monero-web.com or run it yourself.
+      <strong>In every setup:</strong> your seed, private spend key and private view key stay in your browser. QWC wallet scanning and transaction signing run locally in the bundled WebAssembly worker. The RPC gateway receives daemon sync requests and signed transaction data, never your wallet keys.
     </div>
 
     <h2>Questions or issues</h2>
-    <p>If you find a discrepancy between the live site and the source code, or a security issue, please report it at <a href="mailto:security@monero-web.com">security@monero-web.com</a> or open an issue on <a href="https://github.com/Medtabka/monero-web" target="_blank" rel="noopener">GitHub</a>.</p>
+    <p>For a normal bug or documentation discrepancy, open an issue in the <a href="https://github.com/qwertycoin-org/wallet.qwertycoin.org/issues" target="_blank" rel="noopener">official wallet repository</a>. Report vulnerabilities privately through <a href="https://github.com/qwertycoin-org/wallet.qwertycoin.org/security/advisories/new" target="_blank" rel="noopener">GitHub Security Advisories</a>; do not publish wallet-security details in a public issue.</p>
 
   </div>
 </main>
@@ -297,10 +315,11 @@ cd monero-web</code></pre>
       <a href="/">Home</a>
       <a href="/verify">Open Wallet</a>
       <a href="/privacy">Privacy</a>
-      <a href="https://github.com/Medtabka/monero-web" target="_blank" rel="noopener">GitHub</a>
-      <a href="https://github.com/Medtabka/monero-web/blob/main/SECURITY.md" target="_blank" rel="noopener">Security</a>
+      <a href="https://qwertycoin.org/" target="_blank" rel="noopener">Mainnet</a>
+      <a href="https://github.com/qwertycoin-org/wallet.qwertycoin.org" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/qwertycoin-org/wallet.qwertycoin.org/security/advisories/new" target="_blank" rel="noopener">Security</a>
     </div>
-    <div>monero-web.com · MIT licensed · Not affiliated with The Monero Project</div>
+    <div>wallet.qwertycoin.org · Open source · MIT License · Qwertycoin Web Wallet</div>
   </div>
 </footer>
 

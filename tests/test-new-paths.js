@@ -76,7 +76,7 @@ function assertEq(actual, expected, msg) {
 
 // ── Tests ───────────────────────────────────────────────────────────
 (async () => {
-  console.log('\n  monero-web — new code paths\n');
+console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
 
   // 25-word round-trip — sanity check the generate → derive loop is unbroken
   await test('25-word generate → re-derive matches', () => {

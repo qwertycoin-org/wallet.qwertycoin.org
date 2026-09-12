@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # build-manifest.sh — emit a SHA-256 manifest of every file in the deployed
-# bundle so users can verify that what they're running on monero-web.com
+# bundle so users can verify that what they're running on wallet.qwertycoin.org
 # matches the corresponding git tag.
 #
 # Usage:
@@ -9,9 +9,9 @@
 #
 # This is the trust anchor that makes "open source" mean something for a
 # hosted wallet. Without it, users have to take on faith that what's running
-# at monero-web.com matches the public GitHub repo. With it, anyone can run
+# at wallet.qwertycoin.org matches the public GitHub repo. With it, anyone can run
 #
-#   curl -sf https://monero-web.com/MANIFEST.txt | sha256sum -c
+#   curl -sf https://wallet.qwertycoin.org/MANIFEST.txt | sha256sum -c
 #
 # from a clone of the repo and verify byte-for-byte that nothing has been
 # silently substituted.
@@ -24,6 +24,7 @@ cd "$(dirname "$0")/.."
 INCLUDED_PATTERNS=(
   "*.html"
   "fonts/fonts.css"
+  "fonts/LICENSES.md"
   "fonts/*.woff2"
   "js/*.js"
   "js/mymonero-core/*.js"
@@ -34,7 +35,7 @@ INCLUDED_PATTERNS=(
   "vendor/qwertycoin-ts/*.txt"
   "assets/*.svg"
   "assets/*.png"
-  "donation-qr.svg"
+  "assets/*.css"
   "favicon.svg"
   "favicon.ico"
   "_redirects"
@@ -56,7 +57,7 @@ case "${1:-}" in
   ""|--write)
     : > "${manifest_file}"
     {
-      echo "# monero-web build manifest"
+      echo "# Qwertycoin Web Wallet build manifest"
       echo "# Generated $(date -u +%Y-%m-%dT%H:%M:%SZ) from commit $(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
       echo "#"
       echo "# Verify the live deployment matches a specific git tag with:"
@@ -64,7 +65,7 @@ case "${1:-}" in
       echo "#   ./tools/build-manifest.sh --check"
       echo "#"
       echo "# Or verify a single file against the live site:"
-      echo "#   curl -sf https://monero-web.com/dashboard | sha256sum"
+      echo "#   curl -sf https://wallet.qwertycoin.org/dashboard | sha256sum"
       echo "#"
     } > "${manifest_file}"
 

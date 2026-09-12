@@ -2,77 +2,48 @@
 
 ## Reporting a vulnerability
 
-If you think you've found a security issue in monero-web, **please do not open
-a public GitHub issue**. Instead, report it privately so we can fix it before
-it's disclosed.
+Do not open a public issue for a suspected vulnerability. Use GitHub's private vulnerability reporting:
 
-**Preferred channel:** GitHub's private vulnerability reporting at
-<https://github.com/Medtabka/monero-web/security/advisories/new>
+<https://github.com/qwertycoin-org/wallet.qwertycoin.org/security/advisories/new>
 
-This is the primary and recommended way to disclose anything sensitive. It
-gives us a private discussion thread, supports attachments, and ties cleanly
-into GitHub's security advisory + CVE workflow. You'll need a free GitHub
-account to file one.
-
-**Alternative:** if you'd rather not use GitHub, email
-[`security@monero-web.com`](mailto:security@monero-web.com). The address
-forwards to a private inbox and is read by the maintainer. If you have
-something especially sensitive and want PGP, ask for a key in your first
-message and we'll set one up.
-
-Please include:
-
-- A clear description of the issue
-- The exact files / functions / lines involved
-- Steps to reproduce (a minimal proof of concept is ideal)
-- The impact you believe it has
-- Any suggested fix, if you have one
-
-We aim to:
-
-- Acknowledge your report within **72 hours**
-- Triage and respond with an initial assessment within **7 days**
-- Ship a fix or mitigation for confirmed issues within **30 days** for
-  high-severity findings, sooner if actively exploited
-
-We do not currently run a paid bug-bounty program, but we will publicly credit
-anyone who reports a real issue (unless you'd prefer to stay anonymous).
+Include the affected files or functions, reproduction steps, expected impact and any suggested mitigation. Never place real wallet seeds, private keys or spendable transaction material in a report.
 
 ## Scope
 
 In scope:
 
-- The static site at `monero-web.com` and everything in this repository
-- The `js/` crypto engine: `keccak256.js`, `monero-ed25519.js`,
-  `monero-keys.js`, `monero-wordlist.js`, `bip39.js`, `polyseed.js`,
-  `monero-subaddress.js`, `wallet-vault.js`
-- The Cloudflare Pages Function at `functions/api/proxy.js`
-- The self-hosted monero-lws light-wallet server and its API contract
-- CSP, SRI, and any other deployment-side hardening
+- the production wallet at `wallet.qwertycoin.org`
+- the 25-word QWC seed import and wallet-creation paths
+- private-spend-key and watch-only imports
+- browser-side Qwertycoin scanning and transaction signing
+- `WalletVault` encrypted session storage and idle locking
+- the restricted QWC RPC and binary scanner gateways
+- transaction-broadcast abuse controls
+- content-security policy, cache policy and asset manifest integrity
+- QWC v2 genesis and vendored `qwertycoin-ts` artifact binding
 
-Out of scope (please don't report these as vulnerabilities):
+Out of scope:
 
-- The browser itself, or browser-extension-based attacks (the threat model
-  in [README.md](./README.md) explicitly does not cover these)
-- Compromised operating systems / keystroke loggers
-- DNS hijacking outside our control
-- Public Monero remote nodes — they are third-party infrastructure
-- Anything that requires the user to paste their seed into an obvious phishing
-  clone of the site
+- compromised operating systems, browsers or browser extensions
+- phishing domains that do not serve the canonical repository code
+- denial of service against third-party network or hosting infrastructure
+- reports that require exposing real wallet credentials
 
-## Things we are particularly interested in
+## Areas of particular interest
 
-- Any way for derived keys to leak out of the browser tab
-- Any way for an attacker to substitute a different address into the receive
-  flow without the user noticing
-- Cryptographic bugs in the key derivation, polyseed decoder, BIP-39
-  PBKDF2/SLIP-0010 path, subaddress derivation, or AES-GCM vault
-- CSP bypasses, prototype-pollution sinks, clipboard-hijacking sinks
-- Any deviation from the on-paper threat model
+- any path that transmits a seed, private spend key or private view key
+- transaction or address substitution
+- failures in 25-word QWC key derivation or checksum validation
+- signing, output selection, key-image or change-output errors
+- QWC v2 genesis mismatches between JavaScript, WebAssembly and RPC
+- CSP bypasses, DOM injection, clipboard hijacking or unsafe external assets
+- bypasses of restricted-RPC or transaction-submission policy
+- encrypted-session or auto-lock failures
+
+## Third-party components
+
+Some compatibility filenames and JavaScript symbols retain inherited `monero` or `mymonero` names. They are technical provenance, not user-facing product support. Their copyright and license notices must remain intact, including `js/mymonero-core/LICENSE.txt`, `vendor/qwertycoin-ts/monero.worker.js.LICENSE.txt`, `fonts/LICENSES.md`, the root `LICENSE`, and SPDX headers.
 
 ## Disclosure
 
-Once a fix is shipped we'll publish a short advisory on the GitHub repo and
-update the changelog with the CVE (if assigned) and credit.
-
-Thank you for keeping monero-web safe.
+Confirmed issues are handled privately until a mitigation is available. Where appropriate, the project will publish a GitHub security advisory and credit the reporter unless anonymity is requested.

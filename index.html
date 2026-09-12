@@ -3,30 +3,30 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Monero Web — Free Open-Source Monero Web Wallet | MyMonero Alternative</title>
-<meta name="description" content="Free, open-source Monero web wallet — the browser alternative now that MyMonero's web wallet is gone. Non-custodial, client-side signing. Supports BIP-39, MyMonero 13-word, Polyseed and 25-word seeds. No downloads. Your keys never leave your device.">
-<meta name="keywords" content="monero wallet, xmr web wallet, monero browser wallet, mymonero alternative, polyseed, bip39 monero, non-custodial monero, open source xmr">
-<link rel="canonical" href="https://monero-web.com">
+<title>Qwertycoin Web Wallet — Open-Source QWC Wallet</title>
+<meta name="description" content="The official open-source Qwertycoin web wallet. Restore a 25-word QWC seed, create a wallet, receive and send QWC with client-side signing.">
+<meta name="keywords" content="qwertycoin wallet, qwc web wallet, qwertycoin browser wallet, non-custodial qwc, open source wallet">
+<link rel="canonical" href="https://wallet.qwertycoin.org/">
 <link rel="sitemap" type="application/xml" href="/sitemap.xml">
 
-<meta property="og:title" content="Monero Web — Open-Source Monero Web Wallet in your Browser">
-<meta property="og:description" content="Access your Monero from any browser. Four seed formats. Non-custodial. Open source. Zero downloads.">
-<meta property="og:url" content="https://monero-web.com">
+<meta property="og:title" content="Qwertycoin Web Wallet — Official Open-Source QWC Wallet">
+<meta property="og:description" content="Access QWC from your browser with a 25-word Qwertycoin seed. Non-custodial, open source and client-side.">
+<meta property="og:url" content="https://wallet.qwertycoin.org/">
 <meta property="og:type" content="website">
-<meta property="og:image" content="https://monero-web.com/assets/social-card.png">
+<meta property="og:image" content="https://wallet.qwertycoin.org/assets/social-card.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="monero-web — non-custodial Monero wallet in your browser. Supports BIP-39, MyMonero, Polyseed, and 25-word standard seeds.">
+<meta property="og:image:alt" content="Qwertycoin Web Wallet — non-custodial QWC wallet in your browser.">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="https://monero-web.com/assets/social-card.png">
+<meta name="twitter:image" content="https://wallet.qwertycoin.org/assets/social-card.png">
 
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "WebApplication",
-  "name": "Monero Web",
-  "url": "https://monero-web.com",
-  "description": "Free, open-source Monero web wallet. Non-custodial with client-side signing. Supports BIP-39, MyMonero 13-word, Polyseed and 25-word standard seeds.",
+  "name": "Qwertycoin Web Wallet",
+  "url": "https://wallet.qwertycoin.org/",
+  "description": "Official open-source Qwertycoin web wallet with 25-word QWC seeds and client-side signing.",
   "applicationCategory": "FinanceApplication",
   "operatingSystem": "Any modern browser",
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
@@ -38,12 +38,12 @@
 {
   "@context": "https://schema.org",
   "@type": "Organization",
-  "name": "Monero Web",
-  "url": "https://monero-web.com",
-  "logo": "https://monero-web.com/assets/social-card.png",
-  "description": "Free, open-source, non-custodial Monero web wallet running entirely in the browser.",
+  "name": "Qwertycoin",
+  "url": "https://qwertycoin.org/",
+  "logo": "https://wallet.qwertycoin.org/assets/social-card.png",
+  "description": "Open-source Qwertycoin software and services.",
   "sameAs": [
-    "https://github.com/Medtabka/monero-web"
+    "https://github.com/qwertycoin-org"
   ]
 }
 </script>
@@ -63,18 +63,18 @@
     },
     {
       "@type": "Question",
-      "name": "How is this different from MyMonero?",
+      "name": "Which seed phrases are supported?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "MyMonero was a light-wallet service that scanned the blockchain on your behalf using your view key. Monero Web runs the same architecture with a self-hosted light-wallet server (monero-lws). Your spend key never leaves your browser. The entire stack is open source and self-hostable."
+        "text": "The wallet accepts Qwertycoin's standard 25-word seed phrase. Legacy seed formats from other projects are not supported."
       }
     },
     {
       "@type": "Question",
-      "name": "Can I send XMR from this web wallet?",
+      "name": "Can I send QWC from this web wallet?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Yes. The wallet uses a light-wallet server (monero-lws) to scan the blockchain for your spendable outputs, then constructs and signs the transaction entirely in your browser using WebAssembly. Your spend key never leaves your browser tab."
+        "text": "Yes. The browser scans the Qwertycoin chain through a restricted RPC endpoint, then constructs and signs transactions locally. Your seed and private keys never leave the browser tab."
       }
     },
     {
@@ -82,7 +82,7 @@
       "name": "Why a web wallet? Aren't they less secure?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "A web wallet you can read the source of is no less secure than a desktop app — both run code on hardware you control. We mitigate supply-chain risk with zero npm dependencies, no build pipeline, and strict CSP. You can also clone the repo and serve it locally."
+        "text": "Browser wallets add delivery and browser risks. This wallet reduces them with reviewed source, a strict content-security policy, reproducible asset manifests and a self-hosting option. For substantial funds, prefer a dedicated wallet environment."
       }
     },
     {
@@ -105,9 +105,11 @@
 }
 </script>
 
-<link rel="icon" type="image/png" sizes="192x192" href="/assets/favicon-192x192.png">
-<link rel="apple-touch-icon" sizes="192x192" href="/assets/favicon-192x192.png">
-<link rel="icon" type="image/x-icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16x16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
 <link rel="stylesheet" href="/fonts/fonts.css">
 
 <style>
@@ -145,6 +147,7 @@ img,svg{display:block}
 nav{padding:20px 0;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
 .logo{display:flex;align-items:center;gap:10px}
 .logo svg{width:30px;height:30px}
+.logo img{width:36px;height:36px;object-fit:contain}
 .logo-text{font-size:1.05rem;font-weight:700;letter-spacing:-0.02em}
 .logo-text span{color:var(--xmr)}
 .nav-right{display:flex;align-items:center;gap:6px}
@@ -270,17 +273,15 @@ footer{padding:48px 0 32px;border-top:1px solid var(--border);margin-top:64px;co
     <div class="container">
       <nav>
         <a href="/" class="logo">
-          <svg viewBox="0 0 256 256"><circle cx="128" cy="128" r="128" fill="#ff6600"/><path d="M63.5 178.2V105.7l64.5 64.5 64.5-64.5v72.5h29.8v-99.9c0-6.7-5.4-12.1-12.1-12.1-3.2 0-6.3 1.3-8.6 3.5L128 143.3 54.4 69.7c-2.3-2.3-5.3-3.5-8.6-3.5-6.7 0-12.1 5.4-12.1 12.1v99.9h29.8z" fill="#fff"/></svg>
-          <div class="logo-text">monero<span>web</span></div>
+          <img src="/assets/qwertycoin-mark.svg" width="36" height="36" alt="">
+          <div class="logo-text">Qwertycoin <span>Wallet</span></div>
         </a>
         <div class="nav-right">
           <a href="#features">Features</a>
           <a href="#how">How it works</a>
           <a href="#faq">FAQ</a>
-          <a href="#donate">Donate</a>
           <a href="/self-host">Self-Host</a>
-          <a href="https://github.com/Medtabka/monero-web" target="_blank" rel="noopener">GitHub</a>
-          <a href="#" class="swap-popup-trigger">Swap crypto</a>
+          <a href="https://github.com/qwertycoin-org/wallet.qwertycoin.org" target="_blank" rel="noopener">GitHub</a>
           <a href="/verify" class="cta">Open Wallet →</a>
         </div>
       </nav>
@@ -291,15 +292,14 @@ footer{padding:48px 0 32px;border-top:1px solid var(--border);margin-top:64px;co
   <section class="hero">
     <div class="container">
       <div class="hero-badge"><span class="dot"></span> Live · Non-Custodial · 100% Open Source</div>
-      <h1>The Monero web wallet that<br>lives in your <span class="accent">browser</span>.</h1>
-      <p class="lead">Open your XMR from any device, on any network, with no installs. Every cryptographic operation runs locally in your browser — your seed phrase never crosses the wire.</p>
-      <p class="lead" style="font-size:.95rem;margin-top:-20px">MyMonero's web wallet is gone — it migrated to Cake Wallet, a mobile-only app. Monero Web is the open-source browser alternative.</p>
+      <h1>Your Qwertycoin wallet,<br>directly in your <span class="accent">browser</span>.</h1>
+      <p class="lead">Create or restore a QWC wallet without installing an app. Key derivation and transaction signing run locally in your browser — your seed phrase never crosses the wire.</p>
       <div class="hero-cta">
         <a href="/verify" class="btn btn-primary">
           <svg fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
           Open your wallet
         </a>
-        <a href="https://github.com/Medtabka/monero-web" target="_blank" rel="noopener" class="btn btn-ghost">
+        <a href="https://github.com/qwertycoin-org/wallet.qwertycoin.org" target="_blank" rel="noopener" class="btn btn-ghost">
           <svg fill="currentColor" viewBox="0 0 24 24"><path d="M12 .3a12 12 0 00-3.79 23.4c.6.1.82-.26.82-.58v-2.05c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.74.08-.73.08-.73 1.21.09 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.31 3.5 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.34-5.47-5.95 0-1.31.47-2.39 1.24-3.23-.13-.31-.54-1.54.12-3.21 0 0 1.01-.32 3.3 1.23a11.45 11.45 0 016 0c2.3-1.55 3.3-1.23 3.3-1.23.66 1.67.25 2.9.12 3.21.77.84 1.24 1.92 1.24 3.23 0 4.62-2.81 5.65-5.49 5.94.43.37.81 1.1.81 2.22v3.29c0 .32.22.69.83.58A12 12 0 0012 .3"/></svg>
           Star on GitHub
         </a>
@@ -313,36 +313,36 @@ footer{padding:48px 0 32px;border-top:1px solid var(--border);margin-top:64px;co
     </div>
   </section>
 
-  <!-- ─── SEED FORMATS ─── -->
+  <!-- ─── WALLET ACCESS ─── -->
   <section id="formats">
     <div class="container">
-      <span class="section-eyebrow">No wallet left behind</span>
-      <h2 class="section-title">Every Monero seed format. One wallet.</h2>
-      <p class="section-sub">Most browser wallets only handle one mnemonic standard. We support all four — including the legacy 13-word seeds nobody else has touched in years.</p>
+      <span class="section-eyebrow">Qwertycoin standard</span>
+      <h2 class="section-title">One canonical 25-word seed.</h2>
+      <p class="section-sub">Qwertycoin wallets use a 24-word payload plus one checksum word. Legacy seed formats from other projects are intentionally not accepted.</p>
       <div class="seed-grid">
         <div class="seed-card">
-          <div class="num">12 WORDS</div>
-          <h3>BIP-39</h3>
-          <p>Standard hardware-wallet mnemonic. PBKDF2-SHA512 → SLIP-0010 derivation along the Monero coin path <code>m/44'/128'/0'</code>.</p>
-          <div class="users">Trezor · Ledger · Cake</div>
-        </div>
-        <div class="seed-card">
-          <div class="num">13 WORDS</div>
-          <h3>MyMonero Legacy</h3>
-          <p>The 12-data + 1-checksum format used by MyMonero since 2014. Your old seed still works here, in any browser, forever.</p>
-          <div class="users">MyMonero · Edge</div>
-        </div>
-        <div class="seed-card">
-          <div class="num">16 WORDS</div>
-          <h3>Polyseed</h3>
-          <p>Modern compact format with embedded wallet birthday and forward-compatible feature flags. GF(2¹¹) checksum, 4-char prefix matching.</p>
-          <div class="users">Feather · Monero GUI 0.18+</div>
-        </div>
-        <div class="seed-card">
           <div class="num">25 WORDS</div>
-          <h3>Monero Standard</h3>
-          <p>The original 24-data + 1-checksum format from <code>monero-wallet-cli</code>. Available in 13 languages, all loaded locally.</p>
-          <div class="users">monerod · GUI · CLI</div>
+          <h3>Qwertycoin Standard</h3>
+          <p>The official QWC seed format, available in the wallet's supported languages and verified with a checksum.</p>
+          <div class="users">QWC CLI · Desktop · Web</div>
+        </div>
+        <div class="seed-card">
+          <div class="num">64 HEX</div>
+          <h3>Private Spend Key</h3>
+          <p>Open an existing QWC wallet directly from its private spend key. The key is processed locally.</p>
+          <div class="users">advanced recovery</div>
+        </div>
+        <div class="seed-card">
+          <div class="num">VIEW ONLY</div>
+          <h3>Watch-Only</h3>
+          <p>Scan an address with its private view key without loading a spend key into the browser.</p>
+          <div class="users">monitoring · accounting</div>
+        </div>
+        <div class="seed-card">
+          <div class="num">NEW WALLET</div>
+          <h3>Create New</h3>
+          <p>Generate a fresh 25-word QWC seed with the browser's cryptographically secure random-number generator.</p>
+          <div class="users">Qwertycoin Web Wallet</div>
         </div>
       </div>
     </div>
@@ -358,7 +358,7 @@ footer{padding:48px 0 32px;border-top:1px solid var(--border);margin-top:64px;co
         <div class="step">
           <div class="step-num">01</div>
           <h3>Enter your seed</h3>
-          <p>Type or paste any of the four supported mnemonics — or a raw private spend key in hex. We auto-detect the format from the word count.</p>
+          <p>Enter exactly 25 Qwertycoin seed words, import a private spend key, or choose watch-only access.</p>
         </div>
         <div class="step">
           <div class="step-num">02</div>
@@ -368,7 +368,7 @@ footer{padding:48px 0 32px;border-top:1px solid var(--border);margin-top:64px;co
         <div class="step">
           <div class="step-num">03</div>
           <h3>Use your wallet</h3>
-          <p>See your address, generate subaddresses on demand, watch live network height from public Monero nodes, and receive payments via QR code.</p>
+          <p>Synchronize through a restricted QWC RPC endpoint, review balances, send QWC and receive payments via QR code.</p>
         </div>
       </div>
     </div>
@@ -394,12 +394,12 @@ footer{padding:48px 0 32px;border-top:1px solid var(--border);margin-top:64px;co
         <div class="trust-card">
           <div class="icon"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
           <h3>Zero dependencies</h3>
-          <p>The crypto engine is hand-written: Keccak-256, ed25519, base58, all four mnemonic codecs, BIP-39 / SLIP-0010, and polyseed. No npm tree to audit.</p>
+          <p>The browser bundle uses reviewed Qwertycoin-compatible cryptography with pinned, auditable assets and no runtime package installation.</p>
         </div>
         <div class="trust-card">
           <div class="icon"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>
-          <h3>54 / 54 tests passing</h3>
-          <p>The key derivation engine is verified against test vectors from the official Monero source for all 13 supported wordlist languages.</p>
+          <h3>Regression tested</h3>
+          <p>Wallet, UI, manifest, RPC and QWC v2 genesis contracts are exercised before each deployment candidate.</p>
         </div>
       </div>
     </div>
@@ -409,7 +409,7 @@ footer{padding:48px 0 32px;border-top:1px solid var(--border);margin-top:64px;co
   <section id="features">
     <div class="container">
       <span class="section-eyebrow">What's inside</span>
-      <h2 class="section-title">Everything you need to receive XMR today.</h2>
+      <h2 class="section-title">Everything you need to use QWC today.</h2>
       <div class="features-row">
         <div class="feature-list">
           <div class="feature-item">
@@ -418,7 +418,7 @@ footer{padding:48px 0 32px;border-top:1px solid var(--border);margin-top:64px;co
           </div>
           <div class="feature-item">
             <div class="check"><svg fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
-            <div><h4>Live network status</h4><p>Daemon height, fee estimate, and tx-pool size from a pool of public Monero nodes.</p></div>
+            <div><h4>Live network status</h4><p>Daemon height, fee data and transaction state through the restricted Qwertycoin RPC gateway.</p></div>
           </div>
           <div class="feature-item">
             <div class="check"><svg fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
@@ -435,13 +435,11 @@ footer{padding:48px 0 32px;border-top:1px solid var(--border);margin-top:64px;co
         </div>
         <div class="preview">
           <div class="preview-bar"><i></i><i></i><i></i></div>
-<span class="c">// monero-keys.js — derived locally in your tab</span><br>
-<span class="k">async function</span> <span class="v">deriveFromAnyMnemonic</span>(seed) {<br>
+<span class="c">// QWC seed — derived locally in your tab</span><br>
+<span class="k">async function</span> <span class="v">deriveQwertycoinWallet</span>(seed) {<br>
 &nbsp;&nbsp;<span class="k">const</span> count = seed.split(<span class="s">/\s+/</span>).length;<br>
-&nbsp;&nbsp;<span class="k">if</span> (count === <span class="v">12</span>) <span class="k">return</span> deriveFromBip39(seed);<br>
-&nbsp;&nbsp;<span class="k">if</span> (count === <span class="v">13</span>) <span class="k">return</span> deriveMyMonero(seed);<br>
-&nbsp;&nbsp;<span class="k">if</span> (count === <span class="v">16</span>) <span class="k">return</span> derivePolyseed(seed);<br>
-&nbsp;&nbsp;<span class="k">if</span> (count === <span class="v">25</span>) <span class="k">return</span> deriveStandard(seed);<br>
+&nbsp;&nbsp;<span class="k">if</span> (count !== <span class="v">25</span>) <span class="k">throw</span> <span class="s">'QWC seeds contain 25 words'</span>;<br>
+&nbsp;&nbsp;<span class="k">return</span> deriveStandard(seed);<br>
 }<br><br>
 <span class="c">// → spendKey, viewKey, publicKeys, address</span><br>
 <span class="c">// Nothing leaves the browser. Ever.</span>
@@ -463,12 +461,12 @@ footer{padding:48px 0 32px;border-top:1px solid var(--border);margin-top:64px;co
           <p>Yes. Your seed and private keys never leave your browser tab. The wallet only talks to the network for read-only RPC calls (block height, fee estimate) — and those calls don't include any of your keys. You can verify this in DevTools → Network.</p>
         </details>
         <details>
-          <summary>How is this different from MyMonero?</summary>
-          <p>MyMonero was a light-wallet service: a server scanned the blockchain on your behalf using your view key. We run the same architecture — our self-hosted light-wallet server (monero-lws) scans the blockchain using your view key so you can see balances and send transactions. Your spend key never leaves your browser. The key difference: our server is self-hosted on infrastructure we control, and the entire stack (site + node + LWS) is open source and self-hostable.</p>
+          <summary>Which seed phrases can I import?</summary>
+          <p>Qwertycoin uses its standard 25-word seed phrase. The wallet rejects other word counts instead of guessing or importing an incompatible format.</p>
         </details>
         <details>
-          <summary>Can I send XMR from here?</summary>
-          <p>Yes. The wallet uses a light-wallet server (monero-lws, running on our self-hosted VPS) to scan the blockchain for your spendable outputs, then constructs and signs the transaction entirely in your browser using WebAssembly. Your spend key never leaves your browser tab — the server only sees your view key (for scanning) and the final signed transaction hex (for broadcasting). This is the same architecture MyMonero used for 12 years.</p>
+          <summary>Can I send QWC from here?</summary>
+          <p>Yes. The browser scans Qwertycoin through a restricted RPC endpoint, constructs the transaction and signs it locally. The gateway receives blockchain queries and the final signed transaction, never your seed or private spend key.</p>
         </details>
         <details>
           <summary>Why a web wallet at all? Aren't they less secure?</summary>
@@ -486,40 +484,39 @@ footer{padding:48px 0 32px;border-top:1px solid var(--border);margin-top:64px;co
     </div>
   </section>
 
-  <!-- ─── DONATE ─── -->
-  <section id="donate">
+  <!-- ─── CONTRIBUTE ─── -->
+  <section id="contribute">
     <div class="container">
-      <span class="section-eyebrow">Donate</span>
-      <h2 class="section-title">Keep monero-web free.</h2>
-      <p class="section-sub">There's no token, no premium tier, no ads, and no plan to add any. If the wallet is useful to you, an XMR donation goes directly toward server costs, audits, and the work to ship balance scanning and send.</p>
+      <span class="section-eyebrow">Open source</span>
+      <h2 class="section-title">Help improve the Qwertycoin wallet.</h2>
+      <p class="section-sub">Review the source, report security issues privately, or contribute tested improvements through the official Qwertycoin repository.</p>
       <div class="donate-card" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;max-width:760px;display:grid;grid-template-columns:auto 1fr;gap:24px;align-items:start">
         <div style="background:#111113;padding:10px;border-radius:10px;border:1px solid var(--border);flex-shrink:0">
-          <img src="/donation-qr.svg" alt="Monero donation QR code" width="160" height="160" style="display:block;width:160px;height:160px">
+          <img src="/assets/qwertycoin-mark.svg" alt="Qwertycoin logo" width="160" height="160" style="display:block;width:160px;height:160px">
         </div>
         <div style="min-width:0">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-          <svg width="20" height="20" viewBox="0 0 256 256"><circle cx="128" cy="128" r="128" fill="#ff6600"/><path d="M63.5 178.2V105.7l64.5 64.5 64.5-64.5v72.5h29.8v-99.9c0-6.7-5.4-12.1-12.1-12.1-3.2 0-6.3 1.3-8.6 3.5L128 143.3 54.4 69.7c-2.3-2.3-5.3-3.5-8.6-3.5-6.7 0-12.1 5.4-12.1 12.1v99.9h29.8z" fill="#fff"/></svg>
-          <span style="font-size:.78rem;color:var(--text-mid);text-transform:uppercase;letter-spacing:.06em;font-weight:600">XMR address</span>
+          <img src="/assets/qwertycoin-mark.svg" width="20" height="20" alt="">
+          <span style="font-size:.78rem;color:var(--text-mid);text-transform:uppercase;letter-spacing:.06em;font-weight:600">Project repository</span>
         </div>
-        <div id="donate-addr" style="font-family:'JetBrains Mono',monospace;font-size:.7rem;color:var(--text);word-break:break-all;line-height:1.7;padding:14px 16px;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;cursor:pointer;user-select:text;-webkit-user-select:text" title="Click to copy">47RzzwG62wBc5zDLm3M3xGUJAw7AY6vnW4hSHqo1jyJF1UsHCv56pPLgw4LAGwgfEe5RrR9SwaatBXtr77ZMW7sgTVZeRCz</div>
+        <div id="donate-addr" style="font-family:'JetBrains Mono',monospace;font-size:.7rem;color:var(--text);word-break:break-all;line-height:1.7;padding:14px 16px;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;cursor:pointer;user-select:text;-webkit-user-select:text" title="Click to copy">https://github.com/qwertycoin-org/wallet.qwertycoin.org</div>
         <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
           <button id="donate-copy" class="btn btn-ghost" style="padding:10px 18px;font-size:.82rem">
             <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            Copy address
+            Copy repository URL
           </button>
-          <a class="btn btn-ghost" href="monero:47RzzwG62wBc5zDLm3M3xGUJAw7AY6vnW4hSHqo1jyJF1UsHCv56pPLgw4LAGwgfEe5RrR9SwaatBXtr77ZMW7sgTVZeRCz" style="padding:10px 18px;font-size:.82rem">
+          <a class="btn btn-ghost" href="https://github.com/qwertycoin-org/wallet.qwertycoin.org" target="_blank" rel="noopener" style="padding:10px 18px;font-size:.82rem">
             <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
-            Open in wallet
+            Open on GitHub
           </a>
         </div>
-        <div id="donate-toast" style="display:none;margin-top:10px;font-size:.75rem;color:var(--success)">Address copied to clipboard.</div>
+        <div id="donate-toast" style="display:none;margin-top:10px;font-size:.75rem;color:var(--success)">Repository URL copied to clipboard.</div>
         </div>
       </div>
     </div>
   </section>
 
   <script src="/js/index-page.js"></script>
-  <script src="/js/swap-popup.js" defer></script>
 
   <!-- ─── FINAL CTA ─── -->
   <section>
@@ -529,7 +526,7 @@ footer{padding:48px 0 32px;border-top:1px solid var(--border);margin-top:64px;co
         <p>It takes about three seconds. There's nothing to install and no account to create.</p>
         <a href="/verify" class="btn btn-primary">
           <svg fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-          Open Monero Web →
+          Open Qwertycoin Wallet →
         </a>
       </div>
     </div>
@@ -539,15 +536,15 @@ footer{padding:48px 0 32px;border-top:1px solid var(--border);margin-top:64px;co
     <div class="container">
       <div class="footer-row">
         <a href="/verify">Open Wallet</a>
-        <a href="#formats">Seed formats</a>
+        <a href="#formats">Wallet access</a>
         <a href="#how">How it works</a>
         <a href="#faq">FAQ</a>
-        <a href="#donate">Donate</a>
+        <a href="#contribute">Contribute</a>
         <a href="/privacy">Privacy</a>
         <a href="/self-host">Self-Host</a>
-        <a href="https://github.com/Medtabka/monero-web" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/qwertycoin-org/wallet.qwertycoin.org" target="_blank" rel="noopener">GitHub</a>
       </div>
-      <div class="footer-meta">monero-web.com · MIT licensed · Not affiliated with The Monero Project · XMR is property of its respective community</div>
+      <div class="footer-meta">wallet.qwertycoin.org · MIT licensed · Official Qwertycoin web wallet</div>
     </div>
   </footer>
 </div>

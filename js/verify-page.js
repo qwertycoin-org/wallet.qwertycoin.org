@@ -29,19 +29,15 @@ document.addEventListener('DOMContentLoaded', () => {
   })();
 
   const formats = {
-    12: { name:'BIP-39',          cls:'mymonero', icon:'◇' },
-    13: { name:'MyMonero Legacy', cls:'mymonero', icon:'◈' },
-    16: { name:'Polyseed',        cls:'mymonero', icon:'◉' },
-    25: { name:'Monero Standard', cls:'standard', icon:'◆' },
+    25: { name:'Qwertycoin Standard', cls:'standard', icon:'◆' },
   };
 
   // ─── Advanced: custom QWC node URL ───
   // Reads and writes the same localStorage key that js/monero-rpc.js uses,
   // so whatever the user sets here on the verify page is automatically
-  // picked up by the dashboard's MoneroRPC calls. Letting users configure
-  // this BEFORE deriving keys means the view key can go straight to their
-  // own node on the first LWS /login call — it never touches our default.
-  const NODE_KEY = 'monero-web-node-url';
+  // picked up by the dashboard's compatibility RPC client. Keep the legacy
+  // storage key so existing users do not lose their configured endpoint.
+  const NODE_KEY = 'qwertycoin-web-node-url';
   const advInput = $el('adv-node-url');
   const advMsg   = $el('adv-node-msg');
   const advSave  = $el('adv-node-save');
@@ -111,98 +107,120 @@ document.addEventListener('DOMContentLoaded', () => {
       seedFormat.style.display = 'inline-block';
       seedFormat.classList.add(fmt.cls);
       seedFormat.textContent = fmt.icon + ' ' + fmt.name;
-      // Polyseed (16 words) has embedded birthday — no age selection needed.
-      // For all other formats, require a wallet-age button click first.
-      if (count === 16 || walletAgeSelected) {
-        btnSeed.disabled = false;
-      }
+      btnSeed.disabled = false;
     }
-    // BIP-39 passphrase row only shown for 12-word seeds
-    document.getElementById('bip39-pass-group').style.display =
-      (count === 12) ? 'block' : 'none';
   }
   seedInput.addEventListener('input', refreshDeriveBtn);
 
-  // ─── WALLET AGE BUTTONS → restore height ───
-  // Each button computes an approximate block height based on how old the
-  // wallet is. Monero blocks are ~2 min apart → 720/day → ~5,040/week.
-  //
-  // We use a known checkpoint to estimate the current tip accurately,
-  // then subtract blocks for the chosen time period. Computing from
-  // genesis forward is inaccurate because Monero's average block time
-  // over 12 years drifts from the target 120s.
-  const CHECKPOINT_HEIGHT = 3651000;
-  const CHECKPOINT_TS = Date.UTC(2026, 3, 13) / 1000; // April 13, 2026
-  const SECS_PER_BLOCK = 120;
-  const BLOCKS_PER_DAY = 720;
+  // ─── QWC WALLET AGE → conservative restore height ───
+  // Never derive this value from a foreign-chain checkpoint. Query the live
+  // QWC tip and subtract the selected age at QWC's 120-second block target,
+  // plus one full day as a safety margin. A failed lookup always falls back
+  // to genesis so the optimisation can never hide wallet history.
+  const QWC_SECS_PER_BLOCK = 120;
+  const QWC_BLOCKS_PER_DAY = 86400 / QWC_SECS_PER_BLOCK;
+  const QWC_RESTORE_SAFETY_BLOCKS = QWC_BLOCKS_PER_DAY;
+  const restoreHeightEl = $el('restore-height');
+  const restoreHeightStatus = $el('restore-height-selected');
 
-  function estimatedCurrentHeight() {
-    var secsSinceCheckpoint = Date.now() / 1000 - CHECKPOINT_TS;
-    return Math.max(CHECKPOINT_HEIGHT, CHECKPOINT_HEIGHT + Math.floor(secsSinceCheckpoint / SECS_PER_BLOCK));
+  function setRestoreStatus(message, isSafeFallback) {
+    if (!restoreHeightStatus) return;
+    restoreHeightStatus.textContent = message;
+    restoreHeightStatus.style.color = isSafeFallback ? 'var(--text-dim)' : 'var(--success)';
+    restoreHeightStatus.style.display = 'block';
   }
 
-  function ageToHeight(age) {
-    var tip = estimatedCurrentHeight();
-    switch (age) {
-      case 'week':    return Math.max(0, tip - 7 * BLOCKS_PER_DAY);
-      case 'month':   return Math.max(0, tip - 30 * BLOCKS_PER_DAY);
-      case '3months': return Math.max(0, tip - 91 * BLOCKS_PER_DAY);
-      case '6months': return Math.max(0, tip - 182 * BLOCKS_PER_DAY);
-      case 'year':    return Math.max(0, tip - 365 * BLOCKS_PER_DAY);
-      case '2years':  return Math.max(0, tip - 730 * BLOCKS_PER_DAY);
-      case 'unknown': return 0;
-      default:        return 0;
+  function setSelectedWalletAge(selectedButton) {
+    document.querySelectorAll('.wallet-age-btn').forEach(function(item) {
+      const isSelected = item === selectedButton;
+      item.classList.toggle('active', isSelected);
+      item.setAttribute('aria-checked', isSelected ? 'true' : 'false');
+    });
+  }
+
+  async function getLiveQwcHeight() {
+    const customNode = (() => {
+      try { return localStorage.getItem(NODE_KEY) || ''; } catch (e) { return ''; }
+    })();
+    const endpoint = customNode
+      ? customNode.replace(/\/$/, '') + '/json_rpc'
+      : '/api/proxy?path=/json_rpc';
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 'restore-height', method: 'get_info' }),
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const payload = await response.json();
+      const height = payload && payload.result && Number(payload.result.height);
+      if (!Number.isSafeInteger(height) || height < 1) throw new Error('invalid QWC height');
+      return height;
+    } finally {
+      clearTimeout(timeout);
     }
   }
 
-  var restoreHeightEl = $el('restore-height');
-  var selectedLabel = $el('restore-height-selected');
-  var walletAgeSelected = false;
+  function estimateQwcRestoreHeight(tipHeight, ageDays) {
+    if (!Number.isSafeInteger(tipHeight) || tipHeight < 1) return 0;
+    if (!Number.isSafeInteger(ageDays) || ageDays <= 0) return 0;
+    const ageBlocks = ageDays * QWC_BLOCKS_PER_DAY;
+    return Math.max(0, tipHeight - ageBlocks - QWC_RESTORE_SAFETY_BLOCKS);
+  }
 
   document.querySelectorAll('.wallet-age-btn').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      walletAgeSelected = true;
-      // Remove active state from all buttons
-      document.querySelectorAll('.wallet-age-btn').forEach(function(b) {
-        b.style.background = 'var(--surface)';
-        b.style.borderColor = 'var(--border)';
-        b.style.color = 'var(--text)';
+    btn.addEventListener('click', async function() {
+      document.querySelectorAll('.wallet-age-btn').forEach(function(item) {
+        item.disabled = true;
       });
-      // Highlight the clicked button
-      btn.style.background = 'var(--xmr-dim)';
-      btn.style.borderColor = 'rgba(255,102,0,0.4)';
-      btn.style.color = 'var(--xmr)';
-      // Re-evaluate derive button state
-      refreshDeriveBtn();
+      setSelectedWalletAge(btn);
+      const ageDays = Number(btn.dataset.ageDays);
 
-      var age = btn.dataset.age;
-      var height = ageToHeight(age);
-      if (restoreHeightEl) restoreHeightEl.value = String(height);
-      if (selectedLabel) {
-        if (age === 'unknown') {
-          selectedLabel.textContent = 'Will scan from genesis — finds everything, may take 1-3 hours for old wallets';
-          selectedLabel.style.color = 'var(--text-dim)';
-        } else {
-          selectedLabel.textContent = 'Restore point set to ~block ' + height.toLocaleString() + ' — full scan required to find historical transactions';
-          selectedLabel.style.color = 'var(--success)';
+      if (ageDays === 0) {
+        restoreHeightEl.value = '0';
+        setRestoreStatus('Scanning from QWC v2 genesis — no history can be skipped.', true);
+      } else {
+        setRestoreStatus('Reading the live Qwertycoin height…', true);
+        try {
+          const tipHeight = await getLiveQwcHeight();
+          const height = estimateQwcRestoreHeight(tipHeight, ageDays);
+          restoreHeightEl.value = String(height);
+          setRestoreStatus(
+            height > 0
+              ? 'Restore point set to QWC block ' + height.toLocaleString() + ' (live tip ' + tipHeight.toLocaleString() + ', including safety margin).'
+              : 'The chain is newer than this wallet age; scanning safely from QWC v2 genesis.',
+            height === 0
+          );
+        } catch (error) {
+          restoreHeightEl.value = '0';
+          setRestoreStatus('Could not read the live QWC height. Falling back safely to QWC v2 genesis.', true);
         }
-        selectedLabel.style.display = 'block';
       }
+
+      document.querySelectorAll('.wallet-age-btn').forEach(function(item) {
+        item.disabled = false;
+      });
     });
   });
 
-  // Auto-hide the wallet-age section for polyseed (birthday is embedded)
-  // and show it for all other formats. Also hide for BIP-39 passphrase row.
-  seedInput.addEventListener('input', function() {
-    var words = seedInput.value.trim().split(/\s+/).filter(function(w) { return w.length > 0; });
-    var count = words.length;
-    var rhGroup = $el('restore-height-group');
-    if (rhGroup) {
-      // Polyseed (16 words) has an embedded birthday — no need to ask.
-      // For 12/13/25/other, show the age picker.
-      rhGroup.style.display = (count === 16) ? 'none' : 'block';
-    }
-  });
+  if (restoreHeightEl) {
+    restoreHeightEl.addEventListener('input', function() {
+      const digits = restoreHeightEl.value.replace(/[^0-9]/g, '');
+      restoreHeightEl.value = digits || '0';
+      const height = Number(restoreHeightEl.value);
+      const genesisButton = document.querySelector('.wallet-age-btn[data-age-days="0"]');
+      setSelectedWalletAge(height === 0 ? genesisButton : null);
+      setRestoreStatus(
+        height > 0
+          ? 'Exact QWC restore height set to block ' + height.toLocaleString() + '.'
+          : 'Scanning from QWC v2 genesis — no history can be skipped.',
+        height === 0
+      );
+    });
+  }
 
   // ─── SPEND KEY INPUT ───
   const spendKeyInput = document.getElementById('spend-key-input');
@@ -276,17 +294,16 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(async () => {
       try {
         const mnemonic = (seedInput && seedInput.value || '').trim();
-        // Language is auto-detected by MoneroKeys.detectLanguage(); we pass
+        const wordCount = mnemonic.split(/\s+/).filter(Boolean).length;
+        if (wordCount !== 25) throw new Error('Qwertycoin seed phrases contain exactly 25 words.');
+        // Language is auto-detected by the compatibility key engine; we pass
         // null so the engine picks whichever wordlist actually matches.
         const network    = 'mainnet';
-        const passphrase = $val('bip39-pass');
-        const keys = await MoneroKeys.deriveFromAnyMnemonic(mnemonic, null, network, passphrase);
-        // Attach the user-supplied restore height (if any) so the dashboard
-        // can pass it to the LWS to avoid scanning from genesis.
-        const rhVal = $val('restore-height').replace(/[^0-9]/g, '');
-        if (rhVal.length > 0) {
-          keys.restoreHeight = parseInt(rhVal, 10);
-        }
+        const keys = MoneroKeys.deriveFromMnemonic(mnemonic, null, network);
+        const restoreHeight = Number($val('restore-height'));
+        keys.restoreHeight = Number.isSafeInteger(restoreHeight) && restoreHeight > 0
+          ? restoreHeight
+          : 0;
         showResults(keys);
       } catch(e) {
         errorEl.textContent = 'Error: ' + e.message;
@@ -324,9 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ─── SHOW RESULTS ───
   function showResults(keys) {
-    // Reveal the recovered mnemonic card only when we have one (spend-key
-    // import paths attach it; BIP-39 / polyseed / MyMonero don't because
-    // those formats are one-way and can't be reconstructed from the keys)
+    // Reveal the recovered mnemonic card when the standard QWC seed is known.
     const mnemCard = document.getElementById('res-mnemonic-card');
     if (keys.mnemonic && keys.wordCount === 25) {
       document.getElementById('res-mnemonic').textContent = keys.mnemonic;
@@ -494,7 +509,7 @@ document.addEventListener('DOMContentLoaded', () => {
               var url = URL.createObjectURL(blob);
               var a = document.createElement('a');
               a.href = url;
-              a.download = 'monero-wallet-' + wallet.address.slice(0, 8) + '.json';
+              a.download = 'qwertycoin-wallet-' + wallet.address.slice(0, 8) + '.json';
               a.click();
               URL.revokeObjectURL(url);
             });
