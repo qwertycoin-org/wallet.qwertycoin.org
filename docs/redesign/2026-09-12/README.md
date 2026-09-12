@@ -11,14 +11,16 @@ Design reference: `qwertycoin-org/qwertycoin-org.github.io@cad291f45602e44c94f75
 This change aligns presentation and self-hosting guidance. It adds the approved Qwertycoin mark, local
 Archivo/Inter fonts, the cream/black/gold/violet visual system, responsive
 layout rules, a complete favicon matrix, and QWC-specific verification and
-self-hosting instructions. Wallet creation/restoration,
+self-hosting instructions. It also removes the unsupported third-party swap
+navigation, widget, provider permission, and roadmap entry. Wallet creation/restoration,
 session storage, encryption, RPC, scanning, amounts, fees, transaction
 construction/signing/relay, and all functional event handlers are unchanged.
 
-The 44-file JavaScript/Worker/server baseline and the post-change set have the
-same aggregate SHA-256 manifest:
-
-`31cfa01b7bdb03f9de244af3d54ea1586af2e9e768e76d4ab39544563890fa95`
+The 43 retained JavaScript/Worker/server files listed in
+[`protected-logic.sha256`](protected-logic.sha256) remain byte-identical to the
+baseline. The only removed script is the unsupported, presentation-only
+`js/swap-popup.js`; wallet, RPC, cryptographic, storage, and transaction logic
+is unchanged.
 
 The redesign intentionally preserves functional IDs/classes and inline
 `display`/`hidden` state ownership. The shared stylesheet is loaded after the
@@ -81,9 +83,9 @@ privacy, and self-host pages.
 | Check | Result |
 | --- | --- |
 | Existing wallet tests | 44/44 PASS |
-| Presentation-contract tests | 8/8 PASS |
-| Manifest build and `--check` | 66/66 files PASS |
-| Protected logic hash comparison | byte-identical PASS |
+| Presentation-contract tests | 9/9 PASS |
+| Manifest build and `--check` | 65/65 files PASS |
+| Retained protected logic hash comparison | 43/43 byte-identical PASS |
 | Responsive overflow matrix | 24/24 page/viewport combinations PASS |
 | Browser interaction/state checks | PASS |
 | Unexpected failed asset requests | 0 |
