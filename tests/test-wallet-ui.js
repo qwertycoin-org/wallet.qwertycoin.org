@@ -40,7 +40,7 @@ test('all active pages use the approved local Qwertycoin mark and brand lockup',
   for (const file of Object.keys(appPages)) {
     const html = read(file);
     linked(html, 'src="/assets/qwertycoin-mark.svg"');
-    linked(html, '<strong>QWERTYCOIN</strong><span>Web Wallet</span>');
+    linked(html, '<strong>QWERTYCOIN</strong><span>WEB WALLET</span>');
     assert(!html.includes('/assets/classic/logo.png'), `${file}: legacy logo remains`);
   }
 });
@@ -71,6 +71,8 @@ test('all active pages share the responsive Qwertycoin product navigation', () =
     'border-radius: 0',
     'box-shadow: 4px 4px 0 var(--border)',
     'margin: 4px 0',
+    'flex-direction: column',
+    'letter-spacing: 0.16em',
     '@media (max-width: 1200px)',
     'width: auto',
     'min-height: 72px',
