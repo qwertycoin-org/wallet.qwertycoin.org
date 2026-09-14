@@ -6,6 +6,8 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+const sharedCss = '/assets/wallet-ui.f152d12.css';
+const sharedNavigation = '/js/nav-menu.f152d12.js';
 let passed = 0;
 
 function test(name, fn) {
@@ -31,8 +33,9 @@ test('all active pages load the shared visual system after legacy inline styles'
   for (const [file, bodyClass] of Object.entries(appPages)) {
     const html = read(file);
     linked(html, `<body class="${bodyClass}">`);
-    linked(html, 'href="/assets/wallet-ui.css"');
-    assert(html.lastIndexOf('/assets/wallet-ui.css') > html.lastIndexOf('</style>'), `${file}: common CSS must follow legacy CSS`);
+    linked(html, `href="${sharedCss}"`);
+    assert(html.lastIndexOf(sharedCss) > html.lastIndexOf('</style>'), `${file}: common CSS must follow legacy CSS`);
+    assert(!html.includes('href="/assets/wallet-ui.css"'), `${file}: unversioned shared CSS can serve a stale header`);
   }
 });
 
@@ -46,8 +49,8 @@ test('all active pages use the approved local Qwertycoin mark and brand lockup',
 });
 
 test('all active pages share the responsive Qwertycoin product navigation', () => {
-  const css = read('assets/wallet-ui.css');
-  const navigation = read('js/nav-menu.js');
+  const css = read(sharedCss.slice(1));
+  const navigation = read(sharedNavigation.slice(1));
 
   for (const file of Object.keys(appPages)) {
     const html = read(file);
@@ -58,8 +61,9 @@ test('all active pages share the responsive Qwertycoin product navigation', () =
       'data-nav-toggle',
       'id="primary-navigation"',
       'data-nav-menu',
-      'src="/js/nav-menu.js"',
+      `src="${sharedNavigation}"`,
     ]) linked(html, value);
+    assert(!html.includes('src="/js/nav-menu.js"'), `${file}: unversioned navigation script can drift from HTML`);
     assert.strictEqual((html.match(/id="primary-navigation"/g) || []).length, 1, `${file}: navigation id must be unique`);
   }
 
@@ -124,7 +128,7 @@ test('brand fonts are local, content-addressed, and preloaded on active pages', 
 });
 
 test('shared CSS contains the approved semantic palette and accessibility hooks', () => {
-  const css = read('assets/wallet-ui.css').toLowerCase();
+  const css = read(sharedCss.slice(1)).toLowerCase();
   for (const token of ['#f5f1e7', '#fffdf7', '#fff8e8', '#141414', '#ffaf00', '#ffe7a3', '#7952ff']) {
     linked(css, token);
   }

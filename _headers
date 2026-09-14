@@ -51,7 +51,8 @@
 # Cloudflare Pages applies its own default 4-hour browser cache to known
 # static asset types (.js, .css) and that default WINS over the catch-all
 # /* rule unless we explicitly target the directory. /js/* and /functions/*
-# both need their own block.
+# both need their own block. Header-critical CSS/JS additionally use versioned
+# URLs so a browser can never combine newly deployed HTML with older assets.
 
 /js/*
   Cache-Control: public, max-age=0, must-revalidate

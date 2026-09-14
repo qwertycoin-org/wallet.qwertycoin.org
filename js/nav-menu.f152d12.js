@@ -1,3 +1,4 @@
+/* Versioned with the unified-header deployment to prevent HTML/CSS/JS cache skew. */
 (function () {
   'use strict';
 
