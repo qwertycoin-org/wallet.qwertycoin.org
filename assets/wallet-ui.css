@@ -992,6 +992,7 @@ body.wallet-app::after,
     top: calc(100% + 2px);
     right: clamp(1rem, 3vw, 2.5rem);
     left: clamp(1rem, 3vw, 2.5rem);
+    width: auto;
     display: none;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: stretch;

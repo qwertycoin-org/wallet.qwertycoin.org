@@ -1,5 +1,5 @@
 # Qwertycoin Web Wallet build manifest
-# Generated 2026-09-14T12:40:37Z from commit ae1181d
+# Generated 2026-09-14T12:45:49Z from commit d355693
 #
 # Verify the live deployment matches a specific git tag with:
 #   git checkout v0.1.0
@@ -18,7 +18,7 @@ b83c4b9a436236620b4107628799459f778c35b7aa45b1dd389c97b9649bb592  assets/favicon
 449e9192a909de6b096b8949d43f1120092036a1fef2f9df9bdb785269461bb9  assets/qwertycoin-mark.svg
 2f2114c74813e11b739fb7d0293f0244db10d13a63cbdb4a21b4c7e9c2768681  assets/social-card.png
 6e761de434fb98032c3a3b562e04e7d1b2fbd7a5d392db15bfbab0f1854468aa  assets/social-card.svg
-ffd8c2679ecdf4d74c04b393c3bc4a8416993fc40b416bca5f38edf63766c07f  assets/wallet-ui.css
+4ab27a17bc90509fb17c7c9655ad8e7752ca7ec49ced48178a5fbf853bb94904  assets/wallet-ui.css
 adebcef3e990b8f8a142ec4d99509f28e69073d1dc93b36362df4e3f03b69bcb  dashboard.html
 49845fb6edd4109c5f9aa61feaf105f9125f5c10c00e7d1c6726b0c2f5594ec9  favicon.ico
 a81550eef33de480531b7220d41a0ddc46129b36c1b6d2875d170de441d5da66  favicon.svg

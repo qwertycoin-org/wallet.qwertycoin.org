@@ -72,6 +72,7 @@ test('all active pages share the responsive Qwertycoin product navigation', () =
     'box-shadow: 4px 4px 0 var(--border)',
     'margin: 4px 0',
     '@media (max-width: 1200px)',
+    'width: auto',
     'min-height: 72px',
   ]) linked(css, value);
 
