@@ -85,21 +85,37 @@ body.wallet-app::after,
   max-width: 880px;
 }
 
-/* Brand header */
+/* Shared Qwertycoin product header. Keep these dimensions aligned with
+   qwertycoin.org and explorer.qwertycoin.org. */
+.wallet-app .site-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  border-bottom: 2px solid var(--border);
+  background: rgba(245, 241, 231, 0.94);
+  backdrop-filter: blur(16px);
+}
+
+.wallet-app .site-header .container {
+  width: 100%;
+  max-width: 1440px;
+  padding-inline: clamp(1rem, 3vw, 2.5rem);
+}
+
 .wallet-app nav {
-  min-height: 72px;
-  padding: 12px 0;
+  min-height: 82px;
+  padding: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  border-bottom: 2px solid var(--border);
+  border-bottom: 0;
 }
 
 .wallet-app .logo {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 0.72rem;
   color: var(--text);
   border: 0;
   text-decoration: none;
@@ -113,23 +129,26 @@ body.wallet-app::after,
 }
 
 .brand-lockup {
-  display: grid;
-  gap: 1px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
   line-height: 1;
 }
 
 .brand-lockup strong {
   font-family: var(--font-display);
-  font-size: 1rem;
+  font-size: clamp(1.05rem, 1.5vw, 1.45rem);
   font-weight: 900;
-  letter-spacing: 0.055em;
+  letter-spacing: 0;
 }
 
 .brand-lockup span {
   color: var(--text-dim);
-  font-size: 0.66rem;
+  font-family: var(--font-sans);
+  font-size: 0.65rem;
   font-weight: 600;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 
@@ -137,23 +156,24 @@ body.wallet-app::after,
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 4px;
-  flex-wrap: wrap;
-  font-family: var(--font-sans);
+  gap: 0.2rem;
+  font-family: var(--font-display);
   font-size: 0.78rem;
-  font-weight: 600;
-  text-transform: none;
+  font-weight: 900;
+  text-transform: uppercase;
 }
 
 .wallet-app .nav-links a {
-  min-height: 40px;
+  min-height: 42px;
   display: inline-flex;
   align-items: center;
-  padding: 8px 11px;
-  border: 1px solid transparent;
-  border-radius: 5px;
-  color: var(--text-mid);
+  justify-content: center;
+  padding: 0.45rem 0.62rem;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  color: var(--text);
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .wallet-app .nav-links a:hover,
@@ -161,7 +181,40 @@ body.wallet-app::after,
 .wallet-app .nav-links a.active {
   color: var(--text);
   background: var(--surface-2);
-  border-color: var(--border);
+}
+
+.wallet-app .nav-links a.active,
+.wallet-app .nav-links a[aria-current="page"] {
+  box-shadow: inset 0 -3px var(--xmr);
+}
+
+.wallet-app .nav-toggle {
+  display: none;
+  width: 44px;
+  height: 44px;
+  padding: 10px;
+  border: 2px solid var(--border);
+  border-radius: 0;
+  background: var(--xmr);
+  box-shadow: 4px 4px 0 var(--border);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.wallet-app .nav-toggle-bar {
+  display: block;
+  height: 2px;
+  margin: 4px 0;
+  background: currentColor;
+}
+
+.wallet-app .nav-toggle-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 .wallet-app :focus-visible {
@@ -919,25 +972,46 @@ body.wallet-app::after,
   color: var(--text-mid) !important;
 }
 
-@media (max-width: 760px) {
-  .wallet-app .container {
-    padding-inline: 16px;
+@media (max-width: 1200px) {
+  .wallet-app nav {
+    min-height: 72px;
+    align-items: center;
+    flex-direction: row;
+    gap: 24px;
   }
 
-  .wallet-app nav {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 8px;
+  .wallet-app .nav-toggle {
+    display: block;
   }
 
   .wallet-app .nav-links {
-    width: 100%;
-    justify-content: flex-start;
-    gap: 2px;
+    position: absolute;
+    top: calc(100% + 2px);
+    right: clamp(1rem, 3vw, 2.5rem);
+    left: clamp(1rem, 3vw, 2.5rem);
+    width: auto;
+    display: none;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+    padding: 1rem;
+    border: 2px solid var(--border);
+    background: var(--bg);
+    box-shadow: 7px 7px 0 var(--border);
+  }
+
+  .wallet-app .nav-links[data-open] {
+    display: grid;
   }
 
   .wallet-app .nav-links a {
-    padding: 8px;
+    justify-content: flex-start;
+    width: 100%;
+  }
+}
+
+@media (max-width: 760px) {
+  .wallet-app .container {
+    padding-inline: 16px;
   }
 
   .wallet-verify .main-area,
@@ -985,17 +1059,9 @@ body.wallet-app::after,
   }
 }
 
-@media (max-width: 420px) {
+@media (max-width: 720px) {
   .brand-lockup strong {
-    font-size: 0.9rem;
-  }
-
-  .brand-lockup span {
-    font-size: 0.6rem;
-  }
-
-  .wallet-app .nav-links a {
-    font-size: 0.72rem;
+    font-size: 0.94rem;
   }
 
   .wallet-verify .card {
@@ -1017,6 +1083,12 @@ body.wallet-app::after,
 
   .wallet-app #send-priority {
     grid-template-columns: 1fr 1fr !important;
+  }
+}
+
+@media (max-width: 440px) {
+  .wallet-app .nav-links[data-open] {
+    grid-template-columns: 1fr;
   }
 }
 

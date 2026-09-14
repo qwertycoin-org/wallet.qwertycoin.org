@@ -77,14 +77,20 @@ footer a:hover{color:var(--text)}
 
 <div class="ambient"><div class="orb orb-1"></div><div class="orb orb-2"></div></div>
 
-<header>
+<header class="site-header">
   <div class="container">
-    <nav>
+    <nav aria-label="Primary">
       <a href="/verify" class="logo" title="Open wallet">
         <img class="logo-img" src="/assets/qwertycoin-mark.svg" width="42" height="42" alt="">
-        <span class="brand-lockup"><strong>QWERTYCOIN</strong><span>Web Wallet</span></span>
+        <span class="brand-lockup"><strong>QWERTYCOIN</strong><span>WEB WALLET</span></span>
       </a>
-      <div class="nav-links">
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="primary-navigation" data-nav-toggle>
+        <span class="nav-toggle-label">Open wallet navigation</span>
+        <span class="nav-toggle-bar" aria-hidden="true"></span>
+        <span class="nav-toggle-bar" aria-hidden="true"></span>
+        <span class="nav-toggle-bar" aria-hidden="true"></span>
+      </button>
+      <div class="nav-links" id="primary-navigation" data-nav-menu>
         <a href="/">Home</a>
         <a href="/verify">Open Wallet</a>
         <a href="https://github.com/qwertycoin-org/wallet.qwertycoin.org" target="_blank" rel="noopener">GitHub</a>
@@ -187,5 +193,6 @@ footer a:hover{color:var(--text)}
   </div>
 </footer>
 
+<script src="/js/nav-menu.js"></script>
 </body>
 </html>

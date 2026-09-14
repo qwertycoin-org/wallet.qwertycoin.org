@@ -152,15 +152,23 @@ footer p{font-size:.7rem;color:var(--text-dim)}
 <div class="ambient"></div>
 
 <div class="page">
-  <div class="container">
+  <header class="site-header">
+    <div class="container">
     <nav aria-label="Primary">
       <a href="/verify" class="logo" style="text-decoration:none;color:inherit;cursor:pointer" title="Open wallet">
         <img class="logo-img" src="/assets/qwertycoin-mark.svg" width="42" height="42" alt="">
-        <span class="brand-lockup"><strong>QWERTYCOIN</strong><span>Web Wallet</span></span>
+        <span class="brand-lockup"><strong>QWERTYCOIN</strong><span>WEB WALLET</span></span>
       </a>
-      <div class="nav-links"><a href="/verify">Wallet</a><a href="https://qwertycoin.org/">Mainnet</a><a href="/self-host">Self-Host</a><a href="https://github.com/qwertycoin-org/wallet.qwertycoin.org" target="_blank" rel="noopener">GitHub</a></div>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="primary-navigation" data-nav-toggle>
+        <span class="nav-toggle-label">Open wallet navigation</span>
+        <span class="nav-toggle-bar" aria-hidden="true"></span>
+        <span class="nav-toggle-bar" aria-hidden="true"></span>
+        <span class="nav-toggle-bar" aria-hidden="true"></span>
+      </button>
+      <div class="nav-links" id="primary-navigation" data-nav-menu><a href="/verify" aria-current="page">Wallet</a><a href="https://qwertycoin.org/">Mainnet</a><a href="/self-host">Self-Host</a><a href="https://github.com/qwertycoin-org/wallet.qwertycoin.org" target="_blank" rel="noopener">GitHub</a></div>
     </nav>
-  </div>
+    </div>
+  </header>
 
   <main class="main-area" id="main-content">
     <div class="container">
@@ -372,6 +380,7 @@ footer p{font-size:.7rem;color:var(--text-dim)}
 </div>
 
 <!-- Crypto engine (order matters) -->
+<script src="/js/nav-menu.js"></script>
 <script src="js/keccak256.js"></script>
 <script src="js/monero-ed25519.js"></script>
 <script src="js/monero-wordlist.js"></script>

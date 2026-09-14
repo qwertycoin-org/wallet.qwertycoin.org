@@ -40,9 +40,47 @@ test('all active pages use the approved local Qwertycoin mark and brand lockup',
   for (const file of Object.keys(appPages)) {
     const html = read(file);
     linked(html, 'src="/assets/qwertycoin-mark.svg"');
-    linked(html, '<strong>QWERTYCOIN</strong><span>Web Wallet</span>');
+    linked(html, '<strong>QWERTYCOIN</strong><span>WEB WALLET</span>');
     assert(!html.includes('/assets/classic/logo.png'), `${file}: legacy logo remains`);
   }
+});
+
+test('all active pages share the responsive Qwertycoin product navigation', () => {
+  const css = read('assets/wallet-ui.css');
+  const navigation = read('js/nav-menu.js');
+
+  for (const file of Object.keys(appPages)) {
+    const html = read(file);
+    for (const value of [
+      'class="site-header"',
+      'class="nav-toggle"',
+      'aria-controls="primary-navigation"',
+      'data-nav-toggle',
+      'id="primary-navigation"',
+      'data-nav-menu',
+      'src="/js/nav-menu.js"',
+    ]) linked(html, value);
+    assert.strictEqual((html.match(/id="primary-navigation"/g) || []).length, 1, `${file}: navigation id must be unique`);
+  }
+
+  for (const value of [
+    'min-height: 82px',
+    'width: 44px',
+    'height: 44px',
+    'padding: 10px',
+    'border-radius: 0',
+    'box-shadow: 4px 4px 0 var(--border)',
+    'margin: 4px 0',
+    'flex-direction: column',
+    'letter-spacing: 0.16em',
+    '@media (max-width: 1200px)',
+    'width: auto',
+    'min-height: 72px',
+  ]) linked(css, value);
+
+  linked(navigation, "event.key === 'Escape'");
+  linked(navigation, "(min-width: 1201px)");
+  linked(navigation, "navigation.toggleAttribute('data-open', open)");
 });
 
 test('favicon matrix is complete and consistently linked', () => {
