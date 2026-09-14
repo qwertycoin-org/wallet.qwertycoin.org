@@ -10,6 +10,8 @@ and uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Versioned the shared wallet-header CSS and navigation script URLs so mobile
   browsers cannot combine newly deployed header markup with stale pre-header
   assets and expose the accessibility label instead of the burger control.
+- Versioned the Qwertycoin Open Graph image URL so social clients no longer
+  reuse the cached Monero-Web preview inherited from the original project.
 
 ## [0.1.0] — 2026-04-09
 
