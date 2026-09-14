@@ -1,6 +1,6 @@
 # Qwertycoin Web Wallet
 
-![Qwertycoin Web Wallet](assets/social-card.png)
+![Qwertycoin Web Wallet](assets/social-card.2f2114c74813.png)
 
 The official open-source, non-custodial Qwertycoin web wallet. Private keys are derived and used inside the browser.
 

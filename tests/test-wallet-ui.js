@@ -8,6 +8,7 @@ const root = path.resolve(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const sharedCss = '/assets/wallet-ui.f152d12.css';
 const sharedNavigation = '/js/nav-menu.f152d12.js';
+const socialCard = '/assets/social-card.2f2114c74813.png';
 let passed = 0;
 
 function test(name, fn) {
@@ -104,6 +105,26 @@ test('favicon matrix is complete and consistently linked', () => {
     linked(html, 'href="/assets/favicon-16x16.png"');
     linked(html, 'href="/assets/apple-touch-icon.png"');
     linked(html, 'href="/favicon.ico"');
+  }
+});
+
+test('all public entry points advertise the versioned Qwertycoin social card', () => {
+  const card = fs.readFileSync(path.join(root, socialCard.slice(1)));
+  assert(card.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])), 'social card must be PNG');
+  assert.strictEqual(card.readUInt32BE(16), 1200, 'social card width');
+  assert.strictEqual(card.readUInt32BE(20), 630, 'social card height');
+
+  for (const file of ['index.html', ...Object.keys(appPages)]) {
+    const html = read(file);
+    linked(html, `<meta property="og:image" content="https://wallet.qwertycoin.org${socialCard}">`);
+    linked(html, `<meta property="og:image:secure_url" content="https://wallet.qwertycoin.org${socialCard}">`);
+    linked(html, '<meta property="og:image:type" content="image/png">');
+    linked(html, '<meta property="og:image:width" content="1200">');
+    linked(html, '<meta property="og:image:height" content="630">');
+    linked(html, '<meta property="og:image:alt" content="Qwertycoin Web Wallet — non-custodial QWC wallet in your browser.">');
+    linked(html, `<meta name="twitter:image" content="https://wallet.qwertycoin.org${socialCard}">`);
+    linked(html, '<meta name="twitter:image:alt" content="Qwertycoin Web Wallet — non-custodial QWC wallet in your browser.">');
+    assert(!html.includes('content="https://wallet.qwertycoin.org/assets/social-card.png"'), `${file}: unversioned social preview remains`);
   }
 });
 
