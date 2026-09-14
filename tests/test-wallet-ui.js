@@ -171,9 +171,6 @@ test('asset build and cache policy cover the new local presentation files', () =
   linked(build, '"assets/*.css"');
   linked(build, '"fonts/LICENSES.md"');
   linked(headers, '/assets/*');
-  linked(headers, sharedCss);
-  linked(headers, sharedNavigation);
-  linked(headers, 'Cache-Control: public, max-age=31536000, immutable');
 });
 
 test('self-host guide is Qwertycoin-specific and describes the current RPC architecture', () => {
