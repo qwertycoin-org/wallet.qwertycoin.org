@@ -16,6 +16,8 @@ In scope:
 - the 25-word QWC seed import and wallet-creation paths
 - private-spend-key and watch-only imports
 - browser-side Qwertycoin scanning and transaction signing
+- local spend-key message signing and signature verification
+- strict `pool.qwertycoin.org` payout-challenge validation
 - `WalletVault` encrypted session storage and idle locking
 - the restricted QWC RPC and binary scanner gateways
 - transaction-broadcast abuse controls
@@ -34,6 +36,8 @@ Out of scope:
 - any path that transmits a seed, private spend key or private view key
 - transaction or address substitution
 - failures in 25-word QWC key derivation or checksum validation
+- message-signature compatibility, type confusion or unexpected transmission
+- pool-challenge address, domain, expiry, threshold or replay-boundary bypasses
 - signing, output selection, key-image or change-output errors
 - QWC v2 genesis mismatches between JavaScript, WebAssembly and RPC
 - CSP bypasses, DOM injection, clipboard hijacking or unsafe external assets

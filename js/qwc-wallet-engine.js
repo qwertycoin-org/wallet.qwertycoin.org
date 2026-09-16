@@ -89,7 +89,7 @@ const QwcWalletEngine = (() => {
     return { uri: getDefaultDaemonUri() };
   }
 
-  async function createWallet(config, method) {
+  async function createWallet(config, method, canSign = true) {
     const walletId = newId("wallet");
     await invoke(walletId, method, [config]);
     return {
@@ -113,6 +113,12 @@ const QwcWalletEngine = (() => {
       describeTxSet: txSet => invoke(walletId, "describeTxSet", [txSet]),
       relayTxs: txMetadatas => invoke(walletId, "relayTxs", [txMetadatas]),
       submitTxs: signedTxHex => invoke(walletId, "submitTxs", [signedTxHex]),
+      signMessage: (message, signatureType = 0, accountIdx = 0, subaddressIdx = 0) =>
+        canSign
+          ? invoke(walletId, "signMessage", [message, signatureType, accountIdx, subaddressIdx])
+          : Promise.reject(new Error("Watch-only wallets cannot create signatures.")),
+      verifyMessage: (message, address, signature) =>
+        invoke(walletId, "verifyMessage", [message, address, signature]),
       sync: startHeight => invoke(walletId, "sync", [
         Number.isSafeInteger(startHeight) && startHeight > 0 ? startHeight : undefined,
         false
@@ -123,6 +129,21 @@ const QwcWalletEngine = (() => {
 
   return {
     MAINNET,
+    createFromKeys: config => {
+      const keyConfig = {
+        networkType: MAINNET,
+        primaryAddress: config.primaryAddress,
+        privateViewKey: config.privateViewKey,
+        restoreHeight: 0,
+        language: "English"
+      };
+      if (config.privateSpendKey) keyConfig.privateSpendKey = config.privateSpendKey;
+      // Keys-only wallets deliberately do not implement message signing or
+      // verification in qwertycoin-cpp. A full in-memory wallet uses the
+      // existing Core wallet2 implementation and remains offline because this
+      // configuration contains no daemon server.
+      return createWallet(keyConfig, "createWalletFull", !!config.privateSpendKey);
+    },
     createRandomWallet: language => createWallet({
       networkType: MAINNET,
       language: language || "English",
@@ -136,3 +157,5 @@ const QwcWalletEngine = (() => {
     }, "createWalletFull")
   };
 })();
+
+if (typeof module !== "undefined" && module.exports) module.exports = QwcWalletEngine;

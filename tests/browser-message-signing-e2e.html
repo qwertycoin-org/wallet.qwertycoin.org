@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>QWC worker message-signing E2E</title>
+<body data-status="running">running</body>
+<script src="/js/qwc-wallet-engine.js"></script>
+<script>
+'use strict';
+
+(async function () {
+  const message = ' QWC worker/WASM exact-byte test\nline 2: e\u0301 ';
+  let wallet;
+  try {
+    wallet = await QwcWalletEngine.createRandomWallet('English');
+    const address = await wallet.getAddress(0, 0);
+    const signature = await wallet.signMessage(message, 0, 0, 0);
+    const valid = await wallet.verifyMessage(message, address, signature);
+    const tampered = await wallet.verifyMessage(message + ' ', address, signature);
+    if (!valid || valid.isGood !== true || valid.signatureType !== 0) {
+      throw new Error('worker signature did not self-verify as spend-key');
+    }
+    if (!tampered || tampered.isGood !== false) {
+      throw new Error('worker accepted a byte-tampered message');
+    }
+    document.body.dataset.status = 'passed';
+    document.body.textContent = JSON.stringify({
+      passed: true,
+      address,
+      message,
+      signature,
+      signatureType: valid.signatureType,
+      tamperRejected: true
+    });
+  } catch (error) {
+    document.body.dataset.status = 'failed';
+    document.body.textContent = JSON.stringify({
+      passed: false,
+      error: error && error.message ? error.message : String(error)
+    });
+  } finally {
+    if (wallet) await wallet.close();
+  }
+})();
+</script>
+</html>
