@@ -63,6 +63,12 @@ if (!executablePath) throw new Error('CHROMIUM_PATH is required');
     consoleErrors.length = 0;
 
     await page.locator('#btn-sign-verify').click();
+    const desktopTabWidths = await page.locator('[data-message-signing-tab]').evaluateAll(tabs =>
+      tabs.map(tab => Math.round(tab.getBoundingClientRect().width)));
+    assert.strictEqual(desktopTabWidths.length, 3);
+    assert(desktopTabWidths[0] >= 140, `desktop Sign tab is too narrow: ${desktopTabWidths[0]}px`);
+    assert(desktopTabWidths[1] >= 140, `desktop Verify tab is too narrow: ${desktopTabWidths[1]}px`);
+    assert(desktopTabWidths[2] >= 190, `desktop Pool challenge tab is too narrow: ${desktopTabWidths[2]}px`);
     const exactMessage = ' exact browser message\nline 2: e\u0301 ';
     const rejectedCrlfPaste = await page.locator('#message-signing-input').evaluate(input => {
       const transfer = new DataTransfer();
@@ -132,6 +138,10 @@ if (!executablePath) throw new Error('CHROMIUM_PATH is required');
     });
 
     await page.setViewportSize({ width: 390, height: 844 });
+    const mobileTabWidths = await page.locator('[data-message-signing-tab]').evaluateAll(tabs =>
+      tabs.map(tab => Math.round(tab.getBoundingClientRect().width)));
+    assert(mobileTabWidths.every(width => width <= 326),
+      `mobile tabs must remain inside the modal: ${mobileTabWidths.join(', ')}px`);
     const mobileOverflow = await page.evaluate(() =>
       document.documentElement.scrollWidth > document.documentElement.clientWidth);
     assert.strictEqual(mobileOverflow, false);
@@ -153,6 +163,7 @@ if (!executablePath) throw new Error('CHROMIUM_PATH is required');
     console.log(JSON.stringify({
       desktop: { width: 1440, height: 1000, horizontalOverflow: desktopOverflow },
       mobile: { width: 390, height: 844, horizontalOverflow: mobileOverflow },
+      tabWidths: { desktop: desktopTabWidths, mobile: mobileTabWidths },
       offlineSignVerify: true,
       externalRequests,
       preSigningExternalRequests,

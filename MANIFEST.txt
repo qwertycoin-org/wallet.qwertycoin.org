@@ -1,5 +1,5 @@
 # Qwertycoin Web Wallet build manifest
-# Generated 2026-09-16T13:48:13Z from commit fc97ab9
+# Generated 2026-09-16T14:04:51Z from commit 1dbc637
 #
 # Verify the live deployment matches a specific git tag with:
 #   git checkout v0.1.0
@@ -20,7 +20,7 @@ b83c4b9a436236620b4107628799459f778c35b7aa45b1dd389c97b9649bb592  assets/favicon
 2f2114c74813e11b739fb7d0293f0244db10d13a63cbdb4a21b4c7e9c2768681  assets/social-card.png
 6e761de434fb98032c3a3b562e04e7d1b2fbd7a5d392db15bfbab0f1854468aa  assets/social-card.svg
 a1a1345fdbb4d52f74fd5eacdc75443f7c391670b1eecc312b6ad7485f52d0c7  assets/wallet-ui.f152d12.css
-6821a71c89b53b3686f701d06e03d7c83d100358980440730f59e29448f0eb28  dashboard.html
+bd8762453cee31a5a1d9391dc978879d4e6307b1490aa6058c320abb3779f671  dashboard.html
 49845fb6edd4109c5f9aa61feaf105f9125f5c10c00e7d1c6726b0c2f5594ec9  favicon.ico
 a81550eef33de480531b7220d41a0ddc46129b36c1b6d2875d170de441d5da66  favicon.svg
 e17cfd15fb96909d64095015f958207063a0c07191da3512df7d560a781aebdf  fonts/028edbf56089.woff2
