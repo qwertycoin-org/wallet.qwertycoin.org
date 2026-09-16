@@ -269,6 +269,10 @@ footer p{font-size:.65rem;color:var(--text-dim)}
           <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Receive
         </button>
+        <button class="action-btn" id="btn-sign-verify">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L8 18l-4 1 1-4z"/></svg>
+          Sign / Verify
+        </button>
       </div>
 
       <!-- Network Info -->
@@ -422,6 +426,62 @@ footer p{font-size:.65rem;color:var(--text-dim)}
     </div>
   </div>
 
+
+  <!-- ═══ MESSAGE SIGNING MODAL ═══ -->
+  <div class="modal-overlay" id="message-signing-modal">
+    <div class="modal" style="max-width:720px">
+      <div class="modal-header">
+        <h2>Sign / Verify</h2>
+        <button class="modal-close" id="message-signing-close" type="button" aria-label="Close message signing">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:.78rem;color:var(--text-dim);line-height:1.55;margin-bottom:14px">Qwertycoin message signatures prove control of an address without moving funds. Signing uses the spend key inside this browser tab; no message or private key is sent to a server.</p>
+        <div class="tabs" role="tablist" aria-label="Message signing tools" style="margin-bottom:18px">
+          <button class="tab active" id="message-signing-tab-sign" type="button" role="tab" aria-selected="true" data-message-signing-tab="sign">Sign</button>
+          <button class="tab" id="message-signing-tab-verify" type="button" role="tab" aria-selected="false" data-message-signing-tab="verify">Verify</button>
+          <button class="tab" id="message-signing-tab-pool" type="button" role="tab" aria-selected="false" data-message-signing-tab="pool">Pool challenge</button>
+        </div>
+
+        <section id="message-signing-panel-sign" data-message-signing-panel="sign" role="tabpanel" aria-labelledby="message-signing-tab-sign">
+          <label for="message-signing-input" style="display:block;font-size:.72rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Exact message</label>
+          <textarea id="message-signing-input" rows="6" maxlength="16384" autocomplete="off" spellcheck="false" placeholder="Enter the exact message to sign"></textarea>
+          <p style="font-size:.68rem;color:var(--text-dim);line-height:1.5;margin:8px 0 12px">The signature is bound to every character, space and line break. Browser text fields use LF line breaks, so pasted or dropped CR/CRLF text is rejected instead of normalized. Only spend-key signatures are created.</p>
+          <button class="action-btn primary" id="message-signing-create" type="button" style="width:100%">Create spend-key signature</button>
+          <label for="message-signing-output" style="display:block;font-size:.72rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 6px">Signature</label>
+          <textarea id="message-signing-output" rows="3" readonly autocomplete="off" spellcheck="false"></textarea>
+          <button class="action-btn" id="message-signing-copy" type="button" style="width:100%;margin-top:8px">Copy signature</button>
+          <p id="message-signing-status" aria-live="polite" style="font-size:.72rem;color:var(--text-dim);line-height:1.5;margin-top:10px"></p>
+        </section>
+
+        <section id="message-signing-panel-verify" data-message-signing-panel="verify" role="tabpanel" aria-labelledby="message-signing-tab-verify" hidden>
+          <label for="message-verify-address" style="display:block;font-size:.72rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Signing address</label>
+          <textarea id="message-verify-address" rows="3" autocomplete="off" spellcheck="false" placeholder="QWC address"></textarea>
+          <label for="message-verify-input" style="display:block;font-size:.72rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin:12px 0 6px">Exact message</label>
+          <textarea id="message-verify-input" rows="6" maxlength="16384" autocomplete="off" spellcheck="false" placeholder="Enter the exact signed message"></textarea>
+          <label for="message-verify-signature" style="display:block;font-size:.72rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin:12px 0 6px">Signature</label>
+          <textarea id="message-verify-signature" rows="3" autocomplete="off" spellcheck="false" placeholder="Paste the complete signature"></textarea>
+          <button class="action-btn primary" id="message-verify-check" type="button" style="width:100%;margin-top:12px">Verify signature</button>
+          <p id="message-verify-status" aria-live="polite" style="font-size:.72rem;color:var(--text-dim);line-height:1.5;margin-top:10px"></p>
+        </section>
+
+        <section id="message-signing-panel-pool" data-message-signing-panel="pool" role="tabpanel" aria-labelledby="message-signing-tab-pool" hidden>
+          <p style="font-size:.78rem;color:var(--text);line-height:1.55;margin-bottom:12px">Paste the exact short-lived request created on <a href="https://pool.qwertycoin.org/" target="_blank" rel="noopener noreferrer">pool.qwertycoin.org</a>. This signer rejects another address, altered fields, CR/CRLF line endings, a non-canonical threshold, a wrong domain, an expired request, or a lifetime longer than ten minutes.</p>
+          <label for="pool-challenge-input" style="display:block;font-size:.72rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Pool payout challenge</label>
+          <textarea id="pool-challenge-input" rows="8" maxlength="16384" autocomplete="off" spellcheck="false" placeholder="Qwertycoin pool payout threshold&#10;Address: QWC…&#10;Threshold: 1000 QWC&#10;Nonce: …&#10;Expires: …&#10;Domain: pool.qwertycoin.org"></textarea>
+          <div id="pool-challenge-summary" hidden style="margin:10px 0;padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;font-size:.72rem;line-height:1.6"></div>
+          <label for="pool-challenge-confirm" style="display:flex;align-items:flex-start;gap:9px;margin:12px 0;font-size:.74rem;line-height:1.5;color:var(--text)">
+            <input id="pool-challenge-confirm" type="checkbox" style="width:18px;height:18px;flex:0 0 auto;margin:1px 0 0">
+            <span>I checked the exact address, threshold, domain and expiry shown above. Sign these unchanged bytes with this wallet's spend key.</span>
+          </label>
+          <button class="action-btn primary" id="pool-challenge-sign" type="button" style="width:100%;margin-top:12px" disabled>Sign confirmed challenge</button>
+          <label for="pool-challenge-signature" style="display:block;font-size:.72rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 6px">Spend-key signature</label>
+          <textarea id="pool-challenge-signature" rows="3" readonly autocomplete="off" spellcheck="false"></textarea>
+          <button class="action-btn" id="pool-challenge-copy" type="button" style="width:100%;margin-top:8px">Copy signature</button>
+          <p id="pool-challenge-status" aria-live="polite" style="font-size:.72rem;color:var(--text-dim);line-height:1.5;margin-top:10px"></p>
+        </section>
+      </div>
+    </div>
+  </div>
   <!-- ═══ SEND MODAL ═══ -->
   <div class="modal-overlay" id="send-modal">
     <div class="modal">
@@ -562,6 +622,7 @@ footer p{font-size:.65rem;color:var(--text-dim)}
 <script src="js/monero-english-wordlist.js"></script>
 <script src="js/monero-rpc.js"></script>
 <script src="js/qwc-wallet-engine.js"></script>
+<script src="js/message-signing.js"></script>
 
 <script src="js/dashboard-page.js"></script>
 </body>

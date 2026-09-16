@@ -21,6 +21,7 @@ Legacy 12-, 13- and 16-word seed formats from other projects are not exposed or 
 Browser
 ├── Qwertycoin key derivation and address generation
 ├── qwertycoin-ts WebAssembly scanner
+├── local spend-key message signing and signature verification
 ├── local transaction construction and signing
 ├── encrypted in-tab WalletVault session
 └── local QR generation and scanning
@@ -35,7 +36,23 @@ Qwertycoin infrastructure
 └── qwertycoind restricted RPC (ports 8198/8199)
 ```
 
-The seed, private spend key and private view key remain in the browser. The RPC gateway receives restricted blockchain queries and, when the user sends QWC, the completed signed transaction.
+The seed, private spend key and private view key remain in the browser. The RPC
+gateway receives restricted blockchain queries and, when the user sends QWC,
+the completed signed transaction. Message signing and verification do not use
+the gateway. The dedicated pool-challenge view validates the exact address,
+threshold, nonce, expiration and domain locally before creating a spend-key
+signature.
+
+## Message signing
+
+Open **Sign / Verify** in a loaded wallet to create or verify a Qwertycoin
+message signature. Messages are signed as their exact UTF-8 bytes: whitespace,
+line endings and Unicode normalization are not changed. Watch-only wallets can
+verify signatures but cannot create them.
+
+Pool operators integrating payout-threshold authorization must use the strict
+challenge format and server-side replay controls described in
+[`docs/message-signing.md`](docs/message-signing.md).
 
 ## Self-hosting
 

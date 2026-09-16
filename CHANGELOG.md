@@ -6,6 +6,14 @@ and uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- Added local Qwertycoin spend-key message signing and signature verification
+  through the already-vendored `qwertycoin-ts` wallet worker.
+- Added a strict pool payout-challenge signer that requires the loaded wallet
+  address, canonical 1,000–10,000,000 QWC threshold, 48-hex nonce, exact
+  `pool.qwertycoin.org` domain, and an unexpired ten-minute request before
+  signing.
+
 ### Fixed
 - Versioned the shared wallet-header CSS and navigation script URLs so mobile
   browsers cannot combine newly deployed header markup with stale pre-header

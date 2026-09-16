@@ -169,10 +169,64 @@ test('functional wallet anchors remain present', () => {
 
   const dashboard = read('dashboard.html');
   for (const id of [
-    'dashboard', 'wallet-address', 'balance-xmr', 'btn-send', 'btn-receive',
+    'dashboard', 'wallet-address', 'balance-xmr', 'btn-send', 'btn-receive', 'btn-sign-verify',
     'receive-modal', 'send-modal', 'send-step-form', 'send-step-confirm',
-    'send-step-result', 'unlock-overlay', 'btn-export', 'btn-disconnect',
+    'send-step-result', 'message-signing-modal', 'message-signing-input',
+    'message-verify-address', 'message-verify-signature', 'pool-challenge-input',
+    'pool-challenge-confirm', 'pool-challenge-signature', 'unlock-overlay', 'btn-export', 'btn-disconnect',
   ]) linked(dashboard, `id="${id}"`);
+});
+
+
+test('message signing reuses the vendored qwertycoin-ts wallet contract locally', () => {
+  const dashboard = read('dashboard.html');
+  const controller = read('js/dashboard-page.js');
+  const contract = read('js/message-signing.js');
+  const engine = read('js/qwc-wallet-engine.js');
+
+  linked(engine, 'invoke(walletId, "signMessage", [message, signatureType, accountIdx, subaddressIdx])');
+  linked(engine, 'invoke(walletId, "verifyMessage", [message, address, signature])');
+  linked(engine, 'return createWallet(keyConfig, "createWalletFull", !!config.privateSpendKey)');
+  linked(engine, 'Promise.reject(new Error("Watch-only wallets cannot create signatures."))');
+  assert(!engine.includes('return createWallet(keyConfig, "createWalletKeys")'),
+    'message signing must not use the keys-only wallet whose signing methods are unsupported');
+  linked(controller, 'localWallet.signMessage(message, 0, 0, 0)');
+  linked(controller, 'verifierWallet.verifyMessage(message, address, signature)');
+  linked(controller, '!!walletKeys.watchOnly || !walletKeys.privateSpendKeyHex');
+  linked(controller, "if (isWatchOnly) throw new Error('Watch-only wallets cannot create signatures.');");
+  linked(controller, 'QwcMessageSigning.parsePoolChallenge(poolChallengeInput.value, walletKeys.address)');
+  linked(controller, 'poolChallengeConfirm.checked');
+  linked(controller, 'clearMessageSigningState();');
+  linked(controller, 'messageSigningGeneration += 1;');
+  linked(controller, 'messageVerificationGeneration += 1;');
+  linked(controller, 'poolSigningGeneration += 1;');
+  linked(controller, 'qwcMessageWalletGeneration += 1;');
+  linked(controller, 'walletGeneration !== qwcMessageWalletGeneration');
+  linked(controller, 'await localWallet.close();');
+  linked(controller, "poolChallengeInput.addEventListener('paste'");
+  linked(controller, "poolChallengeInput.addEventListener('drop'");
+  linked(controller, 'bindExactMessageInsertionGuard(messageSignInput');
+  linked(controller, 'bindExactMessageInsertionGuard(messageVerifyInput');
+  linked(controller, "rejectCarriageReturnInsertion(event, clipboard && clipboard.getData('text/plain'), onReject)");
+  linked(controller, "insertedText.includes('\\r')");
+  linked(controller, 'poolChallengeInput.value !== signedMessage');
+  linked(controller, 'QwcMessageSigning.isPoolChallengeCandidate(signedMessage)');
+  linked(controller, 'messageVerifyInput.value !== verifiedMessage');
+  linked(controller, 'messageVerifyAddress.value !== verifiedAddress');
+  linked(controller, 'messageVerifySignature.value !== verifiedSignature');
+  linked(controller, 'QwcMessageSigning.parsePoolChallenge(signedMessage, walletKeys.address);');
+  assert(!controller.includes('messageSignInput.value.trim()'), 'the signed message must not be trimmed');
+  assert(!controller.includes('poolChallengeInput.value.trim()'), 'the pool challenge must not be trimmed');
+  linked(contract, "Domain: pool.qwertycoin.org");
+  linked(contract, 'POOL_CHALLENGE_LIFETIME_MS = 10 * 60 * 1000');
+  linked(contract, 'The pool challenge address does not match this wallet.');
+  linked(contract, 'POOL_MIN_THRESHOLD_ATOMIC = 1000n * 100000000n');
+  linked(contract, 'POOL_MAX_THRESHOLD_ATOMIC = 10000000n * 100000000n');
+  assert(!/(fetch\s*\(|XMLHttpRequest|sendBeacon)/.test(contract), 'message-signing contract must not transmit data');
+  assert(dashboard.indexOf('js/message-signing.js') < dashboard.indexOf('js/dashboard-page.js'),
+    'message-signing contract must load before the dashboard controller');
+  linked(dashboard, 'Signing uses the spend key inside this browser tab; no message or private key is sent to a server.');
+  linked(dashboard, 'another address, altered fields, CR/CRLF line endings, a non-canonical threshold, a wrong domain, an expired request');
 });
 
 test('unsupported swap integration is absent from the shipped wallet', () => {
@@ -186,12 +240,16 @@ test('unsupported swap integration is absent from the shipped wallet', () => {
   assert(!read('README.md').includes('Swap integration'), 'unsupported swap integration remains on the roadmap');
 });
 
-test('asset build and cache policy cover the new local presentation files', () => {
+test('asset build, manifest and cache policy cover the new local presentation files', () => {
   const build = read('tools/build-manifest.sh');
   const headers = read('_headers');
+  const manifest = read('MANIFEST.txt');
   linked(build, '"assets/*.css"');
   linked(build, '"fonts/LICENSES.md"');
+  linked(build, '"js/*.js"');
   linked(headers, '/assets/*');
+  linked(headers, '/js/*');
+  linked(manifest, '  js/message-signing.js');
 });
 
 test('self-host guide is Qwertycoin-specific and describes the current RPC architecture', () => {

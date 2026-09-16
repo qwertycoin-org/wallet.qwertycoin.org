@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let idleTimer = null;
   let scanningActive = false; // true while LWS is still scanning the chain
   let qwcUsdPrice = 0;       // cached QWC/USD rate, disabled until a source is configured
+  let clearMessageSigningState = function () {};
 
   const overlay     = document.getElementById('unlock-overlay');
   const overlayMsg  = document.getElementById('unlock-msg');
@@ -32,6 +33,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   overlayForget.addEventListener('click', () => {
+    clearMessageSigningState();
     WalletVault.clear();
     walletKeys = null;
     window.location.href = '/verify';
@@ -98,6 +100,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // the ciphertext persists in sessionStorage across the reload, so the
     // user can re-enter their password without re-deriving from a seed.
     // For a plaintext vault we wipe and bounce to verify.
+    clearMessageSigningState();
     walletKeys = null;
     if (WalletVault.isLocked()) {
       window.location.reload();
@@ -131,7 +134,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   async function populateWallet() {
 
-  const isWatchOnly = !!walletKeys.watchOnly;
+  // Treat the spend key itself as the authority for signing capability. A
+  // malformed or older vault must never become sign-capable merely because
+  // its watchOnly metadata flag is absent.
+  const isWatchOnly = !!walletKeys.watchOnly || !walletKeys.privateSpendKeyHex;
 
   // ─── Populate wallet info ───
   document.getElementById('wallet-address').insertAdjacentText('afterbegin', walletKeys.address);
@@ -416,6 +422,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   let lwsRegistered = false;
   let qwcWallet = null;
   let qwcWalletReady = null;
+  let qwcMessageWallet = null;
+  let qwcMessageWalletReady = null;
+  let qwcMessageWalletGeneration = 0;
   let qwcLastSyncHeight = 0;
   let qwcLastAvailableDisplay = '—';
   var _keyImageCache = {}; // tx_pub_key:out_index → real key_image
@@ -649,6 +658,375 @@ document.addEventListener('DOMContentLoaded', async () => {
       throw error;
     }
   }
+
+  async function getQwcMessageWallet () {
+    if (qwcMessageWallet) return qwcMessageWallet;
+    if (qwcMessageWalletReady) return qwcMessageWalletReady;
+    const walletGeneration = qwcMessageWalletGeneration;
+    const ready = (async function () {
+      if (typeof QwcWalletEngine === 'undefined') {
+        throw new Error('QWC wallet engine is not available');
+      }
+      const config = {
+        primaryAddress: walletKeys.address,
+        privateViewKey: walletKeys.privateViewKeyHex
+      };
+      if (!isWatchOnly && walletKeys.privateSpendKeyHex) {
+        config.privateSpendKey = walletKeys.privateSpendKeyHex;
+      }
+      const localWallet = await QwcWalletEngine.createFromKeys(config);
+      const localAddress = await localWallet.getAddress(0, 0);
+      if (localAddress !== walletKeys.address) {
+        await localWallet.close();
+        throw new Error('The loaded wallet keys do not match the displayed address.');
+      }
+      if (walletGeneration !== qwcMessageWalletGeneration) {
+        await localWallet.close();
+        throw new Error('The wallet changed while the local signing wallet was opening.');
+      }
+      qwcMessageWallet = localWallet;
+      return qwcMessageWallet;
+    })();
+    qwcMessageWalletReady = ready;
+    try {
+      return await ready;
+    } catch (error) {
+      if (qwcMessageWalletReady === ready) qwcMessageWalletReady = null;
+      throw error;
+    }
+  }
+
+  // ─── Local message signing and verification ───────────────────────
+  const messageSigningModal = document.getElementById('message-signing-modal');
+  const messageSignInput = document.getElementById('message-signing-input');
+  const messageSignOutput = document.getElementById('message-signing-output');
+  const messageSignStatus = document.getElementById('message-signing-status');
+  const messageVerifyAddress = document.getElementById('message-verify-address');
+  const messageVerifyInput = document.getElementById('message-verify-input');
+  const messageVerifySignature = document.getElementById('message-verify-signature');
+  const messageVerifyStatus = document.getElementById('message-verify-status');
+  const poolChallengeInput = document.getElementById('pool-challenge-input');
+  const poolChallengeConfirm = document.getElementById('pool-challenge-confirm');
+  const poolChallengeSign = document.getElementById('pool-challenge-sign');
+  const poolChallengeSignature = document.getElementById('pool-challenge-signature');
+  const poolChallengeStatus = document.getElementById('pool-challenge-status');
+  const poolChallengeSummary = document.getElementById('pool-challenge-summary');
+  let messageSigningGeneration = 0;
+  let messageVerificationGeneration = 0;
+  let poolSigningGeneration = 0;
+
+  clearMessageSigningState = function () {
+    messageSigningGeneration += 1;
+    messageVerificationGeneration += 1;
+    poolSigningGeneration += 1;
+    qwcMessageWalletGeneration += 1;
+    messageSignInput.value = '';
+    messageSignOutput.value = '';
+    messageVerifyInput.value = '';
+    messageVerifyAddress.value = '';
+    messageVerifySignature.value = '';
+    poolChallengeInput.value = '';
+    poolChallengeSignature.value = '';
+    poolChallengeConfirm.checked = false;
+    poolChallengeSummary.hidden = true;
+    poolChallengeSummary.textContent = '';
+    messageSigningModal.classList.remove('show');
+    setMessageSigningStatus(messageSignStatus, '', '');
+    setMessageSigningStatus(messageVerifyStatus, '', '');
+    setMessageSigningStatus(poolChallengeStatus, '', '');
+    const localWallet = qwcMessageWallet;
+    qwcMessageWallet = null;
+    qwcMessageWalletReady = null;
+    if (localWallet) localWallet.close().catch(function () {});
+  };
+
+  function setMessageSigningStatus(element, message, state) {
+    element.textContent = message;
+    element.style.color = state === 'success'
+      ? 'var(--success)'
+      : (state === 'error' ? '#f87171' : 'var(--text-dim)');
+  }
+
+  function selectMessageSigningTab(name) {
+    document.querySelectorAll('[data-message-signing-tab]').forEach(function (button) {
+      const selected = button.dataset.messageSigningTab === name;
+      button.classList.toggle('active', selected);
+      button.setAttribute('aria-selected', selected ? 'true' : 'false');
+    });
+    document.querySelectorAll('[data-message-signing-panel]').forEach(function (panel) {
+      panel.hidden = panel.dataset.messageSigningPanel !== name;
+    });
+  }
+
+  function openMessageSigning(name) {
+    messageVerifyAddress.value = messageVerifyAddress.value || walletKeys.address;
+    selectMessageSigningTab(name || 'sign');
+    messageSigningModal.classList.add('show');
+  }
+
+  function closeMessageSigning() {
+    messageSigningModal.classList.remove('show');
+  }
+
+  async function copySignature(value, button) {
+    if (!value) {
+      button.textContent = 'No signature yet';
+      setTimeout(function () { button.textContent = 'Copy signature'; }, 1400);
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(value);
+      button.textContent = 'Signature copied';
+    } catch (_error) {
+      button.textContent = 'Copy unavailable';
+    }
+    setTimeout(function () { button.textContent = 'Copy signature'; }, 1400);
+  }
+
+  async function createSpendSignature(message) {
+    if (isWatchOnly) throw new Error('Watch-only wallets cannot create signatures.');
+    QwcMessageSigning.requireMessage(message);
+    const signingAddress = walletKeys.address;
+    const localWallet = await getQwcMessageWallet();
+    const signature = await localWallet.signMessage(message, 0, 0, 0);
+    if (typeof signature !== 'string' || signature.length < 32) {
+      throw new Error('The wallet engine did not return a complete signature.');
+    }
+    QwcMessageSigning.requireSpendVerification(
+      await localWallet.verifyMessage(message, signingAddress, signature)
+    );
+    return signature;
+  }
+  function rejectCarriageReturnInsertion(event, insertedText, onReject) {
+    if (typeof insertedText !== 'string' || !insertedText.includes('\r')) return false;
+    event.preventDefault();
+    onReject();
+    return true;
+  }
+
+  function bindExactMessageInsertionGuard(input, onReject) {
+    input.addEventListener('paste', function (event) {
+      const clipboard = event.clipboardData;
+      rejectCarriageReturnInsertion(event, clipboard && clipboard.getData('text/plain'), onReject);
+    });
+    input.addEventListener('drop', function (event) {
+      const transfer = event.dataTransfer;
+      rejectCarriageReturnInsertion(event, transfer && transfer.getData('text/plain'), onReject);
+    });
+  }
+
+
+  document.getElementById('btn-sign-verify').addEventListener('click', function () {
+    openMessageSigning(isWatchOnly ? 'verify' : 'sign');
+  });
+  document.getElementById('message-signing-close').addEventListener('click', closeMessageSigning);
+  messageSigningModal.addEventListener('click', function (event) {
+    if (event.target === messageSigningModal) closeMessageSigning();
+  });
+  document.querySelectorAll('[data-message-signing-tab]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      selectMessageSigningTab(button.dataset.messageSigningTab);
+    });
+  });
+
+  if (isWatchOnly) {
+    for (const id of ['message-signing-create', 'pool-challenge-sign']) {
+      const button = document.getElementById(id);
+      button.disabled = true;
+      button.title = 'Watch-only wallet';
+    }
+    setMessageSigningStatus(messageSignStatus, 'Watch-only wallets can verify signatures but cannot create them.', 'error');
+    setMessageSigningStatus(poolChallengeStatus, 'Load the pool payout address with its spend key to sign a pool challenge.', 'error');
+  }
+
+  messageSignInput.addEventListener('input', function () {
+    messageSigningGeneration += 1;
+    messageSignOutput.value = '';
+    setMessageSigningStatus(messageSignStatus, '', '');
+  });
+  bindExactMessageInsertionGuard(messageSignInput, function () {
+    messageSigningGeneration += 1;
+    messageSignOutput.value = '';
+    setMessageSigningStatus(
+      messageSignStatus,
+      'The pasted or dropped message contains CR or CRLF line endings. Nothing was inserted because browser text fields would silently change those bytes to LF.',
+      'error'
+    );
+  });
+  document.getElementById('message-signing-create').addEventListener('click', async function (event) {
+    const button = event.currentTarget;
+    const signingGeneration = ++messageSigningGeneration;
+    const signedMessage = messageSignInput.value;
+    button.disabled = true;
+    button.textContent = 'Signing locally…';
+    messageSignOutput.value = '';
+    setMessageSigningStatus(messageSignStatus, 'Creating a spend-key signature inside the QWC wallet worker…', '');
+    try {
+      if (QwcMessageSigning.isPoolChallengeCandidate(signedMessage)) {
+        throw new Error('Use the Pool challenge tab to validate and confirm this request before signing.');
+      }
+      const signature = await createSpendSignature(signedMessage);
+      if (signingGeneration !== messageSigningGeneration || messageSignInput.value !== signedMessage) return;
+      messageSignOutput.value = signature;
+      setMessageSigningStatus(messageSignStatus, 'Spend-key signature created locally. The message and key were not transmitted.', 'success');
+    } catch (error) {
+      if (signingGeneration === messageSigningGeneration) {
+        setMessageSigningStatus(messageSignStatus, error.message || 'The message could not be signed.', 'error');
+      }
+    } finally {
+      button.disabled = isWatchOnly;
+      button.textContent = 'Create spend-key signature';
+    }
+  });
+  document.getElementById('message-signing-copy').addEventListener('click', function (event) {
+    copySignature(messageSignOutput.value, event.currentTarget);
+  });
+
+  [messageVerifyAddress, messageVerifyInput, messageVerifySignature].forEach(function (element) {
+    element.addEventListener('input', function () {
+      messageVerificationGeneration += 1;
+      setMessageSigningStatus(messageVerifyStatus, '', '');
+    });
+  });
+  bindExactMessageInsertionGuard(messageVerifyInput, function () {
+    messageVerificationGeneration += 1;
+    setMessageSigningStatus(
+      messageVerifyStatus,
+      'The pasted or dropped message contains CR or CRLF line endings. Nothing was inserted because browser text fields would silently change those bytes to LF.',
+      'error'
+    );
+  });
+
+  document.getElementById('message-verify-check').addEventListener('click', async function (event) {
+    const button = event.currentTarget;
+    const verificationGeneration = ++messageVerificationGeneration;
+    const verifiedMessage = messageVerifyInput.value;
+    const verifiedAddress = messageVerifyAddress.value;
+    const verifiedSignature = messageVerifySignature.value;
+    button.disabled = true;
+    button.textContent = 'Verifying locally…';
+    setMessageSigningStatus(messageVerifyStatus, 'Checking the exact message, address and signature…', '');
+    try {
+      const message = QwcMessageSigning.requireMessage(verifiedMessage);
+      const address = QwcMessageSigning.requireAddress(verifiedAddress.trim());
+      const signature = QwcMessageSigning.requireSignature(verifiedSignature.trim());
+      const verifierWallet = await getQwcMessageWallet();
+      const result = QwcMessageSigning.describeVerification(
+        await verifierWallet.verifyMessage(message, address, signature)
+      );
+      if (verificationGeneration !== messageVerificationGeneration ||
+          messageVerifyInput.value !== verifiedMessage ||
+          messageVerifyAddress.value !== verifiedAddress ||
+          messageVerifySignature.value !== verifiedSignature) return;
+      setMessageSigningStatus(messageVerifyStatus, result.message, result.good ? 'success' : 'error');
+    } catch (error) {
+      if (verificationGeneration === messageVerificationGeneration) {
+        setMessageSigningStatus(messageVerifyStatus, error.message || 'The signature could not be verified.', 'error');
+      }
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Verify signature';
+    }
+  });
+
+  function rejectPoolChallengeLineEndings(event, pastedText) {
+    return rejectCarriageReturnInsertion(event, pastedText, function () {
+      poolSigningGeneration += 1;
+      poolChallengeInput.value = '';
+      poolChallengeSignature.value = '';
+      poolChallengeConfirm.checked = false;
+      poolChallengeSummary.hidden = true;
+      poolChallengeSummary.textContent = '';
+      poolChallengeSign.disabled = true;
+      setMessageSigningStatus(
+        poolChallengeStatus,
+        'The pool challenge contains CR or CRLF line endings. Request LF-only challenge text; this wallet will not rewrite signed bytes.',
+        'error'
+      );
+    });
+  }
+
+  poolChallengeInput.addEventListener('paste', function (event) {
+    const clipboard = event.clipboardData;
+    rejectPoolChallengeLineEndings(event, clipboard && clipboard.getData('text/plain'));
+  });
+  poolChallengeInput.addEventListener('drop', function (event) {
+    const transfer = event.dataTransfer;
+    rejectPoolChallengeLineEndings(event, transfer && transfer.getData('text/plain'));
+  });
+  poolChallengeInput.addEventListener('input', function () {
+    poolSigningGeneration += 1;
+    poolChallengeSignature.value = '';
+    poolChallengeConfirm.checked = false;
+    poolChallengeSummary.hidden = true;
+    poolChallengeSummary.textContent = '';
+    if (!poolChallengeInput.value) {
+      setMessageSigningStatus(poolChallengeStatus, '', '');
+      poolChallengeSign.disabled = true;
+      return;
+    }
+    try {
+      const challenge = QwcMessageSigning.parsePoolChallenge(poolChallengeInput.value, walletKeys.address);
+      poolChallengeSummary.textContent =
+        'Address: ' + challenge.address + ' · Threshold: ' + challenge.thresholdQwc +
+        ' QWC · Domain: ' + challenge.domain + ' · Expires: ' + challenge.expiresAt;
+      poolChallengeSummary.hidden = false;
+      setMessageSigningStatus(poolChallengeStatus, 'Exact pool challenge accepted. Review the unchanged text and summary, then confirm it.', 'success');
+    } catch (error) {
+      setMessageSigningStatus(poolChallengeStatus, error.message || 'The pool challenge is invalid.', 'error');
+    }
+    poolChallengeSign.disabled = true;
+  });
+  poolChallengeConfirm.addEventListener('change', function () {
+    poolSigningGeneration += 1;
+    poolChallengeSignature.value = '';
+    let valid = false;
+    try {
+      QwcMessageSigning.parsePoolChallenge(poolChallengeInput.value, walletKeys.address);
+      valid = true;
+    } catch (_error) {}
+    poolChallengeSign.disabled = isWatchOnly || !valid || !poolChallengeConfirm.checked;
+  });
+  poolChallengeSign.addEventListener('click', async function (event) {
+    const button = event.currentTarget;
+    const signingGeneration = ++poolSigningGeneration;
+    const signedMessage = poolChallengeInput.value;
+    button.disabled = true;
+    button.textContent = 'Validating locally…';
+    poolChallengeSignature.value = '';
+    poolChallengeSummary.hidden = true;
+    setMessageSigningStatus(poolChallengeStatus, 'Checking the exact pool contract before signing…', '');
+    try {
+      if (!poolChallengeConfirm.checked) throw new Error('Confirm the exact pool challenge before signing.');
+      const challenge = QwcMessageSigning.parsePoolChallenge(signedMessage, walletKeys.address);
+      poolChallengeSummary.textContent =
+        'Address matches this wallet · Threshold ' + challenge.thresholdQwc +
+        ' QWC · Expires ' + new Date(challenge.expiresAt).toLocaleString() +
+        ' · Domain ' + challenge.domain;
+      poolChallengeSummary.hidden = false;
+      const signature = await createSpendSignature(signedMessage);
+      if (signingGeneration !== poolSigningGeneration ||
+          poolChallengeInput.value !== signedMessage ||
+          !poolChallengeConfirm.checked) return;
+      // Recheck time-bound fields after the asynchronous worker round-trip.
+      QwcMessageSigning.parsePoolChallenge(signedMessage, walletKeys.address);
+      poolChallengeSignature.value = signature;
+      setMessageSigningStatus(poolChallengeStatus, 'Strict pool challenge accepted and signed locally with the spend key.', 'success');
+    } catch (error) {
+      if (signingGeneration === poolSigningGeneration) {
+        setMessageSigningStatus(poolChallengeStatus, error.message || 'The pool challenge could not be signed.', 'error');
+      }
+    } finally {
+      button.disabled = isWatchOnly || !poolChallengeConfirm.checked;
+      button.textContent = 'Sign confirmed challenge';
+    }
+  });
+  document.getElementById('pool-challenge-copy').addEventListener('click', function (event) {
+    copySignature(poolChallengeSignature.value, event.currentTarget);
+  });
+
+  const requestedSigningTool = new URLSearchParams(window.location.search).get('tool');
+  if (requestedSigningTool === 'pool-challenge') openMessageSigning('pool');
 
   function renderQwcHistory (blocks) {
     const listEl = document.getElementById('tx-list');
@@ -1235,6 +1613,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         '</div>';
       document.getElementById('err-retry').addEventListener('click', () => connectAndPopulate());
       document.getElementById('err-disconnect').addEventListener('click', () => {
+        clearMessageSigningState();
         WalletVault.clear();
         window.location.href = '/';
       });
@@ -1529,10 +1908,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ─── Disconnect ───
   document.getElementById('btn-disconnect').addEventListener('click', () => {
+    clearMessageSigningState();
     WalletVault.clear();
     MoneroRPC.disconnect();
     window.location.href = '/';
   });
+
+  window.addEventListener('pagehide', clearMessageSigningState);
 
   // ─── Custom node settings ───
   const customNodeInput = document.getElementById('custom-node');
