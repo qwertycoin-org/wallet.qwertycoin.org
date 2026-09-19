@@ -60,6 +60,9 @@
 /vendor/qwertycoin-ts/*
   Cache-Control: public, max-age=0, must-revalidate
 
+/vendor/libsodium/*
+  Cache-Control: public, max-age=0, must-revalidate
+
 /assets/*
   Cache-Control: public, max-age=0, must-revalidate
 

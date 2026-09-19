@@ -17,6 +17,8 @@ In scope:
 - private-spend-key and watch-only imports
 - browser-side Qwertycoin scanning and transaction signing
 - local spend-key message signing and signature verification
+- QMS1 invitation, encryption, fragment reassembly and prepared-carrier handling
+- wallet-bound encrypted Messenger contacts, journals and chat history
 - strict `pool.qwertycoin.org` payout-challenge validation
 - `WalletVault` encrypted session storage and idle locking
 - the restricted QWC RPC and binary scanner gateways
@@ -37,6 +39,7 @@ Out of scope:
 - transaction or address substitution
 - failures in 25-word QWC key derivation or checksum validation
 - message-signature compatibility, type confusion or unexpected transmission
+- QMS invitation confidentiality, sender authentication, fragment limits, input reservation and explicit broadcast review
 - pool-challenge address, domain, expiry, threshold or replay-boundary bypasses
 - signing, output selection, key-image or change-output errors
 - QWC v2 genesis mismatches between JavaScript, WebAssembly and RPC
@@ -46,7 +49,7 @@ Out of scope:
 
 ## Third-party components
 
-Some compatibility filenames and JavaScript symbols retain inherited `monero` or `mymonero` names. They are technical provenance, not user-facing product support. Their copyright and license notices must remain intact, including `js/mymonero-core/LICENSE.txt`, `vendor/qwertycoin-ts/monero.worker.js.LICENSE.txt`, `fonts/LICENSES.md`, the root `LICENSE`, and SPDX headers.
+Some compatibility filenames and JavaScript symbols retain inherited `monero` or `mymonero` names. They are technical provenance, not user-facing product support. Their copyright and license notices must remain intact, including `js/mymonero-core/LICENSE.txt`, `vendor/qwertycoin-ts/monero.worker.js.LICENSE.txt`, `vendor/libsodium/LICENSE.libsodium-wrappers-sumo`, `fonts/LICENSES.md`, the root `LICENSE`, and SPDX headers.
 
 ## Disclosure
 

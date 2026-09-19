@@ -331,23 +331,23 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
 
     assert(buildInfo.includes('genesis_hash=4f95857586e2c66063c277370eda99cd75897d773af09f0c3cd1e22f7e87db39'),
       'Reset-1 mainnet genesis is missing from bundled worker provenance');
-    assert(buildInfo.includes('core_revision=9953ea40a92a71fbfccc57ffe38e868ddfa9e00a'),
-      'merged Reset-1 core revision is missing from bundled worker provenance');
-    assert(buildInfo.includes('qwertycoin_cpp_revision=16cb5e2e2784c187e48556845e2325992d67d0d6'),
-      'qwertycoin-cpp Reset-1 binding is missing');
-    assert(buildInfo.includes('qwertycoin_ts_revision=40ef3d3a4c9c1642f81aabdf1d10cb9205e3b01e'),
-      'qwertycoin-ts Reset-1 binding is missing');
+    assert(buildInfo.includes('core_revision=e6e0b46b6603bc5c1402df63696b514ba735f8ee'),
+      'QMS-enabled Reset-1 core revision is missing from bundled worker provenance');
+    assert(buildInfo.includes('qwertycoin_cpp_revision=bd63c9e3320396964cc7be0d48a88efa532dc060'),
+      'qwertycoin-cpp custom-extra source binding is missing');
+    assert(buildInfo.includes('qwertycoin_ts_revision=3756ee66aacc81b64cf5589e8ffe441cb22e442e'),
+      'qwertycoin-ts custom-extra source binding is missing');
     assert(buildInfo.includes('unbound_1_22_0_source_sha256=c5dd1bdef5d5685b2cedb749158dd152c52d44f65529a34ac15cd88d4b1b3d43'),
       'verified Unbound source provenance is missing');
     assert(buildInfo.includes('translation_files_sha256=320ecf8874eaad13b97c2d98f5f6bdde5fa3e37fbfac21a78ea4184a63b57dcb'),
       'generated translation header provenance is missing');
-    assert(buildInfo.includes('monero_js_sha256=a25353b9d9af55f626e72b682e55bca723237814685a2c9b127197ae63d25d91'),
+    assert(buildInfo.includes('monero_js_sha256=643793d59594c3149d961e8beee60923c165105b19529735752c40001fad39da'),
       'monero.js artifact hash is missing');
-    assert(buildInfo.includes('monero_worker_js_sha256=828b99dd8b93be1057e0faeecb86cf2eb618255addd291dbc900f73aafb3d3cf'),
+    assert(buildInfo.includes('monero_worker_js_sha256=5f8a146307a3893a9c6e03727f0a2a802ede01cab0f211c7e5616a8f78065d3e'),
       'worker artifact hash is missing');
     assert(!buildInfo.includes('=pending'), 'WASM provenance contains unresolved hashes');
-    assert(engine.includes('monero.worker.js?v=828b99dd8b93be10'),
-      'wallet worker cache key is not Reset-1-specific');
+    assert(engine.includes('monero.worker.js?v=5f8a146307a3893a'),
+      'wallet worker cache key is not bound to the reviewed artifact');
   });
 
   await test('Dashboard QWC history sums wallet transfers and miner outputs', () => {

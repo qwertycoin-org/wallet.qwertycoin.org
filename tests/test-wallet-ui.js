@@ -173,7 +173,10 @@ test('functional wallet anchors remain present', () => {
     'receive-modal', 'send-modal', 'send-step-form', 'send-step-confirm',
     'send-step-result', 'message-signing-modal', 'message-signing-input',
     'message-verify-address', 'message-verify-signature', 'pool-challenge-input',
-    'pool-challenge-confirm', 'pool-challenge-signature', 'unlock-overlay', 'btn-export', 'btn-disconnect',
+    'pool-challenge-confirm', 'pool-challenge-signature', 'wallet-tab-messenger',
+    'qms-section', 'qms-contact-list', 'qms-message-list', 'qms-message-input',
+    'qms-prepare', 'qms-send', 'qms-cancel', 'qms-manage-view',
+    'unlock-overlay', 'btn-export', 'btn-disconnect',
   ]) linked(dashboard, `id="${id}"`);
 });
 
@@ -247,9 +250,13 @@ test('asset build, manifest and cache policy cover the new local presentation fi
   linked(build, '"assets/*.css"');
   linked(build, '"fonts/LICENSES.md"');
   linked(build, '"js/*.js"');
+  linked(build, '"vendor/libsodium/*"');
   linked(headers, '/assets/*');
   linked(headers, '/js/*');
+  linked(headers, '/vendor/libsodium/*');
   linked(manifest, '  js/message-signing.js');
+  linked(manifest, '  js/qms-messenger.js');
+  linked(manifest, '  vendor/libsodium/libsodium-sumo.js');
 });
 
 test('self-host guide is Qwertycoin-specific and describes the current RPC architecture', () => {

@@ -3,8 +3,9 @@
 
 const QwcWalletEngine = (() => {
   const MAINNET = 0;
-  const WORKER_PATH = "/vendor/qwertycoin-ts/monero.worker.js?v=828b99dd8b93be10";
+  const WORKER_PATH = "/vendor/qwertycoin-ts/monero.worker.js?v=5f8a146307a3893a";
   const REQUEST_TIMEOUT_MS = 180000;
+  const DAEMON_CHUNK_BYTES = 3000000;
   let worker;
   let sequence = 0;
   const callbacks = new Map();
@@ -109,6 +110,8 @@ const QwcWalletEngine = (() => {
       getUnlockedBalance: () => invoke(walletId, "getUnlockedBalance", []),
       getTxs: () => invoke(walletId, "getTxs", [{ txs: [{}] }]),
       getOutputs: () => invoke(walletId, "getOutputs", [{ txs: [{}] }]),
+      freezeOutput: keyImage => invoke(walletId, "freezeOutput", [keyImage]),
+      thawOutput: keyImage => invoke(walletId, "thawOutput", [keyImage]),
       createTx: config => invoke(walletId, "createTxs", [normalizeTxConfig(config)]),
       describeTxSet: txSet => invoke(walletId, "describeTxSet", [txSet]),
       relayTxs: txMetadatas => invoke(walletId, "relayTxs", [txMetadatas]),
@@ -129,6 +132,14 @@ const QwcWalletEngine = (() => {
 
   return {
     MAINNET,
+    createDaemonScanner: async () => {
+      const daemonId = newId("daemon");
+      await invoke(daemonId, "connectDaemonRpc", [getDefaultServerConfig()]);
+      return {
+        getHeight: () => invoke(daemonId, "daemonGetHeight", []),
+        getBlocksByRange: (start, end) => invoke(daemonId, "daemonGetBlocksByRangeChunked", [start, end, DAEMON_CHUNK_BYTES])
+      };
+    },
     createFromKeys: config => {
       const keyConfig = {
         networkType: MAINNET,

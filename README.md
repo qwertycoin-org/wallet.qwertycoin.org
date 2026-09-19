@@ -22,6 +22,7 @@ Browser
 ├── Qwertycoin key derivation and address generation
 ├── qwertycoin-ts WebAssembly scanner
 ├── local spend-key message signing and signature verification
+├── QMS1 encrypted Messenger compatible with the desktop wallet
 ├── local transaction construction and signing
 ├── encrypted in-tab WalletVault session
 └── local QR generation and scanning
@@ -53,6 +54,20 @@ verify signatures but cannot create them.
 Pool operators integrating payout-threshold authorization must use the strict
 challenge format and server-side replay controls described in
 [`docs/message-signing.md`](docs/message-signing.md).
+
+## Messenger
+
+The **Messenger** tab implements the same experimental QMS1 protocol as the
+desktop GUI wallet. Contacts exchange their complete 428-character personal
+invitation confidentially, verify the shorter fingerprint separately, then use
+**Encrypt & review** before explicitly broadcasting the carrier transactions.
+Received messages appear after every carrier is confirmed and scanned.
+
+Messages are end-to-end encrypted, authenticated and stored locally in an
+encrypted wallet-bound browser record. Blockchain timing, transaction hashes,
+fees and carrier activity remain public metadata. QMS1 has no forward secrecy,
+ratchet recovery or post-quantum protection. See
+[`docs/qms-messenger.md`](docs/qms-messenger.md) before testing it with funds.
 
 ## Self-hosting
 
@@ -92,6 +107,8 @@ Upstream copyright, license texts and notices are preserved in:
 - [`fonts/LICENSES.md`](fonts/LICENSES.md)
 - [`js/mymonero-core/LICENSE.txt`](js/mymonero-core/LICENSE.txt)
 - [`vendor/qwertycoin-ts/monero.worker.js.LICENSE.txt`](vendor/qwertycoin-ts/monero.worker.js.LICENSE.txt)
+- [`vendor/libsodium/LICENSE.libsodium-wrappers-sumo`](vendor/libsodium/LICENSE.libsodium-wrappers-sumo)
+- [`vendor/libsodium/BUILDINFO.txt`](vendor/libsodium/BUILDINFO.txt)
 - SPDX headers in source files
 
 Do not remove or rewrite third-party attribution when modifying the wallet.

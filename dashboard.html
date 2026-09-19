@@ -186,6 +186,7 @@ footer p{font-size:.65rem;color:var(--text-dim)}
 }
 </style>
 <link rel="stylesheet" href="/assets/wallet-ui.f152d12.css">
+<link rel="stylesheet" href="/assets/qms-messenger.css">
 </head>
 <body class="wallet-app wallet-dashboard">
 
@@ -237,6 +238,46 @@ footer p{font-size:.65rem;color:var(--text-dim)}
           <span class="copy-toast" id="addr-toast">Copied!</span>
         </div>
       </div>
+
+      <div class="wallet-tabs fade-in" id="wallet-tabs" role="tablist" aria-label="Wallet sections">
+        <button class="wallet-tab active" id="wallet-tab-overview" type="button" role="tab" aria-selected="true">Wallet</button>
+        <button class="wallet-tab" id="wallet-tab-messenger" type="button" role="tab" aria-selected="false">Messenger</button>
+      </div>
+
+      <section id="qms-section" class="qms-shell" role="tabpanel" aria-labelledby="wallet-tab-messenger" hidden>
+        <header class="qms-heading">
+          <div><span class="qms-kicker">QMS1 · Experimental</span><h1>Messenger</h1></div>
+          <button class="action-btn" id="qms-manage-toggle" type="button">Manage contacts</button>
+        </header>
+        <p class="qms-security-note">End-to-end encrypted with libsodium sealed boxes and Ed25519 signatures. This MVP has no forward secrecy or post-quantum protection. Messages use normal QWC transaction fees and appear after their carrier transactions are confirmed.</p>
+        <div id="qms-status" class="qms-status" aria-live="polite"></div>
+
+        <div id="qms-chat-view" class="qms-chat-layout">
+          <aside class="qms-contacts"><div class="qms-contacts-title">Chats</div><div id="qms-contact-list"></div></aside>
+          <div class="qms-conversation">
+            <div class="qms-conversation-head"><strong id="qms-chat-name">Select a contact</strong><span id="qms-chat-fingerprint"></span></div>
+            <div id="qms-message-list" class="qms-message-list" role="log" aria-live="polite"><div class="qms-empty">Import a personal invitation to begin.</div></div>
+            <div class="qms-compose">
+              <textarea id="qms-message-input" rows="3" maxlength="4096" aria-label="Message" placeholder="Write a message" disabled></textarea>
+              <div class="qms-compose-meta"><span id="qms-byte-count">0 / 4,096 UTF-8 bytes</span><button class="action-btn primary" id="qms-prepare" type="button" disabled>Encrypt &amp; review</button></div>
+            </div>
+            <div id="qms-review" class="qms-review" hidden>
+              <div><strong id="qms-review-count">0 transactions</strong><span id="qms-review-fee">Fee —</span></div>
+              <p id="qms-review-note">Review the complete carrier batch. Nothing is broadcast until you select Send encrypted message.</p>
+              <div><button class="action-btn primary" id="qms-send" type="button">Send encrypted message</button><button class="action-btn" id="qms-cancel" type="button">Cancel &amp; delete draft</button></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="qms-manage-view" class="qms-manage" hidden>
+          <button class="qms-back" id="qms-manage-back" type="button">← Back to chats</button>
+          <div class="qms-manage-grid">
+            <div class="key-card"><div class="key-label">Your personal invitation</div><p>Give the complete long invitation below confidentially to exactly one contact so they can add you. The short fingerprint is only for verification and cannot be imported. Messenger identities are local to this browser wallet; the desktop app and other browsers have separate invitations.</p><textarea id="qms-own-invitation" rows="7" aria-label="Complete personal invitation" readonly spellcheck="false"></textarea><button class="action-btn" id="qms-copy-invitation" type="button">Copy complete invitation</button><div id="qms-own-fingerprint" class="qms-fingerprint"></div></div>
+            <div class="key-card"><div class="key-label">Import contact invitation</div><input id="qms-contact-name" type="text" maxlength="80" aria-label="Contact name" placeholder="Contact name"><textarea id="qms-contact-invitation" rows="7" aria-label="Complete contact invitation" autocomplete="off" spellcheck="false" placeholder="Complete 428-character invitation hex"></textarea><button class="action-btn primary" id="qms-import-contact" type="button">Import &amp; confirm fingerprint</button></div>
+          </div>
+          <div class="key-card"><div class="key-label">Contacts</div><div id="qms-manage-list"></div></div>
+        </div>
+      </section>
 
       <!-- Balance -->
       <div class="balance-section fade-in">
@@ -623,6 +664,11 @@ footer p{font-size:.65rem;color:var(--text-dim)}
 <script src="js/monero-rpc.js"></script>
 <script src="js/qwc-wallet-engine.js"></script>
 <script src="js/message-signing.js"></script>
+<script src="vendor/libsodium/libsodium-sumo.js"></script>
+<script src="vendor/libsodium/libsodium-wrappers.js"></script>
+<script src="js/qms-protocol.js"></script>
+<script src="js/qms-store.js"></script>
+<script src="js/qms-messenger.js"></script>
 
 <script src="js/dashboard-page.js"></script>
 </body>
