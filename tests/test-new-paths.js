@@ -314,9 +314,13 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
 
   await test('QWC proxy uses the configured mainnet RPC and Turnstile site key', () => {
     const proxy = fs.readFileSync(path.join(__dirname, '../functions/api/proxy.js'), 'utf8');
+    const pathProxy = fs.readFileSync(path.join(__dirname, '../functions/_qwcRpcProxy.js'), 'utf8');
     const lws = fs.readFileSync(path.join(__dirname, '../js/lws-client.js'), 'utf8');
 
-    assert(proxy.includes('https://explorer.qwertycoin.org/qwc-rpc'), 'QWC RPC endpoint missing');
+    assert(proxy.includes('https://integration-explorer.qwertycoin.org/api/v1/wallet-rpc'),
+      'integration QWC RPC endpoint missing');
+    assert(pathProxy.includes('https://integration-explorer.qwertycoin.org/api/v1/wallet-rpc'),
+      'path-based integration QWC RPC endpoint missing');
     assert(proxy.includes('/get_outs'), 'get outs RPC path missing');
     assert(proxy.includes('/get_output_distribution.bin'), 'output distribution RPC path missing');
     assert(proxy.includes('/send_raw_transaction'), 'send RPC path missing');

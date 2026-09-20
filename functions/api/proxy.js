@@ -6,7 +6,7 @@
 // daemon methods such as mining, peer bans, stop_daemon, or unrestricted RPC.
 
 const QWC_NODES = [
-  "https://explorer.qwertycoin.org/qwc-rpc"
+  "https://integration-explorer.qwertycoin.org/api/v1/wallet-rpc"
 ];
 
 const JSON_RPC_METHODS = new Set([
