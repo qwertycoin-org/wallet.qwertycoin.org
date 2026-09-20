@@ -88,9 +88,9 @@ or a compromised operating system.
 
 The custom-extra bridge used by the browser is built from immutable revisions:
 
-- `qwertycoin-ts`: `3756ee66aacc81b64cf5589e8ffe441cb22e442e`
-- `qwertycoin-cpp`: `bd63c9e3320396964cc7be0d48a88efa532dc060`
-- Qwertycoin Core snapshot: `e6e0b46b6603bc5c1402df63696b514ba735f8ee`
+- `qwertycoin-ts`: `42050b20f13089251d1aa7d117a1eea515da0444`
+- `qwertycoin-cpp`: `d4a8cc78ac80e96a2e362ac0ad2630bf99a0759c`
+- Qwertycoin Core snapshot: `890e295f02ca1e6e989221ccf97c2ec24fbec52c`
 
 Exact artifact digests are recorded in
 [`vendor/qwertycoin-ts/BUILDINFO.txt`](../vendor/qwertycoin-ts/BUILDINFO.txt) and

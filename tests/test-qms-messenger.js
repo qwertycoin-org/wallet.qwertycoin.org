@@ -274,7 +274,7 @@ async function test(name, fn) {
     ]) assert(html.includes(value), `missing Messenger UI contract: ${value}`);
     assert(html.indexOf('vendor/libsodium/libsodium-sumo.js') < html.indexOf('js/qms-protocol.js'));
     assert(html.indexOf('js/qms-messenger.js') < html.indexOf('js/dashboard-page.js'));
-    assert(engine.includes('monero.worker.js?v=5f8a146307a3893a'));
+    assert(engine.includes('monero.worker.js?v=6e067bb0fd551614'));
     assert(engine.includes('invoke(walletId, "freezeOutput", [keyImage])'));
     assert(engine.includes('daemonGetBlocksByRangeChunked'));
     assert(engine.includes('const DAEMON_CHUNK_BYTES = 3000000'));
@@ -287,8 +287,8 @@ async function test(name, fn) {
     assert.strictEqual(sha256('vendor/qwertycoin-ts/monero.js'), buildInfo.monero_js_sha256);
     assert.strictEqual(sha256('vendor/qwertycoin-ts/monero.worker.js'), buildInfo.monero_worker_js_sha256);
     assert.strictEqual(sha256('vendor/qwertycoin-ts/monero.worker.js.LICENSE.txt'), buildInfo.monero_worker_license_sha256);
-    assert.strictEqual(buildInfo.qwertycoin_ts_revision, '3756ee66aacc81b64cf5589e8ffe441cb22e442e');
-    assert.strictEqual(buildInfo.qwertycoin_cpp_revision, 'bd63c9e3320396964cc7be0d48a88efa532dc060');
+    assert.strictEqual(buildInfo.qwertycoin_ts_revision, '42050b20f13089251d1aa7d117a1eea515da0444');
+    assert.strictEqual(buildInfo.qwertycoin_cpp_revision, 'd4a8cc78ac80e96a2e362ac0ad2630bf99a0759c');
     assert.strictEqual(sodiumBuildInfo.libsodium_wrappers_sumo_package, 'libsodium-wrappers-sumo@0.8.4');
     assert.strictEqual(sodiumBuildInfo.libsodium_sumo_package, 'libsodium-sumo@0.8.4');
     assert.strictEqual(sha256('vendor/libsodium/libsodium-wrappers.js'), sodiumBuildInfo.libsodium_wrappers_js_sha256);

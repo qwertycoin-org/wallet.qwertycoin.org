@@ -335,22 +335,22 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
 
     assert(buildInfo.includes('genesis_hash=4f95857586e2c66063c277370eda99cd75897d773af09f0c3cd1e22f7e87db39'),
       'Reset-1 mainnet genesis is missing from bundled worker provenance');
-    assert(buildInfo.includes('core_revision=e6e0b46b6603bc5c1402df63696b514ba735f8ee'),
+    assert(buildInfo.includes('core_revision=890e295f02ca1e6e989221ccf97c2ec24fbec52c'),
       'QMS-enabled Reset-1 core revision is missing from bundled worker provenance');
-    assert(buildInfo.includes('qwertycoin_cpp_revision=bd63c9e3320396964cc7be0d48a88efa532dc060'),
+    assert(buildInfo.includes('qwertycoin_cpp_revision=d4a8cc78ac80e96a2e362ac0ad2630bf99a0759c'),
       'qwertycoin-cpp custom-extra source binding is missing');
-    assert(buildInfo.includes('qwertycoin_ts_revision=3756ee66aacc81b64cf5589e8ffe441cb22e442e'),
+    assert(buildInfo.includes('qwertycoin_ts_revision=42050b20f13089251d1aa7d117a1eea515da0444'),
       'qwertycoin-ts custom-extra source binding is missing');
     assert(buildInfo.includes('unbound_1_22_0_source_sha256=c5dd1bdef5d5685b2cedb749158dd152c52d44f65529a34ac15cd88d4b1b3d43'),
       'verified Unbound source provenance is missing');
     assert(buildInfo.includes('translation_files_sha256=320ecf8874eaad13b97c2d98f5f6bdde5fa3e37fbfac21a78ea4184a63b57dcb'),
       'generated translation header provenance is missing');
-    assert(buildInfo.includes('monero_js_sha256=643793d59594c3149d961e8beee60923c165105b19529735752c40001fad39da'),
+    assert(buildInfo.includes('monero_js_sha256=65b20e67c11d6b42ce3c3431dd40fa3d966540b23cdcc931930a05761a8a9e26'),
       'monero.js artifact hash is missing');
-    assert(buildInfo.includes('monero_worker_js_sha256=5f8a146307a3893a9c6e03727f0a2a802ede01cab0f211c7e5616a8f78065d3e'),
+    assert(buildInfo.includes('monero_worker_js_sha256=6e067bb0fd55161486dfe3ccd2b395eaf111da1a0bc5e735fdf1dd037d6fe379'),
       'worker artifact hash is missing');
     assert(!buildInfo.includes('=pending'), 'WASM provenance contains unresolved hashes');
-    assert(engine.includes('monero.worker.js?v=5f8a146307a3893a'),
+    assert(engine.includes('monero.worker.js?v=6e067bb0fd551614'),
       'wallet worker cache key is not bound to the reviewed artifact');
   });
 
