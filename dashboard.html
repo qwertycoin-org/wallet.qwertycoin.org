@@ -159,6 +159,13 @@ footer p{font-size:.65rem;color:var(--text-dim)}
 @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .fade-in{animation:fadeIn .4s ease-out}
 
+/* Give the three message-signing modes a clearer desktop target while
+   retaining the existing compact/mobile tab layout below 761px. */
+@media (min-width:761px){
+  .message-signing-tabs{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.35fr)}
+  .message-signing-tabs .tab{width:100%;padding-inline:18px}
+}
+
 /* ── Mobile polish ─────────────────────────────────────────────────── */
 @media (max-width:520px){
   .container{padding:0 16px}
@@ -436,7 +443,7 @@ footer p{font-size:.65rem;color:var(--text-dim)}
       </div>
       <div class="modal-body">
         <p style="font-size:.78rem;color:var(--text-dim);line-height:1.55;margin-bottom:14px">Qwertycoin message signatures prove control of an address without moving funds. Signing uses the spend key inside this browser tab; no message or private key is sent to a server.</p>
-        <div class="tabs" role="tablist" aria-label="Message signing tools" style="margin-bottom:18px">
+        <div class="tabs message-signing-tabs" role="tablist" aria-label="Message signing tools" style="margin-bottom:18px">
           <button class="tab active" id="message-signing-tab-sign" type="button" role="tab" aria-selected="true" data-message-signing-tab="sign">Sign</button>
           <button class="tab" id="message-signing-tab-verify" type="button" role="tab" aria-selected="false" data-message-signing-tab="verify">Verify</button>
           <button class="tab" id="message-signing-tab-pool" type="button" role="tab" aria-selected="false" data-message-signing-tab="pool">Pool challenge</button>

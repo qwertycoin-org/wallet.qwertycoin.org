@@ -227,6 +227,10 @@ test('message signing reuses the vendored qwertycoin-ts wallet contract locally'
     'message-signing contract must load before the dashboard controller');
   linked(dashboard, 'Signing uses the spend key inside this browser tab; no message or private key is sent to a server.');
   linked(dashboard, 'another address, altered fields, CR/CRLF line endings, a non-canonical threshold, a wrong domain, an expired request');
+  linked(dashboard, 'class="tabs message-signing-tabs"');
+  linked(dashboard, '@media (min-width:761px)');
+  linked(dashboard, '.message-signing-tabs{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.35fr)}');
+  linked(dashboard, '.message-signing-tabs .tab{width:100%;padding-inline:18px}');
 });
 
 test('unsupported swap integration is absent from the shipped wallet', () => {
