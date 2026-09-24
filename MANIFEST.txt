@@ -1,5 +1,5 @@
 # Qwertycoin Web Wallet build manifest
-# Generated 2026-09-24T22:33:18Z from commit 720cb24
+# Generated 2026-09-24T23:30:32Z from commit 2b5d7ac
 #
 # Verify the live deployment matches a specific git tag with:
 #   git checkout v0.1.0
@@ -78,7 +78,7 @@ ca640caf3cd05b49cd2489124d49239623a2a7910f4e7603327f0fcd0fd311ca  vendor/libsodi
 ce7b8ba14db085aadb72359226ccf7273225db31dad653242a7726a10dabbbd4  vendor/libsodium/LICENSE.libsodium-wrappers-sumo
 a3d0b7eb2c24ba6b5401d88717e65bc6a92786d211bc8b91ed746d24226180f3  vendor/libsodium/libsodium-sumo.js
 4e2c5442899321d7d9aea69bef71a3c24a6eab5911b74a5c1ad8bc8c733b0a15  vendor/libsodium/libsodium-wrappers.js
-9636b5dcae0ddc8d446b2b2a940a2003a0c5b56ee4f31732304e2bc0ca47130c  vendor/qwertycoin-ts/BUILDINFO.txt
+b61680836516d8d651dc526b7f0eaaa6e75113b51a64871f1e959179fd8a4b06  vendor/qwertycoin-ts/BUILDINFO.txt
 3fd50f4c37bc7de0afb2d85d94a87e23858a95740bd5e93a302bffa1f270846d  vendor/qwertycoin-ts/monero.js
 aa932c3e16252147fb3a47ad7f13a934d1020fee1af9db7ed45ed417c644d3ef  vendor/qwertycoin-ts/monero.worker.js
 b56b6cbccbd5a0370d840ea4000f0267499febfdf00897d50e948aceb71d5d87  vendor/qwertycoin-ts/monero.worker.js.LICENSE.txt

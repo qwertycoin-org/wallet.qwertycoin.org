@@ -230,6 +230,37 @@ function key(byte) { return new Uint8Array(32).fill(byte); }
     assert.throws(() => qms.reassemble([fragment, conflicting]), /conflicting/);
   });
 
+  await test('an outer-envelope key holder still cannot forge libsignal-authenticated plaintext', async () => {
+    const plan = await alice.prepareOffline(bobStore.state.ownFingerprint, 'inner authentication', 1700000005);
+    const current = qms.unhex(aliceStore.state.cryptoState);
+    const contact = aliceStore.state.contacts[0];
+    const context = await qms.signal.transportContext(current, contact.contactId, true);
+    const messageId = qms.unhex(plan.messageId);
+    const originalFragments = plan.encodedFragments.map(value => qms.decodeFragment(qms.unhex(value)));
+    const inner = qms.openOuterEnvelope(context, messageId, qms.reassemble(originalFragments));
+
+    // Model compromise of the independently derived outer transport secret:
+    // the attacker can create a fully valid outer AEAD envelope and fragment
+    // MACs, but cannot forge the inner libsignal authentication tag.
+    const forgedInner = new Uint8Array(inner);
+    forgedInner[forgedInner.length - 1] ^= 1;
+    const forgedEnvelope = qms.sealOuterEnvelope(context, messageId, forgedInner);
+    const forgedFragments = qms.fragmentEnvelope(context, messageId, forgedEnvelope);
+    assert(forgedFragments.every(fragment => qms.verifyEnvelopeFragment(context, fragment)));
+
+    const ratchetBefore = bobStore.state.cryptoState;
+    const messagesBefore = bob.messages().length;
+    for (let index = 0; index + 1 < forgedFragments.length; index++) {
+      assert.strictEqual(await bob.acceptFragment(qms.encodeFragment(forgedFragments[index]), {}), null);
+    }
+    await assert.rejects(
+      bob.acceptFragment(qms.encodeFragment(forgedFragments[forgedFragments.length - 1]), {}),
+      /decrypt|ciphertext|authentication|MAC|invalid/i
+    );
+    assert.strictEqual(bobStore.state.cryptoState, ratchetBefore, 'failed inner authentication must not advance ratchet state');
+    assert.strictEqual(bob.messages().length, messagesBefore, 'failed inner authentication must not expose plaintext');
+  });
+
   await test('store ciphertext rejects wrong wrapping keys and corruption without plaintext leakage', async () => {
     const serialized = env.sharedLocal.get(aliceStore.storageKey);
     assert(serialized && !serialized.includes('ongoing ratchet reply') && !serialized.includes(aliceStore.state.cryptoState));
