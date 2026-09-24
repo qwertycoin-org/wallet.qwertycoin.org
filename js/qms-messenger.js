@@ -1,519 +1,269 @@
 // Copyright (c) 2026 The Qwertycoin Project
 // SPDX-License-Identifier: MIT
 
+/** QMS2 Web client. Ordinary browsers remain fail-closed for network transport. */
 const QmsMessenger = (() => {
   'use strict';
-
-  const ACTIVE_PLAN_STATUSES = new Set(['building', 'prepared', 'partially broadcast', 'rollback required']);
   const MAX_REASSEMBLIES = 64;
   const MAX_REASSEMBLY_BYTES = 8 * 1024 * 1024;
 
+  function nowSeconds() { return Math.floor(Date.now() / 1000); }
   function nowIso() { return new Date().toISOString(); }
-  function short(value) { return value ? value.slice(0, 16) + '…' : ''; }
-  function atomic(value) {
-    const n = BigInt(String(value || 0));
-    const whole = n / 100000000n;
-    const frac = (n % 100000000n).toString().padStart(8, '0').replace(/0+$/, '');
-    return whole.toString() + (frac ? '.' + frac : '');
-  }
-  function invitationFromHex(value) { return QmsProtocol.decodeInvitation(QmsProtocol.unhex(String(value || '').trim())); }
-  function identityToJson(id) { return { boxPublic: QmsProtocol.hex(id.boxPublic), boxSecret: QmsProtocol.hex(id.boxSecret), signPublic: QmsProtocol.hex(id.signPublic), signSecret: QmsProtocol.hex(id.signSecret) }; }
-  function identityFromJson(id) { return { boxPublic: QmsProtocol.unhex(id.boxPublic), boxSecret: QmsProtocol.unhex(id.boxSecret), signPublic: QmsProtocol.unhex(id.signPublic), signSecret: QmsProtocol.unhex(id.signSecret) }; }
-  function allKeyImages(tx) { return (tx.inputs || []).map(input => input && input.keyImage && input.keyImage.hex).filter(Boolean); }
-  function activePlan(state) { return state.plans.find(plan => ACTIVE_PLAN_STATUSES.has(plan.status)) || null; }
-  function finalFragmentMatches(extraHex, expected) {
-    try {
-      const segments = QmsProtocol.extractSegmentsFromExtra(QmsProtocol.unhex(extraHex));
-      return QmsProtocol.equal(QmsProtocol.encodeFragment(QmsProtocol.decodeSegments(segments)), QmsProtocol.encodeFragment(expected));
-    } catch (_) { return false; }
-  }
+  function clone(value) { return JSON.parse(JSON.stringify(value)); }
+  function restore(target, snapshot) { for (const key of Object.keys(target)) delete target[key]; Object.assign(target, snapshot); }
 
-  function normalizeState(state) {
-    if (!Array.isArray(state.reassembly)) state.reassembly = [];
-    if (!state.scan || !Number.isSafeInteger(Number(state.scan.height)) || Number(state.scan.height) < 0) state.scan = { height: 0, blockHash: '' };
-
-    // Early development builds keyed one copy of the same ciphertext by every
-    // contact. Merge those copies into one recipient-authenticated reassembly.
-    const merged = new Map();
-    for (const candidate of state.reassembly) {
-      if (!candidate || typeof candidate.messageId !== 'string' || typeof candidate.hash !== 'string' || !candidate.fragments) continue;
-      const key = candidate.messageId + ':' + candidate.hash;
-      const partial = merged.get(key) || { messageId: candidate.messageId, hash: candidate.hash, count: 0, ciphertextSize: 0, fragments: {}, bytes: 0 };
-      for (const [index, rawRecord] of Object.entries(candidate.fragments)) {
-        const record = typeof rawRecord === 'string' ? { encoded: rawRecord, txHash: '', blockHeight: 0, blockHash: '', createdAt: '' } : rawRecord;
-        if (!record || typeof record.encoded !== 'string') continue;
-        try {
-          const fragment = QmsProtocol.decodeFragment(QmsProtocol.unhex(record.encoded));
-          if (QmsProtocol.hex(fragment.messageId) !== candidate.messageId || QmsProtocol.hex(fragment.ciphertextHash) !== candidate.hash) continue;
-          partial.count = fragment.count;
-          partial.ciphertextSize = fragment.ciphertextSize;
-          if (!partial.fragments[index]) { partial.fragments[index] = record; partial.bytes += fragment.data.length; }
-        } catch (_) {}
-      }
-      if (Object.keys(partial.fragments).length) merged.set(key, partial);
+  function makeClient(store) {
+    const state = store.state;
+    let transientMessages = [];
+    let operation = Promise.resolve();
+    function serialized(fn) {
+      const result = operation.then(fn, fn);
+      operation = result.catch(() => {});
+      return result;
     }
-    state.reassembly = Array.from(merged.values()).slice(0, MAX_REASSEMBLIES);
-    return state;
-  }
-
-  function totalReassemblyBytes(state) { return state.reassembly.reduce((sum, partial) => sum + Number(partial.bytes || 0), 0); }
-  function addFragmentRecord(state, fragment, source) {
-    const messageId = QmsProtocol.hex(fragment.messageId);
-    const hash = QmsProtocol.hex(fragment.ciphertextHash);
-    let partial = state.reassembly.find(item => item.messageId === messageId && item.hash === hash);
-    if (!partial) {
-      if (state.reassembly.length >= MAX_REASSEMBLIES) throw new Error('Messenger reassembly limit reached');
-      partial = { messageId, hash, count: fragment.count, ciphertextSize: fragment.ciphertextSize, fragments: {}, bytes: 0 };
-      state.reassembly.push(partial);
+    async function commit(mutator) {
+      const before = clone(state);
+      try { await mutator(); await store.save(); }
+      catch (error) { restore(state, before); throw error; }
     }
-    if (partial.count !== fragment.count || partial.ciphertextSize !== fragment.ciphertextSize) throw new Error('Conflicting Messenger fragment metadata');
+    function requireActive() { if (!state.active) throw new Error('Activate QMS2 before using Messenger'); }
+    function cryptoState() { requireActive(); return QmsProtocol.unhex(state.cryptoState); }
+    function contactByFingerprint(fingerprint) { return state.contacts.find(item => !item.removed && item.fingerprint === String(fingerprint).toLowerCase()) || null; }
+    function totalReassemblyBytes() { return state.reassembly.reduce((sum, item) => sum + Number(item.bytes || 0), 0); }
+    function messages() { return state.messages.concat(transientMessages); }
 
-    const index = String(fragment.index);
-    const encoded = QmsProtocol.hex(QmsProtocol.encodeFragment(fragment));
-    if (partial.fragments[index]) {
-      if (partial.fragments[index].encoded !== encoded) throw new Error('Conflicting Messenger fragment duplicate');
-      return partial;
+    async function setHistoryEnabled(enabled) {
+      return serialized(() => commit(async () => { state.historyEnabled = !!enabled; }));
     }
-    if (totalReassemblyBytes(state) + fragment.data.length > MAX_REASSEMBLY_BYTES) throw new Error('Messenger reassembly byte limit reached');
-    partial.fragments[index] = {
-      encoded,
-      txHash: source.txHash || '',
-      blockHeight: Number(source.blockHeight || 0),
-      blockHash: source.blockHash || '',
-      createdAt: source.createdAt || nowIso()
-    };
-    partial.bytes += fragment.data.length;
-    return partial;
-  }
 
-  function openCompletePartial(state, partial, identity, ownInvitation) {
-    if (Object.keys(partial.fragments).length !== partial.count) return null;
-    const records = Array.from({ length: partial.count }, (_, index) => partial.fragments[String(index)]);
-    if (records.some(record => !record)) throw new Error('Incomplete Messenger fragment set');
-    const fragments = records.map(record => QmsProtocol.decodeFragment(QmsProtocol.unhex(record.encoded)));
-    const ciphertext = QmsProtocol.reassemble(fragments);
-    for (const senderContact of state.contacts) {
-      try {
-        const opened = QmsProtocol.openText(identity, invitationFromHex(senderContact.invitationHex), ownInvitation, fragments[0].messageId, ciphertext);
-        const newest = records.slice().sort((a, b) => Number(a.blockHeight || 0) - Number(b.blockHeight || 0)).pop();
+    async function clearHistory() {
+      return serialized(() => commit(async () => {
+        state.messages = [];
+        transientMessages = [];
+      }));
+    }
+
+    async function resetState() {
+      return serialized(() => commit(async () => {
+        const replacement = QmsStore.blank();
+        restore(state, replacement);
+        transientMessages = [];
+      }));
+    }
+
+    async function activate() {
+      return serialized(async () => {
+        if (state.active) return state.ownFingerprint;
+        const engine = await QmsProtocol.signal.engineNew();
+        const prepared = await QmsProtocol.signal.prepareContactPackage(engine, QmsProtocol.genesis());
+        await commit(async () => {
+          state.active = true;
+          state.cryptoState = QmsProtocol.hex(prepared.nextState);
+          state.invitationId = QmsProtocol.hex(prepared.invitationId);
+          state.ownPackage = QmsProtocol.hex(prepared.package);
+          state.ownFingerprint = QmsProtocol.hex(prepared.fingerprint);
+        });
+        return state.ownFingerprint;
+      });
+    }
+
+    async function importContact(label, packageHex, at = nowSeconds()) {
+      return serialized(async () => {
+        requireActive();
+        label = String(label || '').trim();
+        if (!label) throw new Error('Enter a contact name');
+        const normalized = String(packageHex || '').trim().toLowerCase();
+        const packageBytes = QmsProtocol.unhex(normalized);
+        const prepared = await QmsProtocol.signal.prepareImportContact(cryptoState(), QmsProtocol.unhex(state.invitationId), packageBytes, at);
+        const fingerprint = QmsProtocol.hex(prepared.fingerprint);
+        if (fingerprint === state.ownFingerprint) throw new Error("You cannot import this wallet's own QMS2 invitation");
+        const existing = state.contacts.find(item => item.fingerprint === fingerprint);
+        if (existing && existing.packageHex !== normalized) throw new Error('Contact fingerprint is already bound to different package data');
+        await commit(async () => {
+          state.cryptoState = QmsProtocol.hex(prepared.nextState);
+          if (existing) { existing.removed = false; existing.name = label; }
+          else state.contacts.push({ fingerprint, contactId: prepared.contactId, name: label, packageHex: normalized, addedAt: nowIso(), removed: false });
+        });
+        return fingerprint;
+      });
+    }
+
+    async function prepareOffline(fingerprint, text, at = nowSeconds()) {
+      return serialized(async () => {
+        const contact = contactByFingerprint(fingerprint);
+        if (!contact) throw new Error('Unknown QMS2 contact');
+        if (state.prepared) throw new Error('Cancel or finish the existing QMS2 plan first');
+        const current = cryptoState();
+        const prepared = await QmsProtocol.signal.prepareSendText(current, contact.contactId, String(text), at);
+        const context = await QmsProtocol.signal.transportContext(current, contact.contactId, true);
+        const envelope = QmsProtocol.sealOuterEnvelope(context, prepared.messageId, QmsProtocol.concat([prepared.messageType], prepared.ciphertext));
+        const fragments = QmsProtocol.fragmentEnvelope(context, prepared.messageId, envelope);
         return {
-          id: partial.messageId,
-          contactId: senderContact.id,
-          direction: 'in',
-          text: opened.text,
-          createdAt: newest.createdAt || nowIso(),
-          status: 'confirmed',
-          txHash: newest.txHash || '',
-          sourceFragments: records
+          messageId: QmsProtocol.hex(prepared.messageId),
+          contactFingerprint: contact.fingerprint,
+          nextCryptoState: QmsProtocol.hex(prepared.nextState),
+          envelopeSize: envelope.length,
+          carrierExtras: fragments.map(fragment => QmsProtocol.hex(QmsProtocol.carrierExtra(fragment))),
+          encodedFragments: fragments.map(fragment => QmsProtocol.hex(QmsProtocol.encodeFragment(fragment)))
         };
-      } catch (_) { /* Recipient MACs deliberately do not identify the pinned sender. */ }
+      });
     }
-    return null;
-  }
 
-  function acceptFragment(state, identity, ownInvitation, fragment, source) {
-    if (!QmsProtocol.verifyFragment(ownInvitation, fragment)) return null;
-    const messageId = QmsProtocol.hex(fragment.messageId);
-    if (state.messages.some(message => message.id === messageId && message.direction === 'in')) return null;
-    const partial = addFragmentRecord(state, fragment, source);
-    const message = openCompletePartial(state, partial, identity, ownInvitation);
-    if (message) {
-      state.messages.push(message);
-      state.reassembly = state.reassembly.filter(item => item !== partial);
+    async function acceptFragment(encodedFragment, source = {}) {
+      return serialized(async () => {
+        requireActive();
+        const fragment = QmsProtocol.decodeFragment(encodedFragment);
+        let matched = null;
+        for (const contact of state.contacts) {
+          if (contact.removed) continue;
+          try {
+            const contexts = await QmsProtocol.signal.transportContexts(cryptoState(), contact.contactId, false);
+            const context = contexts.find(candidate => QmsProtocol.verifyEnvelopeFragment(candidate, fragment));
+            if (context) { matched = { contact, context }; break; }
+          } catch (_) {}
+        }
+        if (!matched) return null;
+        const messageId = QmsProtocol.hex(fragment.messageId);
+        if (messages().some(item => item.id === messageId && item.direction === 'in')) return null;
+        const hash = QmsProtocol.hex(fragment.ciphertextHash);
+        let partial = state.reassembly.find(item => item.messageId === messageId && item.hash === hash && item.contactFingerprint === matched.contact.fingerprint);
+        if (!partial) {
+          if (state.reassembly.length >= MAX_REASSEMBLIES) throw new Error('QMS2 reassembly limit reached');
+          partial = { messageId, hash, contactFingerprint: matched.contact.fingerprint, count: fragment.count, ciphertextSize: fragment.ciphertextSize, fragments: {}, bytes: 0 };
+        }
+        const staged = clone(partial);
+        const index = String(fragment.index), encoded = QmsProtocol.hex(QmsProtocol.encodeFragment(fragment));
+        if (staged.fragments[index]) {
+          if (staged.fragments[index].encoded !== encoded) throw new Error('Conflicting QMS2 fragment duplicate');
+          return null;
+        }
+        if (totalReassemblyBytes() + fragment.data.length > MAX_REASSEMBLY_BYTES) throw new Error('QMS2 reassembly byte limit reached');
+        staged.fragments[index] = { encoded, txHash: source.txHash || '', blockHeight: Number(source.blockHeight || 0), blockHash: source.blockHash || '', createdAt: source.createdAt || nowIso() };
+        staged.bytes += fragment.data.length;
+
+        if (Object.keys(staged.fragments).length !== staged.count) {
+          await commit(async () => {
+            const position = state.reassembly.findIndex(item => item.messageId === messageId && item.hash === hash && item.contactFingerprint === matched.contact.fingerprint);
+            if (position < 0) state.reassembly.push(staged); else state.reassembly[position] = staged;
+          });
+          return null;
+        }
+
+        const fragments = Array.from({ length: staged.count }, (_, part) => {
+          if (!staged.fragments[String(part)]) throw new Error('Incomplete QMS2 fragment set');
+          return QmsProtocol.decodeFragment(QmsProtocol.unhex(staged.fragments[String(part)].encoded));
+        });
+        const inner = QmsProtocol.openOuterEnvelope(matched.context, fragment.messageId, QmsProtocol.reassemble(fragments));
+        if (inner.length < 2) throw new Error('Empty QMS2 inner ciphertext');
+        const received = await QmsProtocol.signal.prepareReceiveText(cryptoState(), matched.contact.contactId, inner[0], inner.slice(1));
+        if (!QmsProtocol.equal(received.messageId, fragment.messageId)) throw new Error('QMS2 message identifier mismatch');
+        const record = { id: messageId, contactId: matched.contact.fingerprint, direction: 'in', text: received.text, createdAt: source.createdAt || nowIso(), status: 'confirmed', txHash: source.txHash || '', blockHeight: Number(source.blockHeight || 0), blockHash: source.blockHash || '' };
+        await commit(async () => {
+          state.cryptoState = QmsProtocol.hex(received.nextState);
+          state.reassembly = state.reassembly.filter(item => !(item.messageId === messageId && item.hash === hash && item.contactFingerprint === matched.contact.fingerprint));
+          if (state.historyEnabled) state.messages.push(record);
+          else transientMessages.push(record);
+        });
+        return record;
+      });
     }
-    return message;
-  }
 
-  function retryCompleteReassemblies(state, identity, ownInvitation) {
-    const opened = [];
-    for (const partial of state.reassembly.slice()) {
-      const message = openCompletePartial(state, partial, identity, ownInvitation);
-      if (!message || state.messages.some(item => item.id === message.id && item.direction === 'in')) continue;
-      state.messages.push(message); opened.push(message);
-      state.reassembly = state.reassembly.filter(item => item !== partial);
+    async function markReorg(removedBlockHashes) {
+      const removed = new Set(removedBlockHashes || []);
+      return serialized(() => commit(async () => {
+        for (const message of messages()) if (message.direction === 'in' && removed.has(message.blockHash)) message.status = 'reorged';
+        // Ratchet state intentionally never rolls back after authenticated plaintext.
+      }));
     }
-    return opened;
-  }
-
-  function recomputePlanStatus(plan) {
-    if (!plan.txs.length) return plan.status;
-    const statuses = plan.txs.map(tx => tx.status);
-    if (statuses.every(status => status === 'confirmed')) return 'confirmed';
-    if (statuses.some(status => status === 'prepared')) return statuses.some(status => status !== 'prepared') ? 'partially broadcast' : 'prepared';
-    if (statuses.some(status => status === 'confirmed')) return 'partially confirmed';
-    return 'broadcast';
-  }
-
-  function updateOutgoingMessageStatus(state, plan) {
-    const message = state.messages.find(item => item.id === plan.id && item.direction === 'out');
-    if (message) message.status = plan.status;
-  }
-
-  function markOutgoingConfirmed(state, txHash, block) {
-    if (!txHash) return false;
-    let changed = false;
-    for (const plan of state.plans) {
-      let planChanged = false;
-      for (const tx of plan.txs || []) {
-        if (!tx.hash || tx.hash.toLowerCase() !== String(txHash).toLowerCase()) continue;
-        tx.status = 'confirmed'; tx.blockHeight = Number(block.height); tx.blockHash = block.hash || ''; changed = true; planChanged = true;
-      }
-      if (planChanged) { plan.status = recomputePlanStatus(plan); updateOutgoingMessageStatus(state, plan); }
-    }
-    return changed;
-  }
-
-  function rollbackForReorg(state, restoreHeight) {
-    state.messages = state.messages.filter(message => message.direction !== 'in');
-    state.reassembly = [];
-    for (const plan of state.plans) {
-      for (const tx of plan.txs || []) {
-        if (tx.status === 'confirmed') { tx.status = 'broadcast'; delete tx.blockHeight; delete tx.blockHash; }
-      }
-      if (plan.status === 'confirmed' || plan.status === 'partially confirmed') plan.status = recomputePlanStatus(plan);
-      updateOutgoingMessageStatus(state, plan);
-    }
-    state.scan = { height: restoreHeight, blockHash: '' };
-  }
-
-  function removeDraft(state, plan) {
-    state.plans = state.plans.filter(item => item.id !== plan.id);
-    state.messages = state.messages.filter(message => !(message.id === plan.id && message.direction === 'out'));
-  }
-
-  async function releasePlanInputs(wallet, plan) {
-    const failures = [];
-    const seen = new Set();
-    for (const tx of plan.txs || []) {
-      if (tx.status === 'broadcast' || tx.status === 'confirmed') continue;
-      for (const keyImage of tx.keyImages || []) {
-        if (seen.has(keyImage)) continue;
-        seen.add(keyImage);
-        try { await wallet.thawOutput(keyImage); } catch (error) { failures.push(error && error.message ? error.message : String(error)); }
-      }
-    }
-    if (failures.length) throw new Error(`Unable to release ${failures.length} reserved input(s): ${failures[0]}`);
+    function close() { store.close(); }
+    return { state, activate, importContact, prepareOffline, acceptFragment, markReorg, messages, setHistoryEnabled, clearHistory, resetState, close };
   }
 
   async function mount(options) {
     await QmsProtocol.ready();
-    const walletKeys = options.getWalletKeys();
-    if (!walletKeys || !walletKeys.privateSpendKeyHex) throw new Error('Messenger requires an unlocked full wallet');
-    const store = await QmsStore.open(walletKeys), state = normalizeState(store.state);
-    if (!state.identity) state.identity = identityToJson(QmsProtocol.createIdentity());
-    const identity = identityFromJson(state.identity);
-    if (!state.ownInvitation) state.ownInvitation = QmsProtocol.hex(QmsProtocol.encodeInvitation(QmsProtocol.createInvitation(identity)));
-    await store.save();
-
-    let selectedId = activePlan(state) ? activePlan(state).contactId : (state.contacts[0] ? state.contacts[0].id : null);
-    let scanning = false;
-    let recovering = true;
-    let scannerPromise = null;
+    const wallet = options.getWalletKeys();
+    const qmsKey = typeof WalletVault !== 'undefined' && WalletVault.qmsKey ? WalletVault.qmsKey() : null;
+    if (!qmsKey) throw new Error('QMS2 requires a password-protected wallet session; reopen the wallet with a session password');
+    const store = await QmsStore.open(wallet, qmsKey);
+    sodium.memzero(qmsKey);
+    const client = makeClient(store), state = client.state;
     const el = id => document.getElementById(id);
     const section = el('qms-section'), overviewTab = el('wallet-tab-overview'), messengerTab = el('wallet-tab-messenger');
     const dashboard = el('dashboard');
     const overviewNodes = Array.from(dashboard.children).filter(node => node !== section && node.id !== 'wallet-tabs' && !node.classList.contains('wallet-header'));
     const originalHidden = new Map(overviewNodes.map(node => [node, node.hidden]));
-
-    function showStatus(message, type) { const node = el('qms-status'); node.textContent = message || ''; node.className = 'qms-status' + (type ? ' ' + type : ''); }
-    function showError(error) { showStatus(error && error.message ? error.message : String(error), 'error'); }
-    function emptyNotice(message) { const node = document.createElement('div'); node.className = 'qms-empty'; node.textContent = message; return node; }
-    async function synchronizedWallet(statusMessage) {
-      if (statusMessage) showStatus(statusMessage);
-      const wallet = await options.getWallet();
-      if (wallet.reconnectDaemon) await wallet.reconnectDaemon();
-      if (wallet.sync) await wallet.sync(Math.max(0, Number(options.getRestoreHeight() || 0)));
-      return wallet;
-    }
-    function contact() { return state.contacts.find(item => item.id === selectedId) || null; }
-    function preparedForSelected() { return state.plans.find(plan => plan.contactId === selectedId && (plan.status === 'prepared' || plan.status === 'partially broadcast' || plan.status === 'rollback required')) || null; }
-    function formatDate(value) { try { return new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)); } catch (_) { return value; } }
-    function messageByteCount() { return new TextEncoder().encode(el('qms-message-input').value).length; }
-
+    let selectedId = state.contacts.find(item => !item.removed)?.fingerprint || null;
+    function status(message, kind) { const node = el('qms-status'); node.textContent = message || ''; node.className = 'qms-status' + (kind ? ' ' + kind : ''); }
+    function error(value) { status(value && value.message ? value.message : String(value), 'error'); }
+    function empty(message) { const node = document.createElement('div'); node.className = 'qms-empty'; node.textContent = message; return node; }
     function setTab(name) {
-      if (name === 'overview' && activePlan(state)) {
-        showStatus('Send or cancel the prepared message before returning to the wallet.', 'error');
-        return;
-      }
-      const messenger = name === 'messenger'; section.hidden = !messenger;
-      overviewNodes.forEach(node => { node.hidden = messenger ? true : originalHidden.get(node); });
-      overviewTab.classList.toggle('active', !messenger); messengerTab.classList.toggle('active', messenger);
-      overviewTab.setAttribute('aria-selected', String(!messenger)); messengerTab.setAttribute('aria-selected', String(messenger));
-      if (messenger && !recovering) { render(); scan().catch(showError); }
+      const show = name === 'messenger'; section.hidden = !show;
+      overviewNodes.forEach(node => { node.hidden = show ? true : originalHidden.get(node); });
+      overviewTab.classList.toggle('active', !show); messengerTab.classList.toggle('active', show);
+      overviewTab.setAttribute('aria-selected', String(!show)); messengerTab.setAttribute('aria-selected', String(show));
+      if (show) render();
     }
     overviewTab.addEventListener('click', () => setTab('overview'));
     messengerTab.addEventListener('click', () => setTab('messenger'));
 
-    function renderContacts() {
-      const lockedPlan = activePlan(state);
-      if (lockedPlan && selectedId !== lockedPlan.contactId) selectedId = lockedPlan.contactId;
-      const list = el('qms-contact-list'); list.replaceChildren();
-      if (!state.contacts.length) { list.appendChild(emptyNotice('No contacts yet')); return; }
-      for (const item of state.contacts) {
-        const button = document.createElement('button'); button.className = 'qms-contact' + (item.id === selectedId ? ' active' : ''); button.type = 'button';
-        button.setAttribute('aria-pressed', String(item.id === selectedId));
-        button.disabled = recovering || (!!lockedPlan && item.id !== lockedPlan.contactId);
+    function render() {
+      const activeContacts = state.contacts.filter(item => !item.removed);
+      const activate = el('qms-activate');
+      activate.hidden = state.active; activate.disabled = state.active;
+      el('qms-own-invitation').value = state.active ? state.ownPackage : '';
+      el('qms-own-fingerprint').textContent = state.active ? `Fingerprint: ${state.ownFingerprint}` : 'Activate QMS2 to create an independent Messenger identity.';
+      el('qms-copy-invitation').disabled = !state.active;
+      el('qms-import-contact').disabled = !state.active;
+      const contacts = el('qms-contact-list'); contacts.replaceChildren();
+      if (!activeContacts.length) contacts.appendChild(empty(state.active ? 'No contacts yet' : 'Messenger is not activated'));
+      for (const item of activeContacts) {
+        const button = document.createElement('button'); button.type = 'button'; button.className = 'qms-contact' + (item.fingerprint === selectedId ? ' active' : '');
         const name = document.createElement('strong'); name.textContent = item.name;
-        const fingerprint = document.createElement('span'); fingerprint.textContent = short(item.fingerprint);
-        button.append(name, fingerprint);
-        button.addEventListener('click', () => {
-          if (lockedPlan && item.id !== lockedPlan.contactId) { showStatus('Send or cancel the prepared message before changing chats.', 'error'); return; }
-          selectedId = item.id; render();
-        });
-        list.appendChild(button);
+        const fp = document.createElement('span'); fp.textContent = item.fingerprint.slice(0, 16) + '…';
+        button.append(name, fp); button.addEventListener('click', () => { selectedId = item.fingerprint; render(); }); contacts.appendChild(button);
       }
-    }
-
-    function updateComposer() {
-      const item = contact(), lockedPlan = activePlan(state), size = messageByteCount();
-      el('qms-byte-count').textContent = `${size.toLocaleString()} / 4,096 UTF-8 bytes`;
-      el('qms-message-input').disabled = recovering || !item || !!lockedPlan;
-      el('qms-prepare').disabled = recovering || !item || !!lockedPlan || !size || size > QmsProtocol.C.MAX_TEXT_BYTES;
-    }
-
-    function renderMessages() {
-      const item = contact();
-      const messages = state.messages.filter(message => message.contactId === selectedId).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-      el('qms-chat-name').textContent = item ? item.name : 'Select a contact'; el('qms-chat-fingerprint').textContent = item ? item.fingerprint : '';
-      const list = el('qms-message-list'); list.replaceChildren();
-      if (!messages.length) list.appendChild(emptyNotice(item ? 'No messages in this chat yet.' : 'Import a personal invitation to begin.'));
-      for (const message of messages) {
-        const row = document.createElement('div'); row.className = 'qms-message ' + (message.direction === 'out' ? 'me' : 'them');
+      const selected = activeContacts.find(item => item.fingerprint === selectedId) || null;
+      el('qms-chat-name').textContent = selected ? selected.name : 'Select a contact';
+      el('qms-chat-fingerprint').textContent = selected ? selected.fingerprint : '';
+      const messages = el('qms-message-list'); messages.replaceChildren();
+      const rows = client.messages().filter(item => item.contactId === selectedId);
+      if (!rows.length) messages.appendChild(empty(selected ? 'No messages in this chat.' : 'Import a personal invitation to begin.'));
+      for (const item of rows) {
+        const row = document.createElement('div'); row.className = 'qms-message ' + (item.direction === 'out' ? 'me' : 'them');
         const bubble = document.createElement('div'); bubble.className = 'qms-bubble';
-        const text = document.createElement('div'); text.textContent = message.text; bubble.appendChild(text);
-        const meta = document.createElement('div'); meta.className = 'qms-bubble-meta';
-        const who = document.createElement('span'); who.textContent = message.direction === 'out' ? 'Me' : item.name;
-        const when = document.createElement('span'); when.textContent = formatDate(message.createdAt);
-        const status = document.createElement('span'); status.className = 'qms-message-status' + (message.status === 'failed' ? ' error' : ''); status.textContent = message.status;
-        meta.append(who, when, status); bubble.appendChild(meta); row.appendChild(bubble); list.appendChild(row);
+        const text = document.createElement('div'); text.textContent = item.text;
+        const meta = document.createElement('div'); meta.className = 'qms-bubble-meta'; meta.textContent = `${item.direction === 'out' ? 'Me' : selected.name} · ${item.status}`;
+        bubble.append(text, meta); row.appendChild(bubble); messages.appendChild(row);
       }
-      list.scrollTop = list.scrollHeight;
-      const plan = preparedForSelected(); el('qms-review').hidden = !plan;
-      if (plan) {
-        el('qms-review-count').textContent = `${plan.txs.length} transaction${plan.txs.length === 1 ? '' : 's'}`;
-        el('qms-review-fee').textContent = `Fee ${atomic(plan.totalFee)} QWC`;
-        el('qms-review-note').textContent = plan.recoveryError
-          ? `This draft is blocked: ${plan.recoveryError}`
-          : 'Review the complete carrier batch. Nothing is broadcast until you select Send encrypted message.';
-        el('qms-send').disabled = recovering || !!plan.recoveryError || plan.status === 'rollback required';
-        el('qms-cancel').disabled = recovering || plan.txs.some(tx => tx.status === 'broadcast' || tx.status === 'confirmed');
-      }
-      el('qms-manage-toggle').disabled = recovering || !!activePlan(state);
-      overviewTab.disabled = recovering || !!activePlan(state);
-      overviewTab.setAttribute('aria-disabled', String(overviewTab.disabled));
-      updateComposer();
+      const manage = el('qms-manage-list'); manage.replaceChildren();
+      for (const item of activeContacts) { const row = document.createElement('div'); row.className = 'qms-manage-row'; const label = document.createElement('span'); label.textContent = `${item.name} · ${item.fingerprint}`; row.append(label); manage.append(row); }
+      el('qms-history-enabled').checked = state.historyEnabled;
+      const bytes = new TextEncoder().encode(el('qms-message-input').value).length;
+      el('qms-byte-count').textContent = `${bytes.toLocaleString()} / 4,096 UTF-8 bytes`;
+      el('qms-message-input').disabled = true; el('qms-prepare').disabled = true; el('qms-send').disabled = true; el('qms-cancel').disabled = true;
+      el('qms-review').hidden = true;
+      status('QMS2 crypto and encrypted contacts are available offline. Sending and chain sync are blocked in a normal browser because it cannot prove Tor-only routing without direct fallback.', 'error');
     }
-
-    function renderManage() {
-      el('qms-own-invitation').value = state.ownInvitation;
-      const own = invitationFromHex(state.ownInvitation);
-      el('qms-own-fingerprint').textContent = 'Fingerprint: ' + QmsProtocol.hex(QmsProtocol.fingerprint(own.boxPublic, own.signPublic));
-      const list = el('qms-manage-list'); list.replaceChildren();
-      for (const item of state.contacts) {
-        const row = document.createElement('div'); row.className = 'qms-manage-row';
-        const input = document.createElement('input'); input.value = item.name; input.maxLength = 80; input.disabled = recovering || !!activePlan(state);
-        const rename = document.createElement('button'); rename.className = 'action-btn'; rename.textContent = 'Rename'; rename.disabled = input.disabled;
-        rename.addEventListener('click', async () => { const value = input.value.trim(); if (!value) return; item.name = value; await store.save(); render(); showStatus('Contact renamed.', 'ok'); });
-        const remove = document.createElement('button'); remove.className = 'action-btn'; remove.textContent = 'Remove'; remove.disabled = input.disabled;
-        remove.addEventListener('click', async () => {
-          if (!confirm(`Remove ${item.name}? Existing local chat history will be retained and will reappear if this invitation is imported again.`)) return;
-          state.contacts = state.contacts.filter(candidate => candidate.id !== item.id);
-          if (selectedId === item.id) selectedId = state.contacts[0] ? state.contacts[0].id : null;
-          await store.save(); render(); showStatus('Contact removed. Existing local message history was retained.', 'ok');
-        });
-        row.append(input, rename, remove); list.appendChild(row);
-      }
-    }
-    function render() { renderContacts(); renderMessages(); renderManage(); }
-
-    el('qms-manage-toggle').addEventListener('click', () => {
-      if (activePlan(state)) { showStatus('Send or cancel the prepared message before managing contacts.', 'error'); return; }
-      el('qms-chat-view').hidden = true; el('qms-manage-view').hidden = false;
-    });
-    el('qms-manage-back').addEventListener('click', () => { el('qms-manage-view').hidden = true; el('qms-chat-view').hidden = false; render(); });
-    el('qms-copy-invitation').addEventListener('click', async () => { await navigator.clipboard.writeText(state.ownInvitation); showStatus('Complete personal invitation copied.', 'ok'); });
-    el('qms-import-contact').addEventListener('click', async () => {
-      try {
-        if (activePlan(state)) throw new Error('Send or cancel the prepared message first');
-        const name = el('qms-contact-name').value.trim(), invitationHex = el('qms-contact-invitation').value.trim().toLowerCase();
-        if (!name) throw new Error('Enter a contact name');
-        const inv = invitationFromHex(invitationHex); if (!QmsProtocol.equal(inv.genesis, QmsProtocol.genesis())) throw new Error('Invitation belongs to a different network');
-        const fp = QmsProtocol.hex(QmsProtocol.fingerprint(inv.boxPublic, inv.signPublic));
-        const own = invitationFromHex(state.ownInvitation);
-        const ownFingerprint = QmsProtocol.hex(QmsProtocol.fingerprint(own.boxPublic, own.signPublic));
-        if (fp === ownFingerprint) throw new Error('You cannot import this wallet’s own Messenger invitation');
-        if (state.contacts.some(item => item.id === fp)) throw new Error('This contact invitation is already imported');
-        state.contacts.push({ id: fp, fingerprint: fp, name, invitationHex, addedAt: nowIso() }); selectedId = fp;
-        retryCompleteReassemblies(state, identity, own);
-        await store.save(); el('qms-contact-name').value = ''; el('qms-contact-invitation').value = ''; render(); showStatus(`Imported ${name}. Confirm fingerprint ${fp}`, 'ok');
-      } catch (error) { showError(error); }
-    });
-    el('qms-message-input').addEventListener('input', updateComposer);
-
-    el('qms-prepare').addEventListener('click', async () => {
-      const button = el('qms-prepare'); button.disabled = true; button.textContent = 'Encrypting…';
-      const frozen = [], reserved = new Set(); let plan = null;
-      try {
-        const recipientContact = contact(); if (!recipientContact) throw new Error('Select a contact');
-        if (activePlan(state)) throw new Error('Send or cancel the existing prepared message first');
-        const text = el('qms-message-input').value;
-        const textSize = new TextEncoder().encode(text).length;
-        if (!textSize || textSize > QmsProtocol.C.MAX_TEXT_BYTES) throw new Error('Enter a message of at most 4,096 UTF-8 bytes');
-        const messageId = QmsProtocol.random(16), recipient = invitationFromHex(recipientContact.invitationHex);
-        const ciphertext = QmsProtocol.sealText(identity, recipient, messageId, text), fragments = QmsProtocol.fragmentCiphertext(recipient, messageId, ciphertext);
-        plan = { id: QmsProtocol.hex(messageId), contactId: recipientContact.id, createdAt: nowIso(), status: 'building', ciphertext: QmsProtocol.hex(ciphertext), fragments: fragments.map(fragment => QmsProtocol.hex(QmsProtocol.encodeFragment(fragment))), txs: [], totalFee: '0' };
-        state.plans.push(plan); await store.save(); render();
-        const wallet = await synchronizedWallet('Synchronizing spendable outputs before preparing the encrypted carrier batch…');
-        for (const fragment of fragments) {
-          const txSet = await wallet.createTx({ accountIndex: 0, destinations: [{ address: walletKeys.address, amount: '1' }], extraHex: QmsProtocol.hex(QmsProtocol.carrierExtra(fragment)), priority: 1, relay: false, canSplit: false });
-          if (!txSet || !Array.isArray(txSet.txs) || txSet.txs.length !== 1) throw new Error('Each Messenger carrier must produce exactly one transaction');
-          const tx = txSet.txs[0]; if (!tx.metadata || !tx.extraHex || !finalFragmentMatches(tx.extraHex, fragment)) throw new Error('Wallet construction did not preserve the planned Messenger fragment');
-          const keyImages = allKeyImages(tx); if (!keyImages.length) throw new Error('Prepared carrier did not expose reserved inputs');
-          for (const keyImage of keyImages) { if (reserved.has(keyImage)) throw new Error('Prepared carrier batch attempted to reuse an input'); reserved.add(keyImage); }
-          const txEntry = { hash: tx.hash || '', metadata: tx.metadata, extraHex: tx.extraHex, fee: String(tx.fee || 0), keyImages, status: 'preparing' };
-          plan.txs.push(txEntry); await store.save();
-          for (const keyImage of keyImages) { await wallet.freezeOutput(keyImage); frozen.push(keyImage); }
-          txEntry.status = 'prepared';
-          plan.totalFee = (BigInt(plan.totalFee) + BigInt(tx.fee || 0)).toString(); await store.save();
-        }
-        plan.status = 'prepared'; state.messages.push({ id: plan.id, contactId: recipientContact.id, direction: 'out', text, createdAt: plan.createdAt, status: 'ready to send' });
-        await store.save(); el('qms-message-input').value = ''; render(); showStatus(`Prepared ${plan.txs.length} carrier transaction(s). Review the total fee before sending.`, 'ok');
-      } catch (error) {
-        let rollbackError = null;
-        if (plan && frozen.length) {
-          try { await releasePlanInputs(await options.getWallet(), plan); } catch (releaseError) { rollbackError = releaseError; }
-        }
-        if (plan) {
-          if (rollbackError) {
-            plan.status = 'rollback required';
-            plan.recoveryError = rollbackError.message;
-          } else {
-            removeDraft(state, plan);
-          }
-        }
-        await store.save();
-        showError(rollbackError ? `${error.message || error}. ${rollbackError.message}` : error);
-      } finally { button.textContent = 'Encrypt & review'; render(); }
-    });
-
-    el('qms-send').addEventListener('click', async () => {
-      const plan = preparedForSelected(); if (!plan || plan.recoveryError) return;
-      const button = el('qms-send'); button.disabled = true; button.textContent = 'Sending…';
-      try {
-        const wallet = await options.getWallet();
-        for (const tx of plan.txs) {
-          if (tx.status === 'broadcast' || tx.status === 'confirmed') continue;
-          const hashes = await wallet.relayTxs([tx.metadata]); const hash = Array.isArray(hashes) ? hashes[0] : hashes;
-          if (typeof hash !== 'string' || !/^[0-9a-f]{64}$/i.test(hash)) throw new Error('Wallet did not return a valid broadcast transaction hash');
-          if (tx.hash && tx.hash.toLowerCase() !== hash.toLowerCase()) throw new Error('Broadcast hash does not match the prepared transaction');
-          tx.hash = hash.toLowerCase(); tx.status = 'broadcast'; await store.save();
-        }
-        plan.status = recomputePlanStatus(plan); updateOutgoingMessageStatus(state, plan); await store.save(); render(); showStatus('Encrypted message broadcast. Confirmation status will update during scanning.', 'ok');
-      } catch (error) {
-        plan.status = recomputePlanStatus(plan); updateOutgoingMessageStatus(state, plan); await store.save(); render(); showError(error);
-      } finally { button.disabled = false; button.textContent = 'Send encrypted message'; }
-    });
-    el('qms-cancel').addEventListener('click', async () => {
-      const plan = preparedForSelected(); if (!plan || plan.txs.some(tx => tx.status === 'broadcast' || tx.status === 'confirmed')) return;
-      try {
-        await releasePlanInputs(await options.getWallet(), plan);
-        removeDraft(state, plan); await store.save(); render(); showStatus('Prepared draft deleted and unbroadcast inputs released.', 'ok');
-      } catch (error) {
-        plan.status = 'rollback required'; plan.recoveryError = error.message || String(error);
-        await store.save(); render(); showError(error);
-      }
-    });
-
-    function transactionExtras(block) {
-      const txs = [].concat(block && block.minerTx ? [block.minerTx] : [], block && Array.isArray(block.txs) ? block.txs : []), out = [];
-      for (const tx of txs) {
-        if (tx && Array.isArray(tx.extra)) out.push({ extra: new Uint8Array(tx.extra), hash: tx.hash || '' });
-        else if (tx && tx.extraHex) out.push({ extra: QmsProtocol.unhex(tx.extraHex), hash: tx.hash || '' });
-      }
-      return out;
-    }
-    async function getScanner() { if (!scannerPromise) scannerPromise = options.createScanner(); return scannerPromise; }
-    async function scan() {
-      if (scanning || recovering || activePlan(state) || !state.contacts.length || !options.createScanner) return;
-      scanning = true;
-      try {
-        showStatus('Scanning QWC blocks for encrypted messages…');
-        const scanner = await getScanner(); const tip = Number(await scanner.getHeight());
-        if (!Number.isSafeInteger(tip) || tip < 0) throw new Error('Daemon returned an invalid height');
-        const restoreHeight = Math.max(0, Number(options.getRestoreHeight() || 0));
-        let next = Number(state.scan.height || restoreHeight);
-        if (next > tip) throw new Error('Daemon height is behind the saved Messenger scan cursor');
-        if (next > restoreHeight && state.scan.blockHash) {
-          const anchor = await scanner.getBlocksByRange(next - 1, next - 1);
-          if (!Array.isArray(anchor) || anchor.length !== 1 || Number(anchor[0].height) !== next - 1) throw new Error('Unable to verify the Messenger scan anchor');
-          if (anchor[0].hash !== state.scan.blockHash) { rollbackForReorg(state, restoreHeight); next = restoreHeight; await store.save(); showStatus(`Chain reorganization detected. Rescanning Messenger from block ${restoreHeight.toLocaleString()}…`); }
-        }
-        while (next < tip) {
-          const end = Math.min(tip - 1, next + 19), blocks = await scanner.getBlocksByRange(next, end);
-          if (!Array.isArray(blocks) || blocks.length !== end - next + 1) throw new Error('Daemon returned an incomplete Messenger block range');
-          for (let offset = 0; offset < blocks.length; offset++) {
-            const block = blocks[offset], expectedHeight = next + offset;
-            if (Number(block.height) !== expectedHeight || typeof block.hash !== 'string') throw new Error('Daemon returned a non-contiguous Messenger block range');
-            for (const entry of transactionExtras(block)) {
-              markOutgoingConfirmed(state, entry.hash, block);
-              let segments; try { segments = QmsProtocol.extractSegmentsFromExtra(entry.extra); } catch (_) { continue; }
-              if (!segments.length) continue;
-              try {
-                const fragment = QmsProtocol.decodeSegments(segments);
-                acceptFragment(state, identity, invitationFromHex(state.ownInvitation), fragment, { txHash: entry.hash, blockHeight: block.height, blockHash: block.hash, createdAt: block.timestamp ? new Date(Number(block.timestamp) * 1000).toISOString() : nowIso() });
-              } catch (_) {}
-            }
-            state.scan = { height: expectedHeight + 1, blockHash: block.hash };
-          }
-          next = end + 1; await store.save();
-        }
-        await store.save(); render(); showStatus(`Messenger scan complete at block ${Math.max(0, tip - 1).toLocaleString()}.`, 'ok');
-      } finally { scanning = false; }
-    }
-
+    el('qms-activate').addEventListener('click', async () => { try { el('qms-activate').disabled = true; await client.activate(); render(); } catch (cause) { error(cause); el('qms-activate').disabled = false; } });
+    el('qms-copy-invitation').addEventListener('click', async () => { try { await navigator.clipboard.writeText(state.ownPackage); status('Complete QMS2 contact package copied.', 'ok'); } catch (cause) { error(cause); } });
+    el('qms-import-contact').addEventListener('click', async () => { try { const fingerprint = await client.importContact(el('qms-contact-name').value, el('qms-contact-invitation').value); selectedId = fingerprint; el('qms-contact-name').value = ''; el('qms-contact-invitation').value = ''; render(); status(`Contact imported. Confirm fingerprint ${fingerprint}`, 'ok'); } catch (cause) { error(cause); } });
+    el('qms-history-enabled').addEventListener('change', async event => { try { await client.setHistoryEnabled(event.target.checked); render(); status(event.target.checked ? 'Encrypted local message-history persistence enabled.' : 'Message-history persistence disabled. Existing stored history is retained until deleted.', 'ok'); } catch (cause) { event.target.checked = state.historyEnabled; error(cause); } });
+    el('qms-clear-history').addEventListener('click', async () => { try { await client.clearHistory(); render(); status('Local Messenger history deleted. Blockchain carrier data is unchanged.', 'ok'); } catch (cause) { error(cause); } });
+    el('qms-reset-state').addEventListener('click', async () => { try { if (!window.confirm('Delete the local Messenger identity, contacts, sessions, history, and prepared plan? Blockchain carrier data is unchanged.')) return; await client.resetState(); selectedId = null; render(); status('Messenger state reset. Activate again and exchange fresh contact packages before sending.', 'ok'); } catch (cause) { error(cause); } });
+    el('qms-manage-toggle').addEventListener('click', () => { el('qms-chat-view').hidden = true; el('qms-manage-view').hidden = false; });
+    el('qms-manage-back').addEventListener('click', () => { el('qms-manage-view').hidden = true; el('qms-chat-view').hidden = false; });
+    el('qms-message-input').addEventListener('input', render);
     render();
-    try {
-      const stale = state.plans.filter(plan => plan.status === 'building');
-      const recoverable = state.plans.filter(plan => plan.status === 'prepared' || plan.status === 'partially broadcast');
-      const recoveryWallet = stale.length || recoverable.length
-        ? await synchronizedWallet('Synchronizing the wallet before restoring the prepared Messenger journal…')
-        : null;
-      if (stale.length) {
-        for (const plan of stale) {
-          try { await releasePlanInputs(recoveryWallet, plan); removeDraft(state, plan); }
-          catch (error) { plan.status = 'rollback required'; plan.recoveryError = error.message || String(error); }
-        }
-      }
-      for (const plan of recoverable) {
-        const seen = new Set();
-        try {
-          for (const tx of plan.txs || []) {
-            if (tx.status !== 'prepared') continue;
-            for (const keyImage of tx.keyImages || []) { if (seen.has(keyImage)) throw new Error('Prepared journal reuses an input'); seen.add(keyImage); await recoveryWallet.freezeOutput(keyImage); }
-          }
-          delete plan.recoveryError;
-        } catch (error) { plan.recoveryError = error.message || String(error); }
-      }
-      await store.save();
-    } finally {
-      recovering = false; render();
-      const plan = activePlan(state);
-      if (plan) {
-        setTab('messenger');
-        if (plan.recoveryError) showStatus(`Prepared draft is blocked: ${plan.recoveryError}`, 'error');
-      }
-    }
-
-    return {
-      clear() {
-        selectedId = null;
-        try { sodium.memzero(identity.boxSecret); sodium.memzero(identity.signSecret); } catch (_) {}
-      },
-      scan
-    };
+    return { scan: async () => false, clear: () => client.close(), client };
   }
 
-  return { mount, testing: { normalizeState, activePlan, acceptFragment, retryCompleteReassemblies, rollbackForReorg, removeDraft, recomputePlanStatus, releasePlanInputs } };
+  async function commitPreparedStateForTesting(store, plan) {
+    if (!store || !store.state || !plan || !/^[0-9a-f]+$/i.test(plan.nextCryptoState || '')) throw new Error('invalid synthetic QMS2 plan');
+    store.state.cryptoState = plan.nextCryptoState;
+    await store.save();
+  }
+
+  return { mount, makeClient, testing: { makeClient, commitPreparedStateForTesting } };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = QmsMessenger;

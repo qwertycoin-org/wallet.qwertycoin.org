@@ -6,300 +6,282 @@ const cryptoNode = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const { pathToFileURL } = require('url');
 const { webcrypto } = cryptoNode;
 
 const root = path.resolve(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const sha256 = file => cryptoNode.createHash('sha256').update(fs.readFileSync(path.join(root, file))).digest('hex');
 
-function browserContext() {
-  const values = new Map();
-  const localStorage = {
+async function loadSignalModule() {
+  const dist = path.resolve(process.env.QMS2_WASM_DIST || path.join(root, 'vendor/qwertycoin-ts/qms2'));
+  const jsPath = path.join(dist, 'qwc_qms_crypto.js');
+  const wasmPath = path.join(dist, 'qwc_qms_crypto_bg.wasm');
+  if (!fs.existsSync(jsPath) || !fs.existsSync(wasmPath)) throw new Error(`QMS2 WASM artifact missing at ${dist}`);
+  const source = fs.readFileSync(jsPath).toString('base64');
+  const module = await import(`data:text/javascript;base64,${source}`);
+  await module.default({ module_or_path: fs.readFileSync(wasmPath) });
+  return { module, dist };
+}
+
+function browserContext(signalModule, sharedLocal = new Map(), sharedSession = new Map()) {
+  const storage = values => ({
     getItem: key => values.has(key) ? values.get(key) : null,
     setItem: (key, value) => values.set(key, String(value)),
     removeItem: key => values.delete(key),
     clear: () => values.clear()
-  };
+  });
   const ctx = {
-    console,
-    crypto: webcrypto,
-    TextEncoder,
-    TextDecoder,
-    Uint8Array,
-    ArrayBuffer,
-    setTimeout,
-    clearTimeout,
-    localStorage,
+    console, crypto: webcrypto, TextEncoder, TextDecoder, Uint8Array, ArrayBuffer,
+    setTimeout, clearTimeout, localStorage: storage(sharedLocal), sessionStorage: storage(sharedSession),
     atob: value => Buffer.from(value, 'base64').toString('binary'),
     btoa: value => Buffer.from(value, 'binary').toString('base64')
   };
-  ctx.window = ctx;
-  ctx.self = ctx;
+  ctx.window = ctx; ctx.self = ctx;
   vm.createContext(ctx);
-  for (const file of [
-    'vendor/libsodium/libsodium-sumo.js',
-    'vendor/libsodium/libsodium-wrappers.js',
-    'js/qms-protocol.js',
-    'js/qms-store.js',
-    'js/qms-messenger.js'
-  ]) vm.runInContext(read(file), ctx, { filename: file });
+  for (const file of ['vendor/libsodium/libsodium-sumo.js', 'vendor/libsodium/libsodium-wrappers.js', 'js/wallet-vault.js', 'js/qms-protocol.js', 'js/qms-store.js', 'js/qms-messenger.js']) vm.runInContext(read(file), ctx, { filename: file });
+  const qms = vm.runInContext('QmsProtocol', ctx);
+  qms.setSignalModuleForTesting(signalModule);
   return {
-    ctx,
-    values,
-    qms: vm.runInContext('QmsProtocol', ctx),
-    store: vm.runInContext('QmsStore', ctx),
-    messenger: vm.runInContext('QmsMessenger', ctx)
+    ctx, sharedLocal, sharedSession,
+    vault: vm.runInContext('WalletVault', ctx), qms,
+    store: vm.runInContext('QmsStore', ctx), messenger: vm.runInContext('QmsMessenger', ctx)
   };
 }
 
-function invitationHex(qms, invitation) {
-  return qms.hex(qms.encodeInvitation(invitation));
-}
-
 let passed = 0;
-async function test(name, fn) {
-  await fn();
-  passed += 1;
-  console.log(`  ok   ${name}`);
-}
+async function test(name, fn) { await fn(); passed++; console.log(`  ok   ${name}`); }
+function key(byte) { return new Uint8Array(32).fill(byte); }
 
 (async () => {
-  console.log('\n  Qwertycoin Web Wallet — QMS1 Messenger\n');
-  const env = browserContext();
-  const { qms, store, messenger } = env;
+  console.log('\n  Qwertycoin Web Wallet — QMS2 Messenger\n');
+  const signalArtifact = await loadSignalModule();
+  const env = browserContext(signalArtifact.module);
+  const { qms, store, messenger, vault } = env;
   await qms.ready();
 
-  const sodiumBuildInfo = Object.fromEntries(read('vendor/libsodium/BUILDINFO.txt').trim().split(/\n/).slice(1).map(line => {
-    const split = line.indexOf('=');
-    return [line.slice(0, split), line.slice(split + 1)];
-  }));
-  assert.strictEqual(env.ctx.sodium.sodium_version_string(), sodiumBuildInfo.libsodium_runtime_version);
-
-  const alice = qms.createIdentity();
-  const bob = qms.createIdentity();
-  const mallory = qms.createIdentity();
-  const aliceInvite = qms.createInvitation(alice);
-  const bobInvite = qms.createInvitation(bob);
-  const malloryInvite = qms.createInvitation(mallory);
-
-  await test('signed personal invitations have the desktop-compatible encoding', async () => {
-    const encoded = qms.encodeInvitation(aliceInvite);
-    assert.strictEqual(encoded.length, 214);
-    assert.strictEqual(qms.hex(encoded).length, 428);
-    assert(qms.verifyInvitation(qms.decodeInvitation(encoded)));
-    const tampered = Uint8Array.from(encoded);
-    tampered[40] ^= 1;
-    assert.throws(() => qms.decodeInvitation(tampered));
+  await test('pinned libsignal WASM exposes ABI 3 and real PQXDH contact packages', async () => {
+    assert.strictEqual(signalArtifact.module.qwc_qms_wasm_abi_version(), 3);
+    const engine = await qms.signal.engineNew();
+    const prepared = await qms.signal.prepareContactPackage(engine, qms.genesis());
+    assert.strictEqual(prepared.invitationId.length, 16);
+    assert.strictEqual(prepared.fingerprint.length, 32);
+    assert(prepared.package.length > 1000, 'contact package must carry the hybrid pre-key material');
+    assert(prepared.nextState.length > engine.length / 2);
   });
 
-  await test('sealed, signed UTF-8 text round-trips only for the pinned recipient and sender', async () => {
-    const messageId = Uint8Array.from({ length: 16 }, (_, index) => index + 7);
-    const text = 'QMS: Grüße 👋 — encrypted end to end';
-    const ciphertext = qms.sealText(alice, bobInvite, messageId, text);
-    assert.strictEqual(qms.openText(bob, aliceInvite, bobInvite, messageId, ciphertext).text, text);
-    assert.throws(() => qms.openText(bob, malloryInvite, bobInvite, messageId, ciphertext));
-    const tampered = Uint8Array.from(ciphertext);
-    tampered[tampered.length - 1] ^= 1;
-    assert.throws(() => qms.openText(bob, aliceInvite, bobInvite, messageId, tampered));
+  await test('outer framing matches the independently asserted Core transport vector', async () => {
+    const sequence = (length, offset) => Uint8Array.from({ length }, (_, index) => (offset + index) & 255);
+    const context = { genesis: sequence(32, 1), invitationId: sequence(16, 33), sessionId: sequence(16, 49), rootSecret: sequence(32, 65), direction: 1 };
+    const fragments = qms.fragmentEnvelope(context, sequence(16, 17), sequence(1200, 97));
+    const digest = value => cryptoNode.createHash('sha256').update(value).digest('hex');
+    assert.strictEqual(qms.hex(fragments[0].discoveryHint), 'd6d84ae3dab889b69d24f3cbf8ad1dab');
+    assert.strictEqual(qms.hex(fragments[0].mac), 'caea82ceba3fbdfea07ea3509793de21');
+    assert.strictEqual(digest(qms.encodeFragment(fragments[0])), 'f630dacd23e94ded3c9159be1e43b2ab50151f447a024044e8f59d289c4fb3d6');
+    assert.strictEqual(digest(qms.encodeFragment(fragments[1])), '4ee38c6ea74047b292516bf8f6760c1dc9ab5e3cd18aedbf7f387c503fcf6b7e');
+    assert.strictEqual(qms.carrierExtra(fragments[0]).length, 726);
+    assert.strictEqual(digest(qms.carrierExtra(fragments[0])), '2db1d2f44112122f360cd42c82e340cffa5b6630a872d7bdc994db3a64547a9f');
   });
 
-  await test('UTF-8 and genesis bounds reject ambiguous or incompatible messages', async () => {
-    const messageId = qms.random(16);
-    assert.throws(() => qms.sealText(alice, bobInvite, messageId, '\ud800'));
-    assert.throws(() => qms.sealText(alice, bobInvite, messageId, '😀'.repeat(1025)));
-    const foreignInvite = qms.createInvitation(bob, new Uint8Array(32).fill(1));
-    assert.throws(() => qms.sealText(alice, foreignInvite, messageId, 'wrong network'));
+  await test('wallet vault derives an independent Argon2id QMS key only for password sessions', async () => {
+    const wallet = { address: 'QWC-vault', privateSpendKeyHex: '11'.repeat(32) };
+    await vault.store(wallet, 'correct horse battery staple');
+    assert.strictEqual(vault.qmsKey().length, 32);
+    const blob = JSON.parse(env.sharedSession.get('monero-web-wallet'));
+    assert.strictEqual(blob.qmsKdf.name, 'argon2id13');
+    assert(blob.qmsKdf.memlimit <= 128 * 1024 * 1024);
+    vault.clear();
+    await vault.store(wallet, '');
+    assert.strictEqual(vault.qmsKey(), null);
   });
 
-  await test('maximum text fragments, nonce segments and tx_extra round-trip canonically', async () => {
-    const messageId = qms.random(16);
-    const text = 'x'.repeat(4096);
-    const ciphertext = qms.sealText(alice, bobInvite, messageId, text);
-    const fragments = qms.fragmentCiphertext(bobInvite, messageId, ciphertext).reverse();
-    assert(fragments.length > 1 && fragments.length <= 16);
-    for (const fragment of fragments) {
-      assert(qms.verifyFragment(bobInvite, fragment));
-      const segments = qms.encodeSegments(fragment).reverse();
-      assert(qms.equal(qms.encodeFragment(fragment), qms.encodeFragment(qms.decodeSegments(segments))));
-      const carrier = qms.carrierExtra(fragment);
-      assert(carrier.length <= 1060);
-      const finalExtra = new Uint8Array(33 + carrier.length);
-      finalExtra[0] = 0x01;
-      finalExtra.set(carrier, 33);
-      assert(qms.equal(qms.encodeFragment(fragment), qms.encodeFragment(qms.decodeSegments(qms.extractSegmentsFromExtra(finalExtra)))));
-      const withAdditionalKeys = new Uint8Array(finalExtra.length + 3);
-      withAdditionalKeys.set(Uint8Array.from([0x04, 0x01, 0x00]));
-      withAdditionalKeys.set(finalExtra, 3);
-      assert(qms.equal(qms.encodeFragment(fragment), qms.encodeFragment(qms.decodeSegments(qms.extractSegmentsFromExtra(withAdditionalKeys)))));
-      const withLegacyField = new Uint8Array(finalExtra.length + 4);
-      withLegacyField.set(Uint8Array.from([0xde, 0x01, 0x01, 0x00]));
-      withLegacyField.set(finalExtra, 4);
-      assert(qms.equal(qms.encodeFragment(fragment), qms.encodeFragment(qms.decodeSegments(qms.extractSegmentsFromExtra(withLegacyField)))));
+  const aliceStore = await store.open({ address: 'QWC-Alice' }, key(0x11));
+  const bobStore = await store.open({ address: 'QWC-Bob' }, key(0x22));
+  const alice = messenger.makeClient(aliceStore);
+  const bob = messenger.makeClient(bobStore);
+
+  await test('activation creates independent encrypted QMS2 identities and survives restart', async () => {
+    const aliceFp = await alice.activate();
+    const bobFp = await bob.activate();
+    assert.match(aliceFp, /^[0-9a-f]{64}$/);
+    assert.match(bobFp, /^[0-9a-f]{64}$/);
+    assert.notStrictEqual(aliceFp, bobFp);
+    assert(!Array.from(env.sharedLocal.values()).join('').includes(aliceStore.state.cryptoState));
+    const reopened = await store.open({ address: 'QWC-Alice' }, key(0x11));
+    assert.strictEqual(reopened.state.ownFingerprint, aliceFp);
+    reopened.close();
+  });
+
+  await test('contact packages import idempotently and reject self or conflicting identity data', async () => {
+    const aliceContact = await alice.importContact('Bob', bobStore.state.ownPackage, 1700000000);
+    const bobContact = await bob.importContact('Alice', aliceStore.state.ownPackage, 1700000000);
+    assert.strictEqual(aliceContact, bobStore.state.ownFingerprint);
+    assert.strictEqual(bobContact, aliceStore.state.ownFingerprint);
+    assert.strictEqual(await alice.importContact('Bob renamed', bobStore.state.ownPackage, 1700000001), aliceContact);
+    assert.strictEqual(aliceStore.state.contacts.length, 1);
+    await assert.rejects(alice.importContact('Self', aliceStore.state.ownPackage, 1700000001), /self contact package|own QMS2 invitation/);
+  });
+
+  let firstPlan;
+  await test('4,096-byte PQXDH first message fits 7,200 bytes and canonical 0x72 carriers', async () => {
+    firstPlan = await alice.prepareOffline(bobStore.state.ownFingerprint, 'x'.repeat(4096), 1700000002);
+    assert.strictEqual(firstPlan.envelopeSize, 7200);
+    assert.strictEqual(firstPlan.encodedFragments.length, 12);
+    assert.strictEqual(firstPlan.carrierExtras.length, 12);
+    assert(firstPlan.carrierExtras.every(value => qms.unhex(value).length === 726));
+    for (const value of firstPlan.carrierExtras) {
+      const extra = qms.unhex(value);
+      const fragment = qms.decodeSegments(qms.extractSegmentsFromExtra(extra));
+      assert.strictEqual(fragment.version, 2);
+      assert.strictEqual(fragment.profile, 2);
+      assert.strictEqual(fragment.data.length, 600);
     }
-    assert.strictEqual(qms.openText(bob, aliceInvite, bobInvite, messageId, qms.reassemble(fragments)).text.length, 4096);
+    await assert.rejects(alice.prepareOffline(bobStore.state.ownFingerprint, '😀'.repeat(1025), 1700000002), /4,096/);
   });
 
-  await test('malformed segments, extras and fragment MACs are rejected', async () => {
-    const messageId = qms.random(16);
-    const fragments = qms.fragmentCiphertext(bobInvite, messageId, qms.sealText(alice, bobInvite, messageId, 'integrity'));
-    const missing = qms.encodeSegments(fragments[0]);
-    missing.pop();
-    assert.throws(() => qms.decodeSegments(missing));
-    const duplicateSegment = qms.encodeSegments(fragments[0]);
-    if (duplicateSegment.length > 1) {
-      duplicateSegment[1] = Uint8Array.from(duplicateSegment[0]);
-      assert.throws(() => qms.decodeSegments(duplicateSegment));
-    }
-    assert.throws(() => qms.extractSegmentsFromExtra(Uint8Array.from([0x01, 0x00])));
-    assert.throws(() => qms.extractSegmentsFromExtra(Uint8Array.from([0x02, 0x80])));
-    assert.throws(() => qms.extractSegmentsFromExtra(Uint8Array.from([0x02, 0x81, 0x00, 0x72])), /non-canonical/);
-    assert.throws(() => qms.extractSegmentsFromExtra(Uint8Array.from([0x82, 0x00])), /non-canonical/);
-    assert.throws(() => qms.extractSegmentsFromExtra(Uint8Array.from([0x00, 0x01])), /terminal/);
-    assert.throws(() => qms.extractSegmentsFromExtra(Uint8Array.from([0x7f])));
-    const badMac = Object.assign({}, fragments[0], { data: Uint8Array.from(fragments[0].data) });
-    badMac.data[0] ^= 1;
-    assert(!qms.verifyFragment(bobInvite, badMac));
-    assert.throws(() => qms.encodeFragment(Object.assign({}, fragments[0], { messageId: new Uint8Array(15) })), /message id/);
-    const trailing = new Uint8Array(qms.encodeFragment(fragments[0]).length + 1);
-    trailing.set(qms.encodeFragment(fragments[0]));
-    assert.throws(() => qms.decodeFragment(trailing));
+  await test('out-of-order fragments atomically advance receiver state once and ignore duplicates', async () => {
+    await messenger.testing.commitPreparedStateForTesting(aliceStore, firstPlan);
+    const before = bobStore.state.cryptoState;
+    const fragments = firstPlan.encodedFragments.slice().reverse();
+    let received = null;
+    for (let index = 0; index < fragments.length; index++) received = await bob.acceptFragment(qms.unhex(fragments[index]), { txHash: String(index).padStart(64, '0'), blockHeight: 100 + index, blockHash: `block-${index}` });
+    assert(received);
+    assert.strictEqual(received.text.length, 4096);
+    assert.notStrictEqual(bobStore.state.cryptoState, before);
+    assert.strictEqual(bobStore.state.historyEnabled, false);
+    assert.strictEqual(bobStore.state.messages.length, 0, 'history-off plaintext must not persist');
+    assert.strictEqual(bob.messages().length, 1, 'history-off plaintext remains session-only');
+    const committed = bobStore.state.cryptoState;
+    assert.strictEqual(await bob.acceptFragment(qms.unhex(fragments[0]), {}), null);
+    assert.strictEqual(bobStore.state.cryptoState, committed);
   });
 
-  await test('out-of-order confirmed fragments produce one contact-filtered message', async () => {
-    const messageId = qms.random(16);
-    const text = 'contact-isolated '.repeat(120);
-    const fragments = qms.fragmentCiphertext(bobInvite, messageId, qms.sealText(alice, bobInvite, messageId, text)).reverse();
-    const state = {
-      contacts: [
-        { id: 'mallory', invitationHex: invitationHex(qms, malloryInvite) },
-        { id: 'alice', invitationHex: invitationHex(qms, aliceInvite) }
-      ],
-      messages: [], plans: [], reassembly: [], scan: { height: 0, blockHash: '' }
+  await test('ongoing Triple Ratchet reply crosses clients and reorg never rolls ratchet state back', async () => {
+    const reply = await bob.prepareOffline(aliceStore.state.ownFingerprint, 'ongoing ratchet reply', 1700000003);
+    assert(reply.envelopeSize <= 2400);
+    await messenger.testing.commitPreparedStateForTesting(bobStore, reply);
+    let received = null;
+    for (const fragment of reply.encodedFragments) received = await alice.acceptFragment(qms.unhex(fragment), { blockHash: 'reply-block', blockHeight: 200 });
+    assert.strictEqual(received.text, 'ongoing ratchet reply');
+    const ratchetAfterReceive = aliceStore.state.cryptoState;
+    await alice.markReorg(['reply-block']);
+    assert.strictEqual(aliceStore.state.cryptoState, ratchetAfterReceive);
+    assert.strictEqual(alice.messages().find(item => item.id === reply.messageId).status, 'reorged');
+  });
+
+  await test('outer secret rotation survives a lost offer and confirms through the new discovery context', async () => {
+    const aliceContact = aliceStore.state.contacts[0];
+    const bobContact = bobStore.state.contacts[0];
+    const initialIncoming = (await qms.signal.transportContexts(qms.unhex(aliceStore.state.cryptoState), aliceContact.contactId, false))[0];
+    const deliver = async (sender, senderStore, recipient, text, at) => {
+      const plan = await sender.prepareOffline(recipient === bob ? bobStore.state.ownFingerprint : aliceStore.state.ownFingerprint, text, at);
+      await messenger.testing.commitPreparedStateForTesting(senderStore, plan);
+      let received = null;
+      for (const fragment of plan.encodedFragments) received = await recipient.acceptFragment(qms.unhex(fragment), { blockHash: `rotation-${at}`, blockHeight: at });
+      return { plan, received };
     };
-    for (let index = 0; index < fragments.length; index++) {
-      messenger.testing.acceptFragment(state, bob, bobInvite, fragments[index], {
-        txHash: String(index).padStart(64, '0'),
-        blockHeight: 100 + index,
-        blockHash: `block-${index}`,
-        createdAt: new Date(1700000000000 + index * 1000).toISOString()
-      });
-      assert(state.reassembly.length <= 1, 'one ciphertext must not be duplicated per contact');
-    }
-    assert.strictEqual(state.messages.length, 1);
-    assert.strictEqual(state.messages[0].contactId, 'alice');
-    assert.strictEqual(state.messages[0].text, text);
-    assert.strictEqual(state.messages[0].status, 'confirmed');
-    assert.strictEqual(state.reassembly.length, 0);
-    assert.strictEqual(messenger.testing.acceptFragment(state, bob, bobInvite, fragments[0], {}), null);
+
+    // Alice has sent one message already. Fifteen more reach the rotation
+    // interval; the following committed plan carries the first offer.
+    for (let index = 0; index < 15; index++) await deliver(alice, aliceStore, bob, `advance-${index}`, 1700000100 + index);
+    const lost = await alice.prepareOffline(bobStore.state.ownFingerprint, 'lost rotation offer', 1700000200);
+    await messenger.testing.commitPreparedStateForTesting(aliceStore, lost);
+    let aliceIncoming = await qms.signal.transportContexts(qms.unhex(aliceStore.state.cryptoState), aliceContact.contactId, false);
+    assert.strictEqual(aliceIncoming.length, 2, 'active and offered secrets must both be accepted');
+
+    await deliver(alice, aliceStore, bob, 'repeated rotation offer', 1700000201);
+    const bobOutgoing = await qms.signal.transportContext(qms.unhex(bobStore.state.cryptoState), bobContact.contactId, true);
+    assert(aliceIncoming.some(context => qms.equal(context.rootSecret, bobOutgoing.rootSecret)), 'receiver must switch to offered discovery secret');
+    assert(!qms.equal(initialIncoming.rootSecret, bobOutgoing.rootSecret));
+
+    await deliver(bob, bobStore, alice, 'rotation acknowledgement', 1700000202);
+    aliceIncoming = await qms.signal.transportContexts(qms.unhex(aliceStore.state.cryptoState), aliceContact.contactId, false);
+    assert.strictEqual(aliceIncoming.length, 2, 'confirmed active plus one retiring grace secret');
+    assert(aliceIncoming.some(context => qms.equal(context.rootSecret, initialIncoming.rootSecret)));
+    assert(aliceIncoming.some(context => qms.equal(context.rootSecret, bobOutgoing.rootSecret)));
   });
 
-  await test('incomplete ciphertext state is capped before contact amplification', async () => {
-    const state = { contacts: [], messages: [], plans: [], reassembly: [], scan: { height: 0, blockHash: '' } };
-    const payload = new Uint8Array(601).fill(9);
-    for (let index = 0; index < 64; index++) {
-      const first = qms.fragmentCiphertext(bobInvite, qms.random(16), payload)[0];
-      messenger.testing.acceptFragment(state, bob, bobInvite, first, {});
-    }
-    assert.strictEqual(state.reassembly.length, 64);
-    const overflow = qms.fragmentCiphertext(bobInvite, qms.random(16), payload)[0];
-    assert.throws(() => messenger.testing.acceptFragment(state, bob, bobInvite, overflow, {}), /reassembly limit/);
+  await test('plaintext history is opt-in and can be deleted independently of ratchet state', async () => {
+    await alice.setHistoryEnabled(true);
+    const plan = await bob.prepareOffline(aliceStore.state.ownFingerprint, 'persist only by opt-in', 1700000004);
+    await messenger.testing.commitPreparedStateForTesting(bobStore, plan);
+    let received = null;
+    for (const fragment of plan.encodedFragments) received = await alice.acceptFragment(qms.unhex(fragment), { blockHash: 'history-block', blockHeight: 201 });
+    assert.strictEqual(received.text, 'persist only by opt-in');
+    assert(aliceStore.state.messages.some(item => item.text === 'persist only by opt-in'));
+    const cryptoBeforeDelete = aliceStore.state.cryptoState;
+    await alice.clearHistory();
+    assert.strictEqual(aliceStore.state.messages.length, 0);
+    assert.strictEqual(aliceStore.state.cryptoState, cryptoBeforeDelete, 'history deletion must not roll back ratchet state');
   });
 
-  await test('prepared-plan cancellation deletes its message and safely releases unique inputs', async () => {
-    const plan = {
-      id: 'draft', contactId: 'alice', status: 'prepared',
-      txs: [
-        { status: 'prepared', keyImages: ['a', 'b'] },
-        { status: 'prepared', keyImages: ['b', 'c'] }
-      ]
-    };
-    const state = { plans: [plan], messages: [{ id: 'draft', direction: 'out' }] };
-    const thawed = [];
-    await messenger.testing.releasePlanInputs({ thawOutput: async keyImage => thawed.push(keyImage) }, plan);
-    assert.deepStrictEqual(thawed, ['a', 'b', 'c']);
-    messenger.testing.removeDraft(state, plan);
-    assert.strictEqual(state.plans.length, 0);
-    assert.strictEqual(state.messages.length, 0);
-    await assert.rejects(
-      messenger.testing.releasePlanInputs({ thawOutput: async () => { throw new Error('locked'); } }, plan),
-      /Unable to release/
-    );
+  await test('wrong direction, tampering, missing fragments and conflicting duplicates fail closed', async () => {
+    const plan = await alice.prepareOffline(bobStore.state.ownFingerprint, 'integrity', 1700000004);
+    const current = qms.unhex(aliceStore.state.cryptoState);
+    const contact = aliceStore.state.contacts[0];
+    const context = await qms.signal.transportContext(current, contact.contactId, true);
+    const fragment = qms.decodeFragment(qms.unhex(plan.encodedFragments[0]));
+    const wrongDirection = Object.assign({}, context, { direction: context.direction ^ 1 });
+    assert(!qms.verifyEnvelopeFragment(wrongDirection, fragment));
+    const tampered = qms.unhex(plan.encodedFragments[0]); tampered[tampered.length - 1] ^= 1;
+    assert(!qms.verifyEnvelopeFragment(context, qms.decodeFragment(tampered)));
+    assert.throws(() => qms.reassemble(plan.encodedFragments.slice(1).map(value => qms.decodeFragment(qms.unhex(value)))), /incomplete/);
+    const conflicting = qms.decodeFragment(qms.unhex(plan.encodedFragments[0])); conflicting.mac = new Uint8Array(conflicting.mac); conflicting.mac[0] ^= 1;
+    assert.throws(() => qms.reassemble([fragment, conflicting]), /conflicting/);
   });
 
-  await test('outgoing status and reorg rollback retain only chain-independent data', async () => {
-    const plan = { id: 'p', status: 'confirmed', txs: [{ status: 'confirmed', blockHeight: 9, blockHash: 'old' }] };
-    const state = {
-      plans: [plan],
-      messages: [
-        { id: 'p', direction: 'out', status: 'confirmed' },
-        { id: 'incoming', direction: 'in', status: 'confirmed' }
-      ],
-      reassembly: [{ messageId: 'partial' }],
-      scan: { height: 10, blockHash: 'old' }
-    };
-    messenger.testing.rollbackForReorg(state, 4);
-    assert.strictEqual(state.messages.length, 1);
-    assert.strictEqual(state.messages[0].status, 'broadcast');
-    assert.strictEqual(plan.status, 'broadcast');
-    assert.strictEqual(state.reassembly.length, 0);
-    assert.strictEqual(state.scan.height, 4);
+  await test('store ciphertext rejects wrong wrapping keys and corruption without plaintext leakage', async () => {
+    const serialized = env.sharedLocal.get(aliceStore.storageKey);
+    assert(serialized && !serialized.includes('ongoing ratchet reply') && !serialized.includes(aliceStore.state.cryptoState));
+    await assert.rejects(store.open({ address: 'QWC-Alice' }, key(0x44)), /Unable to decrypt/);
+    const parsed = JSON.parse(serialized);
+    parsed.ciphertext = parsed.ciphertext.slice(0, -2) + (parsed.ciphertext.endsWith('AA') ? 'BB' : 'AA');
+    env.sharedLocal.set(aliceStore.storageKey, JSON.stringify(parsed));
+    await assert.rejects(store.open({ address: 'QWC-Alice' }, key(0x11)), /Unable to decrypt/);
+    env.sharedLocal.set(aliceStore.storageKey, serialized);
   });
 
-  await test('wallet-bound QMS state is encrypted and serialized in save order', async () => {
-    const wallet = { address: 'QWC-test-wallet', privateSpendKeyHex: '11'.repeat(32) };
-    const first = await store.open(wallet);
-    first.state.messages.push({ id: 'one', text: 'plaintext must not leak' });
-    const saveOne = first.save();
-    first.state.messages.push({ id: 'two', text: 'latest snapshot' });
-    const saveTwo = first.save();
-    await Promise.all([saveOne, saveTwo]);
-    const envelope = env.values.get(first.storageKey);
-    assert(envelope && !envelope.includes('plaintext must not leak') && !envelope.includes('latest snapshot'));
-    const reopened = await store.open(wallet);
-    assert.strictEqual(reopened.state.messages.length, 2);
-    await assert.rejects(store.open({ address: wallet.address, privateSpendKeyHex: '22'.repeat(32) }), /Unable to decrypt/);
+  await test('explicit restore reset deletes session state and requires fresh contact packages', async () => {
+    const previousCryptoState = aliceStore.state.cryptoState;
+    await alice.resetState();
+    assert.strictEqual(aliceStore.state.active, false);
+    assert.strictEqual(aliceStore.state.cryptoState, '');
+    assert.strictEqual(aliceStore.state.contacts.length, 0);
+    assert.strictEqual(aliceStore.state.messages.length, 0);
+    assert(!env.sharedLocal.get(aliceStore.storageKey).includes(previousCryptoState));
   });
 
-  await test('shipped UI, worker and provenance are bound to the reviewed Messenger assets', async () => {
+  await test('ordinary-browser UI is explicitly QMS2 and cannot invoke wallet or network transport', async () => {
     const html = read('dashboard.html');
-    const engine = read('js/qwc-wallet-engine.js');
-    const dashboardScript = read('js/dashboard-page.js');
-    const messengerScript = read('js/qms-messenger.js');
-    const worker = read('vendor/qwertycoin-ts/monero.worker.js');
-    const css = read('assets/qms-messenger.css');
-    const buildInfo = Object.fromEntries(read('vendor/qwertycoin-ts/BUILDINFO.txt').trim().split(/\n/).slice(1).map(line => line.split('=')));
-    for (const value of [
-      'id="wallet-tab-messenger"', 'id="qms-section"', 'Manage contacts',
-      'Encrypt &amp; review', 'Send encrypted message', 'Copy complete invitation'
-    ]) assert(html.includes(value), `missing Messenger UI contract: ${value}`);
-    assert(html.indexOf('vendor/libsodium/libsodium-sumo.js') < html.indexOf('js/qms-protocol.js'));
-    assert(html.indexOf('js/qms-messenger.js') < html.indexOf('js/dashboard-page.js'));
-    assert(engine.includes('monero.worker.js?v=6e067bb0fd551614'));
-    assert(engine.includes('invoke(walletId, "freezeOutput", [keyImage])'));
-    assert(engine.includes('daemonGetBlocksByRangeChunked'));
-    assert(engine.includes('const DAEMON_CHUNK_BYTES = 3000000'));
-    assert(messengerScript.includes("name === 'overview' && activePlan(state)"));
-    assert(messengerScript.includes('overviewTab.disabled = recovering || !!activePlan(state)'));
-    assert(dashboardScript.includes('await qmsController.scan()'));
-    assert(worker.includes('extraHex'));
-    assert(worker.includes('freezeOutput'));
-    assert(worker.includes('daemonGetBlocksByRangeChunked'));
-    assert.strictEqual(sha256('vendor/qwertycoin-ts/monero.js'), buildInfo.monero_js_sha256);
-    assert.strictEqual(sha256('vendor/qwertycoin-ts/monero.worker.js'), buildInfo.monero_worker_js_sha256);
-    assert.strictEqual(sha256('vendor/qwertycoin-ts/monero.worker.js.LICENSE.txt'), buildInfo.monero_worker_license_sha256);
-    assert.strictEqual(buildInfo.qwertycoin_ts_revision, '42050b20f13089251d1aa7d117a1eea515da0444');
-    assert.strictEqual(buildInfo.qwertycoin_cpp_revision, 'd4a8cc78ac80e96a2e362ac0ad2630bf99a0759c');
-    assert.strictEqual(sodiumBuildInfo.libsodium_wrappers_sumo_package, 'libsodium-wrappers-sumo@0.8.4');
-    assert.strictEqual(sodiumBuildInfo.libsodium_sumo_package, 'libsodium-sumo@0.8.4');
-    assert.strictEqual(sha256('vendor/libsodium/libsodium-wrappers.js'), sodiumBuildInfo.libsodium_wrappers_js_sha256);
-    assert.strictEqual(sha256('vendor/libsodium/libsodium-sumo.js'), sodiumBuildInfo.libsodium_sumo_js_sha256);
-    assert.strictEqual(sha256('vendor/libsodium/LICENSE.libsodium-wrappers-sumo'), sodiumBuildInfo.license_sha256);
-    assert(!/@import|url\(\s*["']?https?:/i.test(css), 'Messenger CSS must not load external assets');
-    assert(fs.statSync(path.join(root, 'vendor/libsodium/LICENSE.libsodium-wrappers-sumo')).size > 500);
+    const script = read('js/qms-messenger.js');
+    assert(html.includes('QMS2 · Experimental'));
+    assert(html.includes('id="qms-activate"'));
+    assert(html.includes('cannot prove Tor-only routing without direct fallback'));
+    assert(script.includes('Sending and chain sync are blocked in a normal browser'));
+    assert(!script.includes('reconnectDaemon'));
+    assert(!script.includes('createTransaction'));
+    assert(!script.includes('sendTransaction'));
+    assert(!script.includes('getWallet()'));
+    assert(script.includes('scan: async () => false'));
+    assert(script.includes('MAX_REASSEMBLIES = 64'));
+    assert(script.includes('MAX_REASSEMBLY_BYTES = 8 * 1024 * 1024'));
+    assert(64 * qms.C.MAX_CIPHERTEXT_BYTES <= 8 * 1024 * 1024,
+      'the 64-message cap must remain stricter than the aggregate byte cap for canonical envelopes');
   });
 
-  console.log(`\n  ${passed} QMS1 Messenger tests passed\n`);
-})().catch(error => {
-  console.error(error);
-  process.exit(1);
-});
+  await test('artifact pins and source graph are recorded for independent CI reproduction', async () => {
+    const sums = fs.readFileSync(path.join(signalArtifact.dist, 'QMS2-SHA256SUMS'), 'utf8');
+    for (const line of sums.trim().split(/\n/)) {
+      const [expected, file] = line.trim().split(/\s+/);
+      if (!file || file === '-') continue;
+      assert.strictEqual(cryptoNode.createHash('sha256').update(fs.readFileSync(path.join(signalArtifact.dist, file))).digest('hex'), expected);
+    }
+    const html = read('dashboard.html');
+    assert(html.indexOf('vendor/libsodium/libsodium-sumo.js') < html.indexOf('js/wallet-vault.js'));
+    assert(html.indexOf('js/qms-protocol.js') < html.indexOf('js/qms-messenger.js'));
+    assert.strictEqual(sha256('vendor/libsodium/libsodium-wrappers.js'), Object.fromEntries(read('vendor/libsodium/BUILDINFO.txt').trim().split(/\n/).slice(1).map(line => line.split('='))).libsodium_wrappers_js_sha256);
+  });
+
+  alice.close(); bob.close();
+  console.log(`\n  ${passed} QMS2 Messenger tests passed\n`);
+})().catch(error => { console.error(error); process.exit(1); });
