@@ -122,7 +122,7 @@ Called every ~30 seconds by the dashboard while the wallet view is open.
 
 The dashboard computes the **available balance** as
 `total_received - total_sent - locked_funds` (parsed from atomic string,
-displayed via `MoneroRPC.formatXMR()`).
+displayed via `QwertycoinRPC.formatXMR()`).
 
 The dashboard shows a **scanning indicator** while
 `scanned_height < blockchain_height`. The percentage is

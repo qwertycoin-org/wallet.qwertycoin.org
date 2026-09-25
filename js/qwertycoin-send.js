@@ -1,22 +1,22 @@
 // SPDX-License-Identifier: MIT
 /**
- * monero-send.js — Send-transaction module for monero-web
+ * qwertycoin-send.js — Qwertycoin Web Wallet send-transaction module
  *
  * Uses MoneroCore (mymonero-loader.js) for address validation and tx signing.
  * Output selection and fee calculation are done in pure JS to avoid the
  * async callback issue with the WASM's send_funds() function.
  *
  * Public API:
- *   MoneroSend.validateAddress(addr)        → { valid, reason, subaddress, integrated }
- *   MoneroSend.estimateFee(keys, to, amt, prio)  → { fee_xmr, fee_atomic, per_byte }
- *   MoneroSend.send(keys, to, amt, prio, pid, preview) → Promise<{ tx_hash }>
+ *   QwertycoinSend.validateAddress(addr)        → { valid, reason, subaddress, integrated }
+ *   QwertycoinSend.estimateFee(keys, to, amt, prio)  → { fee_xmr, fee_atomic, per_byte }
+ *   QwertycoinSend.send(keys, to, amt, prio, pid, preview) → Promise<{ tx_hash }>
  *
  * Depends on:
  *   js/mymonero-loader.js  (MoneroCore — WASM bridge for sendStep2)
  *   js/lws-client.js       (LwsClient for network I/O)
  */
 
-const MoneroSend = (function () {
+const QwertycoinSend = (function () {
   'use strict';
 
   const ATOMIC_PER_XMR = 100000000n;
@@ -134,7 +134,7 @@ const MoneroSend = (function () {
     // the real key_image and check if it truly appears in the spend list.
     //
     // Also skip pre-RingCT outputs (empty rct field): those were created
-    // before Monero's v9 hard fork (Oct 2018) and cannot be included in
+    // by legacy pre-v9 transaction formats and cannot be included in
     // modern RingCT transactions regardless of their unspent status.
     var spendableOuts = [];
     for (var oi = 0; oi < unspentResp.outputs.length; oi++) {
@@ -306,4 +306,4 @@ const MoneroSend = (function () {
   return { validateAddress: validateAddress, estimateFee: estimateFee, send: send };
 })();
 
-if (typeof module !== 'undefined' && module.exports) module.exports = MoneroSend;
+if (typeof module !== 'undefined' && module.exports) module.exports = QwertycoinSend;

@@ -56,7 +56,7 @@ Some compatibility filenames and JavaScript symbols retain inherited `monero`
 or `mymonero` names. They are technical provenance, not user-facing product
 support. Copyright and license notices must remain intact, including
 `js/mymonero-core/LICENSE.txt`,
-`vendor/qwertycoin-ts/monero.worker.js.LICENSE.txt`,
+`vendor/qwertycoin-ts/qwertycoin.worker.js.LICENSE.txt`,
 `vendor/qwertycoin-ts/qms2/LICENSE.qwc-qms-crypto`,
 `vendor/qwertycoin-ts/qms2/THIRD_PARTY.qwc-qms-crypto.md`,
 `vendor/libsodium/LICENSE.libsodium-wrappers-sumo`, `fonts/LICENSES.md`, the

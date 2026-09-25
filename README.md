@@ -110,7 +110,7 @@ Upstream copyright, license texts and notices are preserved in:
 - [`LICENSE`](LICENSE)
 - [`fonts/LICENSES.md`](fonts/LICENSES.md)
 - [`js/mymonero-core/LICENSE.txt`](js/mymonero-core/LICENSE.txt)
-- [`vendor/qwertycoin-ts/monero.worker.js.LICENSE.txt`](vendor/qwertycoin-ts/monero.worker.js.LICENSE.txt)
+- [`vendor/qwertycoin-ts/qwertycoin.worker.js.LICENSE.txt`](vendor/qwertycoin-ts/qwertycoin.worker.js.LICENSE.txt)
 - `vendor/qwertycoin-ts/qms2/LICENSE.qwc-qms-crypto`
 - `vendor/qwertycoin-ts/qms2/THIRD_PARTY.qwc-qms-crypto.md`
 - [`vendor/libsodium/LICENSE.libsodium-wrappers-sumo`](vendor/libsodium/LICENSE.libsodium-wrappers-sumo)

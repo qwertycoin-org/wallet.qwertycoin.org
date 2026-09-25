@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * monero-subaddress.js — Monero subaddress derivation
+ * qwertycoin-subaddress.js — Qwertycoin subaddress derivation
  *
  * Subaddress (major i, minor j) for an account with private view key `a`
  * and public spend key `D`:
@@ -14,10 +14,10 @@
  * The (0,0) subaddress index is reserved for the primary address and must
  * NOT be encoded as a subaddress — it has its own (standard) network byte.
  *
- * Depends on: keccak256.js, monero-ed25519.js
+ * Depends on: keccak256.js, qwertycoin-ed25519.js
  */
 
-const MoneroSubaddress = (function () {
+const QwertycoinSubaddress = (function () {
   'use strict';
 
   const SUBADDRESS_NETBYTE = 0x2A; // mainnet subaddress prefix → "8..."
@@ -44,7 +44,7 @@ const MoneroSubaddress = (function () {
    * Hash-to-scalar: sc_reduce32(Keccak256(data))
    */
   function hashToScalar(data) {
-    return MoneroEd25519.sc_reduce32(Keccak256.hash(data));
+    return QwertycoinEd25519.sc_reduce32(Keccak256.hash(data));
   }
 
   /**
@@ -56,8 +56,8 @@ const MoneroSubaddress = (function () {
   }
 
   /**
-   * Encode a Monero subaddress from its public spend & view points.
-   * Mirrors MoneroKeys.encodeAddress() but with the subaddress netbyte.
+   * Encode a Qwertycoin subaddress from its public spend and view points.
+   * Mirrors QwertycoinKeys.encodeAddress() but with the subaddress netbyte.
    */
   function encodeSubaddress(pubSpend, pubView) {
     const raw = new Uint8Array(69);
@@ -69,7 +69,7 @@ const MoneroSubaddress = (function () {
     raw[66] = hash[1];
     raw[67] = hash[2];
     raw[68] = hash[3];
-    return MoneroEd25519.cnBase58Encode(raw);
+    return QwertycoinEd25519.cnBase58Encode(raw);
   }
 
   /**
@@ -85,9 +85,9 @@ const MoneroSubaddress = (function () {
       throw new Error('Index (0,0) is the primary address, not a subaddress');
     }
     const m  = subaddressSecret(keys.privateViewKey, major, minor);
-    const mG = MoneroEd25519.scalarmultBase(m);
-    const subSpend = MoneroEd25519.pointAdd(keys.publicSpendKey, mG);
-    const subView  = MoneroEd25519.scalarmult(keys.privateViewKey, subSpend);
+    const mG = QwertycoinEd25519.scalarmultBase(m);
+    const subSpend = QwertycoinEd25519.pointAdd(keys.publicSpendKey, mG);
+    const subView  = QwertycoinEd25519.scalarmult(keys.privateViewKey, subSpend);
     const address  = encodeSubaddress(subSpend, subView);
     return {
       major,
@@ -107,4 +107,4 @@ const MoneroSubaddress = (function () {
   return { generate, subaddressSecret, encodeSubaddress };
 })();
 
-if (typeof module !== 'undefined' && module.exports) module.exports = MoneroSubaddress;
+if (typeof module !== 'undefined' && module.exports) module.exports = QwertycoinSubaddress;

@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
-/* monero-wordlists.js - All Monero mnemonic language wordlists */
+/* qwertycoin-wordlists.js - All Qwertycoin mnemonic language wordlists */
 /* Source: monero-project/monero/src/mnemonics/ */
 /* Auto-generated from C++ header files */
 
-/* English is loaded separately in monero-english-wordlist.js */
+/* English is loaded separately in qwertycoin-english-wordlist.js */
 
 /* Chinese (simplified) (简体中文) - prefix: 1 */
-MoneroWordList.register("chinese_simplified", [
+QwertycoinWordList.register("chinese_simplified", [
   "的", "一", "是", "在", "不", "了",
   "有", "和", "人", "这", "中", "大",
   "为", "上", "个", "国", "我", "以",
@@ -281,7 +281,7 @@ MoneroWordList.register("chinese_simplified", [
 ], 1);
 
 /* Dutch (Nederlands) - prefix: 4 */
-MoneroWordList.register("dutch", [
+QwertycoinWordList.register("dutch", [
   "aalglad", "aalscholver", "aambeeld", "aangeef", "aanlandig", "aanvaard",
   "aanwakker", "aapmens", "aarten", "abdicatie", "abnormaal", "abrikoos",
   "accu", "acuut", "adjudant", "admiraal", "advies", "afbidding",
@@ -556,7 +556,7 @@ MoneroWordList.register("dutch", [
 ], 4);
 
 /* Esperanto (Esperanto) - prefix: 4 */
-MoneroWordList.register("esperanto", [
+QwertycoinWordList.register("esperanto", [
   "abako", "abdiki", "abelo", "abituriento", "ablativo", "abnorma",
   "abonantoj", "abrikoto", "absoluta", "abunda", "acetono", "acida",
   "adapti", "adekvata", "adheri", "adicii", "adjektivo", "administri",
@@ -831,7 +831,7 @@ MoneroWordList.register("esperanto", [
 ], 4);
 
 /* French (Français) - prefix: 4 */
-MoneroWordList.register("french", [
+QwertycoinWordList.register("french", [
   "abandon", "abattre", "aboi", "abolir", "aborder", "abri",
   "absence", "absolu", "abuser", "acacia", "acajou", "accent",
   "accord", "accrocher", "accuser", "acerbe", "achat", "acheter",
@@ -1106,7 +1106,7 @@ MoneroWordList.register("french", [
 ], 4);
 
 /* German (Deutsch) - prefix: 4 */
-MoneroWordList.register("german", [
+QwertycoinWordList.register("german", [
   "Abakus", "Abart", "abbilden", "Abbruch", "Abdrift", "Abendrot",
   "Abfahrt", "abfeuern", "Abflug", "abfragen", "Abglanz", "abhärten",
   "abheben", "Abhilfe", "Abitur", "Abkehr", "Ablauf", "ablecken",
@@ -1381,7 +1381,7 @@ MoneroWordList.register("german", [
 ], 4);
 
 /* Italian (Italiano) - prefix: 4 */
-MoneroWordList.register("italian", [
+QwertycoinWordList.register("italian", [
   "abbinare", "abbonato", "abisso", "abitare", "abominio", "accadere",
   "accesso", "acciaio", "accordo", "accumulo", "acido", "acqua",
   "acrobata", "acustico", "adattare", "addetto", "addio", "addome",
@@ -1656,7 +1656,7 @@ MoneroWordList.register("italian", [
 ], 4);
 
 /* Japanese (日本語) - prefix: 3 */
-MoneroWordList.register("japanese", [
+QwertycoinWordList.register("japanese", [
   "あいこくしん", "あいさつ", "あいだ", "あおぞら", "あかちゃん", "あきる",
   "あけがた", "あける", "あこがれる", "あさい", "あさひ", "あしあと",
   "あじわう", "あずかる", "あずき", "あそぶ", "あたえる", "あたためる",
@@ -1931,7 +1931,7 @@ MoneroWordList.register("japanese", [
 ], 3);
 
 /* Lojban (Lojban) - prefix: 4 */
-MoneroWordList.register("lojban", [
+QwertycoinWordList.register("lojban", [
   "backi", "bacru", "badna", "badri", "bajra", "bakfu",
   "bakni", "bakri", "baktu", "balji", "balni", "balre",
   "balvi", "bambu", "bancu", "bandu", "banfi", "bangu",
@@ -2206,7 +2206,7 @@ MoneroWordList.register("lojban", [
 ], 4);
 
 /* Portuguese (Português) - prefix: 4 */
-MoneroWordList.register("portuguese", [
+QwertycoinWordList.register("portuguese", [
   "abaular", "abdominal", "abeto", "abissinio", "abjeto", "ablucao",
   "abnegar", "abotoar", "abrutalhar", "absurdo", "abutre", "acautelar",
   "accessorios", "acetona", "achocolatado", "acirrar", "acne", "acovardar",
@@ -2481,7 +2481,7 @@ MoneroWordList.register("portuguese", [
 ], 4);
 
 /* Russian (Русский) - prefix: 4 */
-MoneroWordList.register("russian", [
+QwertycoinWordList.register("russian", [
   "абажур", "абзац", "абонент", "абрикос", "абсурд", "авангард",
   "август", "авиация", "авоська", "автор", "агат", "агент",
   "агитатор", "агнец", "агония", "агрегат", "адвокат", "адмирал",
@@ -2756,7 +2756,7 @@ MoneroWordList.register("russian", [
 ], 4);
 
 /* Spanish (Español) - prefix: 4 */
-MoneroWordList.register("spanish", [
+QwertycoinWordList.register("spanish", [
   "ábaco", "abdomen", "abeja", "abierto", "abogado", "abono",
   "aborto", "abrazo", "abrir", "abuelo", "abuso", "acabar",
   "academia", "acceso", "acción", "aceite", "acelga", "acento",
@@ -3031,7 +3031,7 @@ MoneroWordList.register("spanish", [
 ], 4);
 
 /* English (old) (English (old)) - prefix: 4 */
-MoneroWordList.register("english_old", [
+QwertycoinWordList.register("english_old", [
   "like", "just", "love", "know", "never", "want",
   "time", "out", "there", "make", "look", "eye",
   "down", "only", "think", "heart", "back", "then",

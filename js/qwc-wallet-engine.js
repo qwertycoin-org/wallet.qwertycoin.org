@@ -3,7 +3,7 @@
 
 const QwcWalletEngine = (() => {
   const MAINNET = 0;
-  const WORKER_PATH = "/vendor/qwertycoin-ts/monero.worker.js?v=aa932c3e16252147";
+  const WORKER_PATH = "/vendor/qwertycoin-ts/qwertycoin.worker.js?v=56adb2f12e6cf22e";
   const REQUEST_TIMEOUT_MS = 180000;
   const DAEMON_CHUNK_BYTES = 3000000;
   let worker;

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
-/* monero-english-wordlist.js — Canonical 1626-word English mnemonic list */
+/* qwertycoin-english-wordlist.js — Canonical 1626-word English mnemonic list */
 /* Source: monero-project/monero/src/mnemonics/english.h */
-/* Prefix length: 3 (unique 3-char prefixes per Monero spec) */
+/* Prefix length: 3 (unique 3-char prefixes in the Qwertycoin mnemonic format) */
 
-MoneroWordList.register("english", [
+QwertycoinWordList.register("english", [
   "abbey", "abducts", "ability", "ablaze", "abnormal", "abort", "abrasive", "absorb",
   "abyss", "academy", "aces", "aching", "acidic", "acoustic", "acquire", "across",
   "actress", "acumen", "adapt", "addicted", "adept", "adhesive", "adjust", "adopt",

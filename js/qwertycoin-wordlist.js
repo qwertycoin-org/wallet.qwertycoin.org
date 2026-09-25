@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 /**
- * monero-wordlist.js
- * Monero Mnemonic Word List Handler
+ * qwertycoin-wordlist.js
+ * Qwertycoin mnemonic word-list handler
  *
  * The actual word list (1626 words) must be loaded from the canonical
- * Monero source and registered via MoneroWordList.register().
+ * upstream source and registered via QwertycoinWordList.register().
  * 
  * Download the English list from:
  *   https://raw.githubusercontent.com/monero-project/monero/master/src/mnemonics/english.h
@@ -15,7 +15,7 @@
  *   - 3-word-group → bytes decoding
  */
 
-const MoneroWordList = (function () {
+const QwertycoinWordList = (function () {
   'use strict';
 
   const lists = {};
@@ -48,7 +48,7 @@ const MoneroWordList = (function () {
     // when the wordlist has duplicate prefixes (legacy English).
     if (list.fullMap[w] !== undefined) return list.fullMap[w];
     // Fall back to prefix-truncated lookup for users who entered the
-    // shortened prefix form of a word (allowed by Monero CLI).
+    // shortened prefix form of a word accepted by the Qwertycoin CLI.
     const prefix = w.substring(0, list.prefixLen);
     const idx = list.map[prefix];
     return idx !== undefined ? idx : -1;
@@ -144,4 +144,4 @@ const MoneroWordList = (function () {
   return { register, lookup, wordAt, verifyChecksum, decodeWords, encodeBytes, appendChecksum, isLoaded, crc32 };
 })();
 
-if (typeof module !== 'undefined' && module.exports) module.exports = MoneroWordList;
+if (typeof module !== 'undefined' && module.exports) module.exports = QwertycoinWordList;

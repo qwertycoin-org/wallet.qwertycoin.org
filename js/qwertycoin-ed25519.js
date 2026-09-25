@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 /**
- * monero-ed25519.js
- * Ed25519 scalar and group operations for Monero key derivation
+ * qwertycoin-ed25519.js
+ * Ed25519 scalar and group operations for Qwertycoin key derivation
  *
  * Implements:
  *   - sc_reduce32: reduce a 32-byte scalar mod l (ed25519 group order)
  *   - scalarmult_base: multiply ed25519 basepoint by scalar → public key
- *   - Monero base58 encoding with 4-byte Keccak checksum
+ *   - CryptoNote-style base58 encoding with 4-byte Keccak checksum
  *
  * The ed25519 group order:
  *   l = 2^252 + 27742317777372353535851937790883648493
@@ -14,7 +14,7 @@
  * Field: GF(2^255 - 19)
  */
 
-const MoneroEd25519 = (function () {
+const QwertycoinEd25519 = (function () {
   'use strict';
 
   // ─── Big-number helpers (256-bit via Float64 limbs, 16 limbs × 16 bits) ───
@@ -350,13 +350,13 @@ const MoneroEd25519 = (function () {
     return result;
   }
 
-  // ─── Monero Base58 encoding ───
+  // ─── Qwertycoin Base58 encoding ───
 
   const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 
   /**
    * Encode a block of bytes (up to 8) into base58
-   * Monero uses a specific block-based base58 (not Bitcoin's)
+   * Qwertycoin uses CryptoNote's block-based base58 (not Bitcoin's)
    */
   function encodeBlock(data, buf, startIdx) {
     // Block sizes: input bytes → output base58 chars
@@ -385,7 +385,7 @@ const MoneroEd25519 = (function () {
   }
 
   /**
-   * Monero base58 encode (block-based, different from Bitcoin base58check)
+   * Qwertycoin base58 encode (block-based, different from Bitcoin base58check)
    * @param {Uint8Array} data - Raw bytes to encode
    * @returns {string} Base58 encoded string
    */
@@ -526,5 +526,5 @@ const MoneroEd25519 = (function () {
 })();
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = MoneroEd25519;
+  module.exports = QwertycoinEd25519;
 }

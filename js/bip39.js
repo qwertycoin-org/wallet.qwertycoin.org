@@ -10,7 +10,7 @@
  *   3. Hardened-only path m/44'/128'/0' (Monero coin type per SLIP-0044 = 128)
  *      Each step:  I = HMAC-SHA512(parent_chaincode,
  *                                  0x00 || parent_key || ser32(0x80000000+i))
- *   4. The final 32-byte key is fed to MoneroKeys.deriveFromSeed.
+ *   4. The final 32-byte key is fed to QwertycoinKeys.deriveFromSeed.
  *
  * All hashing uses SubtleCrypto, so the public entry point is async.
  *

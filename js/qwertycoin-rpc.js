@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 /**
- * monero-rpc.js
- * Monero Remote Node JSON-RPC Client
+ * qwertycoin-rpc.js
+ * Qwertycoin remote-node JSON-RPC client
  *
- * Connects to Monero remote nodes from the browser via fetch().
+ * Connects to Qwertycoin remote nodes from the browser via fetch().
  * Supports automatic failover between multiple nodes.
  *
  * RPC Methods implemented:
@@ -16,7 +16,7 @@
  * Depends on: nothing (standalone module)
  */
 
-const MoneroRPC = (function () {
+const QwertycoinRPC = (function () {
   'use strict';
 
   // Same-origin RPC proxy. Both Cloudflare Pages Functions and Netlify
@@ -351,4 +351,4 @@ const MoneroRPC = (function () {
   };
 })();
 
-if (typeof module !== 'undefined' && module.exports) module.exports = MoneroRPC;
+if (typeof module !== 'undefined' && module.exports) module.exports = QwertycoinRPC;

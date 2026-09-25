@@ -296,7 +296,7 @@ test('seed import exposes only the canonical 25-word Qwertycoin format', () => {
   linked(verify, "I don't know");
   linked(controller, "25: { name:'Qwertycoin Standard'");
   linked(controller, 'wordCount !== 25');
-  linked(controller, 'MoneroKeys.deriveFromMnemonic(mnemonic, null, network)');
+  linked(controller, 'QwertycoinKeys.deriveFromMnemonic(mnemonic, null, network)');
   linked(controller, "const NODE_KEY = 'qwertycoin-web-node-url'");
   linked(controller, 'const QWC_SECS_PER_BLOCK = 120');
   linked(controller, 'const QWC_RESTORE_SAFETY_BLOCKS = QWC_BLOCKS_PER_DAY');
@@ -346,7 +346,7 @@ test('upstream copyright and license files remain byte-identical', () => {
     'LICENSE': 'b58a4a825d432d14c2cd68ebd53a2ce4902a94f64d194d292ac9764a9a70fd12',
     'fonts/LICENSES.md': '8c81763fcb09a26583fb2c793264a4a6f4ae9facd3d98224df49710b86716782',
     'js/mymonero-core/LICENSE.txt': 'c7c911457cac352c3d79c43cde1dc26a2c0355234e737060cac7a786647ac87f',
-    'vendor/qwertycoin-ts/monero.worker.js.LICENSE.txt': 'b56b6cbccbd5a0370d840ea4000f0267499febfdf00897d50e948aceb71d5d87',
+    'vendor/qwertycoin-ts/qwertycoin.worker.js.LICENSE.txt': 'b56b6cbccbd5a0370d840ea4000f0267499febfdf00897d50e948aceb71d5d87',
   };
   for (const [file, digest] of Object.entries(expected)) {
     const actual = crypto.createHash('sha256').update(fs.readFileSync(path.join(root, file))).digest('hex');
