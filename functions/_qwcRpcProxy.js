@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 const DEFAULT_NODES = [
-  "https://integration-explorer.qwertycoin.org/api/v1/wallet-rpc"
+  "https://explorer.qwertycoin.org/qwc-rpc"
 ];
 
 const JSON_RPC_METHODS = new Set([
