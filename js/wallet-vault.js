@@ -179,12 +179,16 @@ const WalletVault = (function () {
     return qmsUnlockKey ? new Uint8Array(qmsUnlockKey) : null;
   }
 
+  function hasQmsKey() {
+    return !!(qmsUnlockKey && qmsUnlockKey.length === QMS_PWHASH_BYTES);
+  }
+
   function clear() {
     replaceQmsUnlockKey(null);
     sessionStorage.removeItem(STORAGE_KEY);
   }
 
-  return { store, hasBlob, isLocked, readPlain, unlock, qmsKey, clear };
+  return { store, hasBlob, isLocked, readPlain, unlock, qmsKey, hasQmsKey, clear };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = WalletVault;

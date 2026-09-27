@@ -1999,18 +1999,28 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ─── Auto-refresh height every 30s ───
   const qmsTab = document.getElementById('wallet-tab-messenger');
   const qmsUnsupportedSeedFormat = !!walletKeys.seedFormat && walletKeys.seedFormat !== 'standard';
-  if ((isWatchOnly || qmsUnsupportedSeedFormat) && qmsTab) {
+  const qmsPasswordProtected = typeof WalletVault !== 'undefined' && WalletVault.hasQmsKey && WalletVault.hasQmsKey();
+  if ((isWatchOnly || qmsUnsupportedSeedFormat || !qmsPasswordProtected) && qmsTab) {
+    qmsTab.hidden = true;
     qmsTab.disabled = true;
     qmsTab.setAttribute('aria-disabled', 'true');
-    qmsTab.title = qmsUnsupportedSeedFormat
+    qmsTab.title = !qmsPasswordProtected
+      ? 'Messenger requires a password-protected wallet session'
+      : qmsUnsupportedSeedFormat
       ? 'Messenger currently requires a standard 25-word QWC wallet'
       : 'Messenger requires an unlocked full wallet';
     const status = document.getElementById('qms-status');
-    if (status) status.textContent = qmsUnsupportedSeedFormat
+    if (status) status.textContent = !qmsPasswordProtected
+      ? 'Messenger is unavailable without a Session password.'
+      : qmsUnsupportedSeedFormat
       ? 'Messenger is unavailable for this seed format in the current browser wallet.'
       : 'Messenger is unavailable for watch-only wallets.';
   }
-  if (typeof QmsMessenger !== 'undefined' && !qmsController && !isWatchOnly && !qmsUnsupportedSeedFormat) {
+  if (typeof QmsMessenger !== 'undefined' && !qmsController && !isWatchOnly && !qmsUnsupportedSeedFormat && qmsPasswordProtected) {
+    qmsTab.hidden = false;
+    qmsTab.disabled = false;
+    qmsTab.removeAttribute('aria-disabled');
+    qmsTab.title = '';
     QmsMessenger.mount({
       getWalletKeys: () => walletKeys,
       getWallet: getQwcWallet,

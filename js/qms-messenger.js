@@ -185,6 +185,18 @@ const QmsMessenger = (() => {
     const dashboard = el('dashboard');
     const overviewNodes = Array.from(dashboard.children).filter(node => node !== section && node.id !== 'wallet-tabs' && !node.classList.contains('wallet-header'));
     const originalHidden = new Map(overviewNodes.map(node => [node, node.hidden]));
+    const wallet = options.getWalletKeys();
+    const qmsKey = typeof WalletVault !== 'undefined' && WalletVault.qmsKey ? WalletVault.qmsKey() : null;
+    if (!qmsKey) {
+      messengerTab.hidden = true;
+      messengerTab.disabled = true;
+      messengerTab.setAttribute('aria-hidden', 'true');
+      section.hidden = true;
+      return { scan: async () => false, clear: () => {}, client: null };
+    }
+    messengerTab.hidden = false;
+    messengerTab.disabled = false;
+    messengerTab.removeAttribute('aria-hidden');
     let renderCurrent = () => {};
     function status(message, kind) { const node = el('qms-status'); node.textContent = message || ''; node.className = 'qms-status' + (kind ? ' ' + kind : ''); }
     function error(value) { status(value && value.message ? value.message : String(value), 'error'); }
@@ -198,35 +210,6 @@ const QmsMessenger = (() => {
     }
     overviewTab.addEventListener('click', () => setTab('overview'));
     messengerTab.addEventListener('click', () => setTab('messenger'));
-
-    const wallet = options.getWalletKeys();
-    const qmsKey = typeof WalletVault !== 'undefined' && WalletVault.qmsKey ? WalletVault.qmsKey() : null;
-    if (!qmsKey) {
-      const reason = 'QMS2 requires a password-protected wallet session. Back up this wallet, then reopen it with a Session password to activate Messenger.';
-      renderCurrent = () => {
-        const activate = el('qms-activate');
-        activate.hidden = false; activate.disabled = true; activate.title = reason;
-        el('qms-manage-toggle').disabled = true;
-        el('qms-own-invitation').value = '';
-        el('qms-own-fingerprint').textContent = reason;
-        el('qms-copy-invitation').disabled = true;
-        el('qms-import-contact').disabled = true;
-        el('qms-contact-name').disabled = true;
-        el('qms-contact-invitation').disabled = true;
-        const contacts = el('qms-contact-list'); contacts.replaceChildren(empty('Messenger is unavailable until this wallet is reopened with a Session password.'));
-        el('qms-chat-name').textContent = 'Password-protected session required';
-        el('qms-chat-fingerprint').textContent = '';
-        const messages = el('qms-message-list'); messages.replaceChildren(empty('No QMS2 identity or ratchet state was created in this unencrypted session.'));
-        const manage = el('qms-manage-list'); manage.replaceChildren(empty('No encrypted contacts are available.'));
-        el('qms-history-enabled').checked = false; el('qms-history-enabled').disabled = true;
-        el('qms-clear-history').disabled = true; el('qms-reset-state').disabled = true;
-        el('qms-message-input').disabled = true; el('qms-prepare').disabled = true; el('qms-send').disabled = true; el('qms-cancel').disabled = true;
-        el('qms-review').hidden = true; el('qms-manage-view').hidden = true; el('qms-chat-view').hidden = false;
-        status(reason, 'error');
-      };
-      renderCurrent();
-      return { scan: async () => false, clear: () => {}, client: null };
-    }
 
     await QmsProtocol.ready();
     const store = await QmsStore.open(wallet, qmsKey);

@@ -86,12 +86,14 @@ function key(byte) { return new Uint8Array(32).fill(byte); }
   await test('wallet vault derives an independent Argon2id QMS key only for password sessions', async () => {
     const wallet = { address: 'QWC-vault', privateSpendKeyHex: '11'.repeat(32) };
     await vault.store(wallet, 'correct horse battery staple');
+    assert.strictEqual(vault.hasQmsKey(), true);
     assert.strictEqual(vault.qmsKey().length, 32);
     const blob = JSON.parse(env.sharedSession.get('monero-web-wallet'));
     assert.strictEqual(blob.qmsKdf.name, 'argon2id13');
     assert(blob.qmsKdf.memlimit <= 128 * 1024 * 1024);
     vault.clear();
     await vault.store(wallet, '');
+    assert.strictEqual(vault.hasQmsKey(), false);
     assert.strictEqual(vault.qmsKey(), null);
   });
 
@@ -287,6 +289,7 @@ function key(byte) { return new Uint8Array(32).fill(byte); }
     const script = read('js/qms-messenger.js');
     const verifyScript = read('js/verify-page.js');
     assert(html.includes('QMS2 · Experimental'));
+    assert(html.includes('id="wallet-tab-messenger" type="button" role="tab" aria-selected="false" hidden'));
     assert(html.includes('id="qms-activate"'));
     assert(html.includes('cannot prove Tor-only routing without direct fallback'));
     assert(script.includes('Sending and chain sync are blocked in a normal browser'));
@@ -295,11 +298,13 @@ function key(byte) { return new Uint8Array(32).fill(byte); }
     assert(!script.includes('sendTransaction'));
     assert(!script.includes('getWallet()'));
     assert(script.includes('scan: async () => false'));
-    assert(script.includes('Back up this wallet, then reopen it with a Session password to activate Messenger.'));
-    assert(script.indexOf("messengerTab.addEventListener('click'") < script.indexOf('if (!qmsKey)'),
-      'Messenger navigation must be wired before the password-session gate');
-    assert(script.includes('activate.hidden = false; activate.disabled = true'),
-      'passwordless sessions must render the Messenger explanation without enabling QMS2');
+    assert(script.indexOf('if (!qmsKey)') < script.indexOf("messengerTab.addEventListener('click'"),
+      'passwordless sessions must return before Messenger navigation is wired');
+    assert(script.includes('messengerTab.hidden = true'));
+    assert(script.includes('messengerTab.hidden = false'));
+    const dashboardScript = read('js/dashboard-page.js');
+    assert(dashboardScript.includes('!qmsPasswordProtected'));
+    assert(dashboardScript.includes('qmsTab.hidden = true'));
     assert(verifyScript.match(/optional for wallet use · required for Messenger/g)?.length === 2,
       'both wallet-entry flows must disclose the Messenger password requirement');
     assert(script.includes('MAX_REASSEMBLIES = 64'));
