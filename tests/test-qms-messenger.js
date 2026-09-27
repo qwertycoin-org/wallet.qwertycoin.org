@@ -285,6 +285,7 @@ function key(byte) { return new Uint8Array(32).fill(byte); }
   await test('ordinary-browser UI is explicitly QMS2 and cannot invoke wallet or network transport', async () => {
     const html = read('dashboard.html');
     const script = read('js/qms-messenger.js');
+    const verifyScript = read('js/verify-page.js');
     assert(html.includes('QMS2 · Experimental'));
     assert(html.includes('id="qms-activate"'));
     assert(html.includes('cannot prove Tor-only routing without direct fallback'));
@@ -294,6 +295,13 @@ function key(byte) { return new Uint8Array(32).fill(byte); }
     assert(!script.includes('sendTransaction'));
     assert(!script.includes('getWallet()'));
     assert(script.includes('scan: async () => false'));
+    assert(script.includes('Back up this wallet, then reopen it with a Session password to activate Messenger.'));
+    assert(script.indexOf("messengerTab.addEventListener('click'") < script.indexOf('if (!qmsKey)'),
+      'Messenger navigation must be wired before the password-session gate');
+    assert(script.includes('activate.hidden = false; activate.disabled = true'),
+      'passwordless sessions must render the Messenger explanation without enabling QMS2');
+    assert(verifyScript.match(/optional for wallet use · required for Messenger/g)?.length === 2,
+      'both wallet-entry flows must disclose the Messenger password requirement');
     assert(script.includes('MAX_REASSEMBLIES = 64'));
     assert(script.includes('MAX_REASSEMBLY_BYTES = 8 * 1024 * 1024'));
     assert(64 * qms.C.MAX_CIPHERTEXT_BYTES <= 8 * 1024 * 1024,

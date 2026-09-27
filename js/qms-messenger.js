@@ -180,19 +180,12 @@ const QmsMessenger = (() => {
   }
 
   async function mount(options) {
-    await QmsProtocol.ready();
-    const wallet = options.getWalletKeys();
-    const qmsKey = typeof WalletVault !== 'undefined' && WalletVault.qmsKey ? WalletVault.qmsKey() : null;
-    if (!qmsKey) throw new Error('QMS2 requires a password-protected wallet session; reopen the wallet with a session password');
-    const store = await QmsStore.open(wallet, qmsKey);
-    sodium.memzero(qmsKey);
-    const client = makeClient(store), state = client.state;
     const el = id => document.getElementById(id);
     const section = el('qms-section'), overviewTab = el('wallet-tab-overview'), messengerTab = el('wallet-tab-messenger');
     const dashboard = el('dashboard');
     const overviewNodes = Array.from(dashboard.children).filter(node => node !== section && node.id !== 'wallet-tabs' && !node.classList.contains('wallet-header'));
     const originalHidden = new Map(overviewNodes.map(node => [node, node.hidden]));
-    let selectedId = state.contacts.find(item => !item.removed)?.fingerprint || null;
+    let renderCurrent = () => {};
     function status(message, kind) { const node = el('qms-status'); node.textContent = message || ''; node.className = 'qms-status' + (kind ? ' ' + kind : ''); }
     function error(value) { status(value && value.message ? value.message : String(value), 'error'); }
     function empty(message) { const node = document.createElement('div'); node.className = 'qms-empty'; node.textContent = message; return node; }
@@ -201,15 +194,51 @@ const QmsMessenger = (() => {
       overviewNodes.forEach(node => { node.hidden = show ? true : originalHidden.get(node); });
       overviewTab.classList.toggle('active', !show); messengerTab.classList.toggle('active', show);
       overviewTab.setAttribute('aria-selected', String(!show)); messengerTab.setAttribute('aria-selected', String(show));
-      if (show) render();
+      if (show) renderCurrent();
     }
     overviewTab.addEventListener('click', () => setTab('overview'));
     messengerTab.addEventListener('click', () => setTab('messenger'));
 
+    const wallet = options.getWalletKeys();
+    const qmsKey = typeof WalletVault !== 'undefined' && WalletVault.qmsKey ? WalletVault.qmsKey() : null;
+    if (!qmsKey) {
+      const reason = 'QMS2 requires a password-protected wallet session. Back up this wallet, then reopen it with a Session password to activate Messenger.';
+      renderCurrent = () => {
+        const activate = el('qms-activate');
+        activate.hidden = false; activate.disabled = true; activate.title = reason;
+        el('qms-manage-toggle').disabled = true;
+        el('qms-own-invitation').value = '';
+        el('qms-own-fingerprint').textContent = reason;
+        el('qms-copy-invitation').disabled = true;
+        el('qms-import-contact').disabled = true;
+        el('qms-contact-name').disabled = true;
+        el('qms-contact-invitation').disabled = true;
+        const contacts = el('qms-contact-list'); contacts.replaceChildren(empty('Messenger is unavailable until this wallet is reopened with a Session password.'));
+        el('qms-chat-name').textContent = 'Password-protected session required';
+        el('qms-chat-fingerprint').textContent = '';
+        const messages = el('qms-message-list'); messages.replaceChildren(empty('No QMS2 identity or ratchet state was created in this unencrypted session.'));
+        const manage = el('qms-manage-list'); manage.replaceChildren(empty('No encrypted contacts are available.'));
+        el('qms-history-enabled').checked = false; el('qms-history-enabled').disabled = true;
+        el('qms-clear-history').disabled = true; el('qms-reset-state').disabled = true;
+        el('qms-message-input').disabled = true; el('qms-prepare').disabled = true; el('qms-send').disabled = true; el('qms-cancel').disabled = true;
+        el('qms-review').hidden = true; el('qms-manage-view').hidden = true; el('qms-chat-view').hidden = false;
+        status(reason, 'error');
+      };
+      renderCurrent();
+      return { scan: async () => false, clear: () => {}, client: null };
+    }
+
+    await QmsProtocol.ready();
+    const store = await QmsStore.open(wallet, qmsKey);
+    sodium.memzero(qmsKey);
+    const client = makeClient(store), state = client.state;
+    let selectedId = state.contacts.find(item => !item.removed)?.fingerprint || null;
+
     function render() {
       const activeContacts = state.contacts.filter(item => !item.removed);
       const activate = el('qms-activate');
-      activate.hidden = state.active; activate.disabled = state.active;
+      activate.hidden = state.active; activate.disabled = state.active; activate.title = '';
+      el('qms-manage-toggle').disabled = false;
       el('qms-own-invitation').value = state.active ? state.ownPackage : '';
       el('qms-own-fingerprint').textContent = state.active ? `Fingerprint: ${state.ownFingerprint}` : 'Activate QMS2 to create an independent Messenger identity.';
       el('qms-copy-invitation').disabled = !state.active;
@@ -238,12 +267,14 @@ const QmsMessenger = (() => {
       const manage = el('qms-manage-list'); manage.replaceChildren();
       for (const item of activeContacts) { const row = document.createElement('div'); row.className = 'qms-manage-row'; const label = document.createElement('span'); label.textContent = `${item.name} · ${item.fingerprint}`; row.append(label); manage.append(row); }
       el('qms-history-enabled').checked = state.historyEnabled;
+      el('qms-history-enabled').disabled = false; el('qms-clear-history').disabled = false; el('qms-reset-state').disabled = false;
       const bytes = new TextEncoder().encode(el('qms-message-input').value).length;
       el('qms-byte-count').textContent = `${bytes.toLocaleString()} / 4,096 UTF-8 bytes`;
       el('qms-message-input').disabled = true; el('qms-prepare').disabled = true; el('qms-send').disabled = true; el('qms-cancel').disabled = true;
       el('qms-review').hidden = true;
       status('QMS2 crypto and encrypted contacts are available offline. Sending and chain sync are blocked in a normal browser because it cannot prove Tor-only routing without direct fallback.', 'error');
     }
+    renderCurrent = render;
     el('qms-activate').addEventListener('click', async () => { try { el('qms-activate').disabled = true; await client.activate(); render(); } catch (cause) { error(cause); el('qms-activate').disabled = false; } });
     el('qms-copy-invitation').addEventListener('click', async () => { try { await navigator.clipboard.writeText(state.ownPackage); status('Complete QMS2 contact package copied.', 'ok'); } catch (cause) { error(cause); } });
     el('qms-import-contact').addEventListener('click', async () => { try { const fingerprint = await client.importContact(el('qms-contact-name').value, el('qms-contact-invitation').value); selectedId = fingerprint; el('qms-contact-name').value = ''; el('qms-contact-invitation').value = ''; render(); status(`Contact imported. Confirm fingerprint ${fingerprint}`, 'ok'); } catch (cause) { error(cause); } });
