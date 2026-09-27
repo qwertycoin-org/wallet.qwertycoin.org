@@ -1,5 +1,5 @@
 # Qwertycoin Web Wallet build manifest
-# Generated 2026-09-25T06:10:05Z from commit 7f8041f
+# Generated 2026-09-27T11:58:03Z from commit f6778a3
 #
 # Verify the live deployment matches a specific git tag with:
 #   git checkout v0.1.0
@@ -78,7 +78,7 @@ ca640caf3cd05b49cd2489124d49239623a2a7910f4e7603327f0fcd0fd311ca  vendor/libsodi
 ce7b8ba14db085aadb72359226ccf7273225db31dad653242a7726a10dabbbd4  vendor/libsodium/LICENSE.libsodium-wrappers-sumo
 a3d0b7eb2c24ba6b5401d88717e65bc6a92786d211bc8b91ed746d24226180f3  vendor/libsodium/libsodium-sumo.js
 4e2c5442899321d7d9aea69bef71a3c24a6eab5911b74a5c1ad8bc8c733b0a15  vendor/libsodium/libsodium-wrappers.js
-288f7754b2d1a84c164e2d3abc73e12ca9ed66f58df11abe0e7059297e77ce90  vendor/qwertycoin-ts/BUILDINFO.txt
+ef553a6249494603e3e9a2d25dad1647941d76fbb32fda57de0ed30dbe576a15  vendor/qwertycoin-ts/BUILDINFO.txt
 5cc1632ee3d0da4178ba986d350c861149eb20468c4210723bbdf5a2c5e33c3a  vendor/qwertycoin-ts/qms2/LICENSE.qwc-qms-crypto
 57b3f01f6bfdfdb74636e99a1ba4cb09b5c5fbd3428623950e75381eb34fcc47  vendor/qwertycoin-ts/qms2/QMS2-SHA256SUMS
 48da3e471be91076947eb2608ef4dc1a0e58067e453be285acf9741c338fbbb8  vendor/qwertycoin-ts/qms2/THIRD_PARTY.qwc-qms-crypto.md

@@ -335,15 +335,15 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
 
     assert(buildInfo.includes('genesis_hash=4f95857586e2c66063c277370eda99cd75897d773af09f0c3cd1e22f7e87db39'),
       'Reset-1 mainnet genesis is missing from bundled worker provenance');
-    assert(buildInfo.includes('core_revision=efd0667129d52c89157cb36241a703c3becfb52f'),
+    assert(buildInfo.includes('core_revision=cd6ce02da439cd54eafbda68d952f9d88c7fd994'),
       'QMS-enabled Reset-1 core revision is missing from bundled worker provenance');
-    assert(buildInfo.includes('qwertycoin_cpp_revision=6648ca39a7d2982fa0b13eb72f11e5b98e81417c'),
+    assert(buildInfo.includes('qwertycoin_cpp_revision=46179a320807fd5f90541b3c6e61b654b07e963a'),
       'qwertycoin-cpp custom-extra source binding is missing');
-    assert(buildInfo.includes('qwertycoin_ts_revision=afa2770d1cf54ebede0ff224e3108238d14eac5e'),
+    assert(buildInfo.includes('qwertycoin_ts_revision=e919999842133f0bd667c292ddcf02966473d202'),
       'qwertycoin-ts custom-extra source binding is missing');
     assert(buildInfo.includes('libsignal_revision=e8cc2dddd578859b4a029c9c94670b24ce2b616a'),
       'pinned libsignal source revision is missing');
-    assert(buildInfo.includes('github_actions_run=36100969802'),
+    assert(buildInfo.includes('github_actions_run=36316957328'),
       'reviewed QMS2 artifact workflow is missing');
     assert(buildInfo.includes('unbound_1_22_0_source_sha256=c5dd1bdef5d5685b2cedb749158dd152c52d44f65529a34ac15cd88d4b1b3d43'),
       'verified Unbound source provenance is missing');
