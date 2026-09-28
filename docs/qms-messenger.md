@@ -1,12 +1,15 @@
-# QMS1 Messenger in the Web Wallet
+# QMS1/Fast Messenger in the Web Wallet
 
-The web wallet's **Messenger** tab is compatible with the experimental QMS1
-implementation in Qwertycoin GUI `v2.0.3-rc2`. It uses normal QWC
-transactions as carriers; nodes, miners and consensus rules are unchanged.
+The web wallet's **Messenger** tab implements the experimental QMS1/Fast
+profile shared with the corresponding desktop GUI source branch. It uses
+normal QWC transactions as carriers; nodes, miners and consensus rules are
+unchanged. Deleted release-candidate binaries are not a compatibility target.
 
 ## Test flow
 
-1. Open **Messenger → Manage contacts** in each full wallet.
+1. Open each full wallet with a non-empty **Session password**, then open
+   **Messenger → Manage contacts**. Passwordless sessions do not display the
+   Messenger tab and do not initialize Messenger state.
 2. Give the complete 428-character personal invitation to the other person
    over a confidential channel. The invitation contains a discovery secret and
    must not be posted publicly.
@@ -40,6 +43,8 @@ imported again.
 - 214-byte signed invitations and 96-byte fragment headers
 - 600-byte fragment payloads, up to 16 fragments and 4,096 UTF-8 text bytes
 - Existing 1,060-byte `tx_extra` relay limit; no protocol-limit changes
+- No fixed padding buckets: `Hello` produces one 277-byte ciphertext fragment
+  and one 393-byte carrier `tx_extra`, hence one carrier transaction
 
 The browser assembles and validates the exact `tx_extra` bytes before asking
 the vendored Qwertycoin WebAssembly wallet to build each non-relayed carrier.
@@ -59,11 +64,11 @@ derived incoming state and rescans from the wallet restore height.
 ## Local storage
 
 QMS identity keys, invitations, contacts, messages, reassembly state and the
-prepared-transaction journal are serialized into one AES-256-GCM envelope in
-`localStorage`. Its non-extractable key is derived with HKDF-SHA-256 from the
-wallet private spend key and a random per-wallet salt. The wallet address is
-hashed for the storage key. Plaintext QMS private material is not written to
-browser storage.
+prepared-transaction journal are serialized into one XChaCha20-Poly1305
+envelope in `localStorage`. A random data key encrypts the state and is wrapped
+by a separate Argon2id-derived key available only to a non-empty Session
+password. The wallet address is hashed for the storage key. Plaintext QMS
+private material and the Session password are not written to browser storage.
 
 This protects at-rest records from casual storage inspection, not from hostile
 code executing in the unlocked wallet origin, a compromised browser extension
@@ -77,7 +82,8 @@ or a compromised operating system.
   blockchain metadata even though message content is encrypted.
 - Personal invitations are confidential capabilities. Use a separate channel
   to verify fingerprints.
-- Messenger is disabled for watch-only wallets. The current browser sender
+- Messenger is hidden without a non-empty Session password and disabled for
+  watch-only wallets. The current browser sender
   supports standard 25-word QWC wallets (including a standard wallet restored
   from its spend key), not BIP-39 or polyseed imports. Hardware, multisig,
   integrated-address and payment-ID message flows are not supported.

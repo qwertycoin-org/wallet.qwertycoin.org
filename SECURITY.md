@@ -18,7 +18,7 @@ In scope:
 - browser-side Qwertycoin scanning and transaction signing
 - local spend-key message signing and signature verification
 - QMS1 invitation, encryption, fragment reassembly and prepared-carrier handling
-- wallet-bound encrypted Messenger contacts, journals and chat history
+- Session-password-bound encrypted Messenger contacts, journals and chat history
 - strict `pool.qwertycoin.org` payout-challenge validation
 - `WalletVault` encrypted session storage and idle locking
 - the restricted QWC RPC and binary scanner gateways

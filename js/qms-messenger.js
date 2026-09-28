@@ -199,7 +199,9 @@ const QmsMessenger = (() => {
     await QmsProtocol.ready();
     const walletKeys = options.getWalletKeys();
     if (!walletKeys || !walletKeys.privateSpendKeyHex) throw new Error('Messenger requires an unlocked full wallet');
-    const store = await QmsStore.open(walletKeys), state = normalizeState(store.state);
+    const qmsKey = options.getQmsKey && options.getQmsKey();
+    if (!(qmsKey instanceof Uint8Array) || qmsKey.length !== 32) throw new Error('Messenger requires a non-empty Session password');
+    const store = await QmsStore.open(walletKeys, qmsKey), state = normalizeState(store.state);
     if (!state.identity) state.identity = identityToJson(QmsProtocol.createIdentity());
     const identity = identityFromJson(state.identity);
     if (!state.ownInvitation) state.ownInvitation = QmsProtocol.hex(QmsProtocol.encodeInvitation(QmsProtocol.createInvitation(identity)));
@@ -508,6 +510,7 @@ const QmsMessenger = (() => {
       clear() {
         selectedId = null;
         try { sodium.memzero(identity.boxSecret); sodium.memzero(identity.signSecret); } catch (_) {}
+        store.close();
       },
       scan
     };

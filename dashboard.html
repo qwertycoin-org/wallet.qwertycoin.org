@@ -248,15 +248,15 @@ footer p{font-size:.65rem;color:var(--text-dim)}
 
       <div class="wallet-tabs fade-in" id="wallet-tabs" role="tablist" aria-label="Wallet sections">
         <button class="wallet-tab active" id="wallet-tab-overview" type="button" role="tab" aria-selected="true">Wallet</button>
-        <button class="wallet-tab" id="wallet-tab-messenger" type="button" role="tab" aria-selected="false">Messenger</button>
+        <button class="wallet-tab" id="wallet-tab-messenger" type="button" role="tab" aria-selected="false" hidden>Messenger</button>
       </div>
 
       <section id="qms-section" class="qms-shell" role="tabpanel" aria-labelledby="wallet-tab-messenger" hidden>
         <header class="qms-heading">
-          <div><span class="qms-kicker">QMS1 · Experimental</span><h1>Messenger</h1></div>
+          <div><span class="qms-kicker">QMS1 · Fast Profile · Experimental</span><h1>Messenger</h1></div>
           <button class="action-btn" id="qms-manage-toggle" type="button">Manage contacts</button>
         </header>
-        <p class="qms-security-note">End-to-end encrypted with libsodium sealed boxes and Ed25519 signatures. This MVP has no forward secrecy or post-quantum protection. Messages use normal QWC transaction fees and appear after their carrier transactions are confirmed.</p>
+        <p class="qms-security-note">Compact authenticated end-to-end encryption with libsodium sealed boxes and Ed25519 signatures. A short message normally needs one carrier transaction. QMS1/Fast has no forward secrecy or post-quantum protection. Messenger requires a non-empty Session password; messages use normal QWC transaction fees and appear after their carrier transactions are confirmed.</p>
         <div id="qms-status" class="qms-status" aria-live="polite"></div>
 
         <div id="qms-chat-view" class="qms-chat-layout">

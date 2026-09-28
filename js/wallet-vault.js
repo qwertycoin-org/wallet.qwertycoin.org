@@ -29,6 +29,10 @@ const WalletVault = (function () {
 
   const STORAGE_KEY = 'monero-web-wallet';
   const PBKDF2_ITERATIONS = 250000;
+  const QMS_PWHASH_OPSLIMIT = 2;
+  const QMS_PWHASH_MEMLIMIT = 64 * 1024 * 1024;
+  const QMS_PWHASH_BYTES = 32;
+  let qmsUnlockKey = null;
 
   function b64(bytes) {
     let s = '';
@@ -56,6 +60,26 @@ const WalletVault = (function () {
     );
   }
 
+  async function deriveQmsUnlockKey(password, salt, opslimit, memlimit) {
+    if (typeof sodium === 'undefined') throw new Error('QMS1 password protection is unavailable');
+    await sodium.ready;
+    const key = sodium.crypto_pwhash(
+      QMS_PWHASH_BYTES,
+      String(password),
+      salt,
+      opslimit,
+      memlimit,
+      sodium.crypto_pwhash_ALG_ARGON2ID13
+    );
+    if (!(key instanceof Uint8Array) || key.length !== QMS_PWHASH_BYTES) throw new Error('QMS1 Argon2id key derivation failed');
+    return key;
+  }
+
+  function replaceQmsUnlockKey(value) {
+    if (qmsUnlockKey && typeof sodium !== 'undefined' && sodium.memzero) sodium.memzero(qmsUnlockKey);
+    qmsUnlockKey = value ? new Uint8Array(value) : null;
+  }
+
   /**
    * Store wallet keys. If password is empty/falsy the keys are stored
    * in plaintext (encrypted:false). Otherwise they are AES-GCM encrypted.
@@ -68,6 +92,7 @@ const WalletVault = (function () {
       try { sessionStorage.setItem('monero-web-fresh-wallet', '1'); } catch (e) {}
     }
     if (!password) {
+      replaceQmsUnlockKey(null);
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
         encrypted: false,
         keys
@@ -75,6 +100,7 @@ const WalletVault = (function () {
       return;
     }
     const salt = crypto.getRandomValues(new Uint8Array(16));
+    const qmsSalt = (typeof sodium !== 'undefined') ? crypto.getRandomValues(new Uint8Array(16)) : null;
     const iv   = crypto.getRandomValues(new Uint8Array(12));
     const key  = await deriveKey(password, salt, PBKDF2_ITERATIONS);
     const ct   = new Uint8Array(await crypto.subtle.encrypt(
@@ -82,14 +108,25 @@ const WalletVault = (function () {
       key,
       new TextEncoder().encode(JSON.stringify(keys))
     ));
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
+    const qmsKey = qmsSalt
+      ? await deriveQmsUnlockKey(password, qmsSalt, QMS_PWHASH_OPSLIMIT, QMS_PWHASH_MEMLIMIT)
+      : null;
+    replaceQmsUnlockKey(qmsKey);
+    const envelope = {
       encrypted:  true,
       version:    1,
       iterations: PBKDF2_ITERATIONS,
       salt:       b64(salt),
       iv:         b64(iv),
       ciphertext: b64(ct)
-    }));
+    };
+    if (qmsSalt) envelope.qmsKdf = {
+        name: 'argon2id13',
+        opslimit: QMS_PWHASH_OPSLIMIT,
+        memlimit: QMS_PWHASH_MEMLIMIT,
+        salt: b64(qmsSalt)
+      };
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(envelope));
   }
 
   function readBlob() {
@@ -129,14 +166,31 @@ const WalletVault = (function () {
     } catch (e) {
       throw new Error('Wrong password');
     }
+    const qmsKdf = b.qmsKdf;
+    if (!qmsKdf || qmsKdf.name !== 'argon2id13'
+        || !Number.isInteger(qmsKdf.opslimit) || qmsKdf.opslimit < 1 || qmsKdf.opslimit > 4
+        || !Number.isInteger(qmsKdf.memlimit) || qmsKdf.memlimit < 8 * 1024 * 1024 || qmsKdf.memlimit > 128 * 1024 * 1024) {
+      replaceQmsUnlockKey(null);
+    } else {
+      replaceQmsUnlockKey(await deriveQmsUnlockKey(password, unb64(qmsKdf.salt), qmsKdf.opslimit, qmsKdf.memlimit));
+    }
     return JSON.parse(new TextDecoder().decode(plain));
   }
 
+  function qmsKey() {
+    return qmsUnlockKey ? new Uint8Array(qmsUnlockKey) : null;
+  }
+
+  function hasQmsKey() {
+    return !!(qmsUnlockKey && qmsUnlockKey.length === QMS_PWHASH_BYTES);
+  }
+
   function clear() {
+    replaceQmsUnlockKey(null);
     sessionStorage.removeItem(STORAGE_KEY);
   }
 
-  return { store, hasBlob, isLocked, readPlain, unlock, clear };
+  return { store, hasBlob, isLocked, readPlain, unlock, qmsKey, hasQmsKey, clear };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = WalletVault;

@@ -14,11 +14,18 @@ const sha256 = file => cryptoNode.createHash('sha256').update(fs.readFileSync(pa
 
 function browserContext() {
   const values = new Map();
+  const sessionValues = new Map();
   const localStorage = {
     getItem: key => values.has(key) ? values.get(key) : null,
     setItem: (key, value) => values.set(key, String(value)),
     removeItem: key => values.delete(key),
     clear: () => values.clear()
+  };
+  const sessionStorage = {
+    getItem: key => sessionValues.has(key) ? sessionValues.get(key) : null,
+    setItem: (key, value) => sessionValues.set(key, String(value)),
+    removeItem: key => sessionValues.delete(key),
+    clear: () => sessionValues.clear()
   };
   const ctx = {
     console,
@@ -30,6 +37,7 @@ function browserContext() {
     setTimeout,
     clearTimeout,
     localStorage,
+    sessionStorage,
     atob: value => Buffer.from(value, 'base64').toString('binary'),
     btoa: value => Buffer.from(value, 'binary').toString('base64')
   };
@@ -39,6 +47,7 @@ function browserContext() {
   for (const file of [
     'vendor/libsodium/libsodium-sumo.js',
     'vendor/libsodium/libsodium-wrappers.js',
+    'js/wallet-vault.js',
     'js/qms-protocol.js',
     'js/qms-store.js',
     'js/qms-messenger.js'
@@ -47,6 +56,7 @@ function browserContext() {
     ctx,
     values,
     qms: vm.runInContext('QmsProtocol', ctx),
+    vault: vm.runInContext('WalletVault', ctx),
     store: vm.runInContext('QmsStore', ctx),
     messenger: vm.runInContext('QmsMessenger', ctx)
   };
@@ -66,7 +76,7 @@ async function test(name, fn) {
 (async () => {
   console.log('\n  Qwertycoin Web Wallet — QMS1 Messenger\n');
   const env = browserContext();
-  const { qms, store, messenger } = env;
+  const { qms, store, messenger, vault } = env;
   await qms.ready();
 
   const sodiumBuildInfo = Object.fromEntries(read('vendor/libsodium/BUILDINFO.txt').trim().split(/\n/).slice(1).map(line => {
@@ -137,6 +147,15 @@ async function test(name, fn) {
       assert(qms.equal(qms.encodeFragment(fragment), qms.encodeFragment(qms.decodeSegments(qms.extractSegmentsFromExtra(withLegacyField)))));
     }
     assert.strictEqual(qms.openText(bob, aliceInvite, bobInvite, messageId, qms.reassemble(fragments)).text.length, 4096);
+  });
+
+  await test('a short Fast Profile message uses one compact carrier transaction', async () => {
+    const messageId = Uint8Array.from({ length: 16 }, (_, index) => index + 13);
+    const ciphertext = qms.sealText(alice, bobInvite, messageId, 'Hello');
+    assert.strictEqual(ciphertext.length, 277);
+    const fragments = qms.fragmentCiphertext(bobInvite, messageId, ciphertext);
+    assert.strictEqual(fragments.length, 1);
+    assert.strictEqual(qms.carrierExtra(fragments[0]).length, 393);
   });
 
   await test('malformed segments, extras and fragment MACs are rejected', async () => {
@@ -245,9 +264,21 @@ async function test(name, fn) {
     assert.strictEqual(state.scan.height, 4);
   });
 
-  await test('wallet-bound QMS state is encrypted and serialized in save order', async () => {
+  await test('session password derives a dedicated QMS1/Fast key', async () => {
+    const wallet = { address: 'QWC-password-test', privateSpendKeyHex: '33'.repeat(32) };
+    await vault.store(wallet, 'correct horse battery staple');
+    assert.strictEqual(vault.hasQmsKey(), true);
+    assert.strictEqual(vault.qmsKey().length, 32);
+    vault.clear();
+    assert.strictEqual(vault.hasQmsKey(), false);
+    await vault.store(wallet, '');
+    assert.strictEqual(vault.hasQmsKey(), false);
+  });
+
+  await test('password-bound QMS state is encrypted and serialized in save order', async () => {
     const wallet = { address: 'QWC-test-wallet', privateSpendKeyHex: '11'.repeat(32) };
-    const first = await store.open(wallet);
+    const key = env.ctx.sodium.randombytes_buf(32);
+    const first = await store.open(wallet, key);
     first.state.messages.push({ id: 'one', text: 'plaintext must not leak' });
     const saveOne = first.save();
     first.state.messages.push({ id: 'two', text: 'latest snapshot' });
@@ -255,9 +286,11 @@ async function test(name, fn) {
     await Promise.all([saveOne, saveTwo]);
     const envelope = env.values.get(first.storageKey);
     assert(envelope && !envelope.includes('plaintext must not leak') && !envelope.includes('latest snapshot'));
-    const reopened = await store.open(wallet);
+    const reopened = await store.open(wallet, key);
     assert.strictEqual(reopened.state.messages.length, 2);
-    await assert.rejects(store.open({ address: wallet.address, privateSpendKeyHex: '22'.repeat(32) }), /Unable to decrypt/);
+    await assert.rejects(store.open(wallet, env.ctx.sodium.randombytes_buf(32)), /Unable to decrypt/);
+    first.close();
+    reopened.close();
   });
 
   await test('shipped UI, worker and provenance are bound to the reviewed Messenger assets', async () => {
@@ -269,7 +302,8 @@ async function test(name, fn) {
     const css = read('assets/qms-messenger.css');
     const buildInfo = Object.fromEntries(read('vendor/qwertycoin-ts/BUILDINFO.txt').trim().split(/\n/).slice(1).map(line => line.split('=')));
     for (const value of [
-      'id="wallet-tab-messenger"', 'id="qms-section"', 'Manage contacts',
+      'id="wallet-tab-messenger" type="button" role="tab" aria-selected="false" hidden',
+      'id="qms-section"', 'Manage contacts',
       'Encrypt &amp; review', 'Send encrypted message', 'Copy complete invitation'
     ]) assert(html.includes(value), `missing Messenger UI contract: ${value}`);
     assert(html.indexOf('vendor/libsodium/libsodium-sumo.js') < html.indexOf('js/qms-protocol.js'));
@@ -281,6 +315,9 @@ async function test(name, fn) {
     assert(messengerScript.includes("name === 'overview' && activePlan(state)"));
     assert(messengerScript.includes('overviewTab.disabled = recovering || !!activePlan(state)'));
     assert(dashboardScript.includes('await qmsController.scan()'));
+    assert(dashboardScript.includes('WalletVault.hasQmsKey()'));
+    assert(dashboardScript.includes('qmsTab.hidden = true'));
+    assert(dashboardScript.indexOf('qmsPasswordProtected') < dashboardScript.indexOf('QmsMessenger.mount'));
     assert(worker.includes('extraHex'));
     assert(worker.includes('freezeOutput'));
     assert(worker.includes('daemonGetBlocksByRangeChunked'));
