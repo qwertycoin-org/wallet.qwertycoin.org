@@ -34,7 +34,7 @@ Cloudflare Pages
 └── abuse controls for transaction submission
 
 Qwertycoin infrastructure
-└── Integration Explorer's restricted, allowlisted wallet RPC gateway
+└── Production Explorer's restricted, allowlisted wallet RPC gateway
 ```
 
 The seed, private spend key and private view key remain in the browser. The RPC
@@ -83,10 +83,11 @@ python3 -m http.server 8000
 
 For full wallet operation, configure the Pages functions or an equivalent same-origin gateway against a restricted `qwertycoind` RPC endpoint. Do not expose unrestricted administrative RPC publicly.
 
-The QMS feature preview intentionally uses the isolated Integration Explorer
-gateway while its wallet synchronization and carrier flow are being proved.
-This is not the generic Explorer HTML/API endpoint: only the wallet-required
-RPC path and method allowlists are forwarded.
+The QMS feature preview uses the Production Explorer's restricted wallet
+gateway after its synchronization, carrier and receive paths were proved on
+the isolated Integration Explorer. This is not the generic Explorer HTML/API
+endpoint: only the wallet-required RPC path and method allowlists are
+forwarded.
 
 ## Verification
 

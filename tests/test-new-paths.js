@@ -318,10 +318,14 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
     const blockScanRoute = fs.readFileSync(path.join(__dirname, '../functions/get_blocks_by_height.bin.js'), 'utf8');
     const lws = fs.readFileSync(path.join(__dirname, '../js/lws-client.js'), 'utf8');
 
-    assert(proxy.includes('https://integration-explorer.qwertycoin.org/api/v1/wallet-rpc'),
-      'integration QWC RPC endpoint missing');
-    assert(pathProxy.includes('https://integration-explorer.qwertycoin.org/api/v1/wallet-rpc'),
-      'path-based integration QWC RPC endpoint missing');
+    assert(proxy.includes('https://explorer.qwertycoin.org/api/v1/wallet-rpc'),
+      'production QWC RPC endpoint missing');
+    assert(pathProxy.includes('https://explorer.qwertycoin.org/api/v1/wallet-rpc'),
+      'path-based production QWC RPC endpoint missing');
+    assert(!proxy.includes('https://integration-explorer.qwertycoin.org'),
+      'integration QWC RPC endpoint must not be used by the production candidate');
+    assert(!pathProxy.includes('https://integration-explorer.qwertycoin.org'),
+      'path-based integration QWC RPC endpoint must not be used by the production candidate');
     assert(pathProxy.includes('"/get_blocks_by_height.bin"'),
       'canonical block scan RPC path is not allowed');
     assert(pathProxy.includes('path === "/get_blocks_by_height.bin" ? "/getblocks_by_height.bin" : path'),

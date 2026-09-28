@@ -1,5 +1,5 @@
 # Qwertycoin Web Wallet build manifest
-# Generated 2026-09-28T14:46:49Z from commit 040e8e9
+# Generated 2026-09-28T16:01:01Z from commit 294c48f
 #
 # Verify the live deployment matches a specific git tag with:
 #   git checkout v0.1.0
@@ -69,7 +69,7 @@ a89e09d29278744721e647b205a9a85f6dd3622a1f0d2d4c3804333cf28e5061  js/polyseed.js
 a2007ecab7a22e81f1c4d0a04f5af21abd8ee8cefd4edda87b7fe2d1bcc87e11  js/qms-store.js
 839e954daff7a6c601479b60403c5ddea4958412405a694a25cdfb18e6c89773  js/qr-scanner.js
 5f5e2c80f5ba8b2b68d771fc44da7b5fd4a3e256526f78f985644f99e0df84c4  js/qrcodegen.js
-fb1ddc687ec183acf5a5aa5947b7a2e5234dada6653b664918fdb2fd995265be  js/qwc-wallet-engine.js
+eb8b810ae84e6723613b262bb67f150b59587881f368161186dfbf3306f37389  js/qwc-wallet-engine.js
 bc60c8a627e7b1e84acd99b4f4301bb7eb5851b44352b89876a94dc2f0622619  js/verify-page.js
 1aec2c7db0de5138f1dc79ff83d7ebc15d3bb0647a74d9859faf531a1a1e8e21  js/wallet-vault.js
 b924e7e9b5ec42e2864678ea35116925ad349eaaa785c9d1bc1533e6002a5062  privacy.html

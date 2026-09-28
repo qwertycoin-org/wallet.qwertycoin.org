@@ -356,6 +356,9 @@ async function test(name, fn) {
     assert(engine.includes('monero.worker.js?v=6e067bb0fd551614'));
     assert(engine.includes('invoke(walletId, "freezeOutput", [keyImage])'));
     assert(engine.includes('daemonGetBlocksByRangeChunked'));
+    assert(engine.includes('daemonGetBlockHeadersByRange'));
+    assert(engine.includes('mismatched Messenger block header data'));
+    assert(engine.includes('Object.assign({}, block, { hash: header.hash })'));
     assert(engine.includes('server: getDefaultServerConfig()'));
     assert(engine.includes('proxyToWorker: false'));
     assert(engine.includes('const DAEMON_CHUNK_BYTES = 3000000'));

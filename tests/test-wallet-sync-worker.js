@@ -55,6 +55,31 @@ const QwcWalletEngine = require('../js/qwc-wallet-engine.js');
     const blocks = await scanner.getBlocksByRange(scannerHeight - 1, scannerHeight - 1);
     assert(Array.isArray(blocks) && blocks.length === 1, 'Messenger scanner must return the requested block');
     assert.strictEqual(Number(blocks[0].height), scannerHeight - 1, 'Messenger scanner returned the wrong block');
+    const rangeStart = Math.max(0, scannerHeight - 20);
+    const rangeEnd = scannerHeight - 1;
+    const range = await scanner.getBlocksByRange(rangeStart, rangeEnd);
+    assert.strictEqual(range.length, rangeEnd - rangeStart + 1,
+      'Messenger scanner must return the complete requested block range');
+    for (let offset = 0; offset < range.length; offset++) {
+      assert.strictEqual(Number(range[offset].height), rangeStart + offset,
+        `Messenger scanner returned a non-contiguous block at offset ${offset}`);
+      assert.strictEqual(typeof range[offset].hash, 'string',
+        `Messenger scanner returned a block without a hash at offset ${offset}`);
+      assert.match(range[offset].prevHash, /^[0-9a-f]{64}$/i,
+        `Messenger scanner returned a block without a previous hash at offset ${offset}`);
+    }
+    const genesisRangeEnd = Math.min(19, scannerHeight - 1);
+    const genesisRange = await scanner.getBlocksByRange(0, genesisRangeEnd);
+    assert.strictEqual(genesisRange.length, genesisRangeEnd + 1,
+      'Messenger scanner must return the complete genesis block range');
+    for (let offset = 0; offset < genesisRange.length; offset++) {
+      assert.strictEqual(Number(genesisRange[offset].height), offset,
+        `Messenger scanner returned a non-contiguous genesis block at offset ${offset}`);
+      assert.strictEqual(typeof genesisRange[offset].hash, 'string',
+        `Messenger scanner returned a genesis block without a hash at offset ${offset}`);
+      assert.match(genesisRange[offset].prevHash, /^[0-9a-f]{64}$/i,
+        `Messenger scanner returned a genesis block without a previous hash at offset ${offset}`);
+    }
     console.log(`  actual QWC worker/WASM genesis sync passed at height ${walletHeight}`);
   } finally {
     if (restored) await restored.close();

@@ -55,7 +55,10 @@ released only on a successful unbroadcast cancellation.
 ## Receiving and reorgs
 
 The scanner reads confirmed blocks through the existing restricted same-origin
-QWC RPC gateway. A message is shown only after canonical segment parsing,
+QWC RPC gateway. Binary block ranges are joined by height with canonical block
+headers because the binary response does not carry block hashes; previous-hash
+and header fields must agree before a range is accepted. A message is shown
+only after canonical segment parsing,
 recipient discovery/MAC checks, full ciphertext hashing, decryption and pinned
 sender-signature verification. Incomplete reassembly is capped at 64 messages
 and 8 MiB. The saved scan anchor is checked on restart; a mismatch discards
