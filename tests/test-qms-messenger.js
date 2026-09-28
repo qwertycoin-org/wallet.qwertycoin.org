@@ -275,6 +275,51 @@ async function test(name, fn) {
     assert.strictEqual(vault.hasQmsKey(), false);
   });
 
+  await test('same wallet and Session password reopen Messenger history after reimport', async () => {
+    const wallet = { address: 'QWC-reimport-test', privateSpendKeyHex: '44'.repeat(32) };
+    const password = 'persistent test password';
+    await vault.store(wallet, password);
+    const first = await store.open(wallet, vault.qmsKey(), vault.qmsKdf());
+    first.state.messages.push({ id: 'persisted', direction: 'out', text: 'survives reimport' });
+    await first.save();
+    first.close();
+
+    vault.clear();
+    await vault.store(wallet, password);
+    const reopened = await store.open(wallet, vault.qmsKey(), vault.qmsKdf());
+    assert.strictEqual(reopened.state.messages.length, 1);
+    assert.strictEqual(reopened.state.messages[0].id, 'persisted');
+    reopened.close();
+
+    const encryptedHistory = env.values.get(reopened.storageKey);
+    vault.clear();
+    await vault.store(wallet, 'different password');
+    await assert.rejects(store.open(wallet, vault.qmsKey(), vault.qmsKdf()), /Unable to decrypt/);
+    assert.strictEqual(env.values.get(reopened.storageKey), encryptedHistory, 'wrong password must not overwrite Messenger history');
+  });
+
+  await test('an active legacy session migrates its ephemeral KDF metadata before reimport', async () => {
+    const wallet = { address: 'QWC-legacy-reimport-test', privateSpendKeyHex: '55'.repeat(32) };
+    const password = 'legacy migration password';
+    await vault.store(wallet, password);
+    const legacy = await store.open(wallet, vault.qmsKey());
+    legacy.state.messages.push({ id: 'legacy', direction: 'out', text: 'migrate me' });
+    await legacy.save();
+    assert.strictEqual(JSON.parse(env.values.get(legacy.storageKey)).kdf, undefined);
+    legacy.close();
+
+    const migrated = await store.open(wallet, vault.qmsKey(), vault.qmsKdf());
+    await migrated.save();
+    assert.strictEqual(JSON.parse(env.values.get(migrated.storageKey)).kdf.name, 'argon2id13');
+    migrated.close();
+
+    vault.clear();
+    await vault.store(wallet, password);
+    const reopened = await store.open(wallet, vault.qmsKey(), vault.qmsKdf());
+    assert.strictEqual(reopened.state.messages[0].id, 'legacy');
+    reopened.close();
+  });
+
   await test('password-bound QMS state is encrypted and serialized in save order', async () => {
     const wallet = { address: 'QWC-test-wallet', privateSpendKeyHex: '11'.repeat(32) };
     const key = env.ctx.sodium.randombytes_buf(32);
@@ -316,6 +361,7 @@ async function test(name, fn) {
     assert(messengerScript.includes('overviewTab.disabled = recovering || !!activePlan(state)'));
     assert(dashboardScript.includes('await qmsController.scan()'));
     assert(dashboardScript.includes('WalletVault.hasQmsKey()'));
+    assert(dashboardScript.includes('getQmsKdf: () => WalletVault.qmsKdf()'));
     assert(dashboardScript.includes('qmsTab.hidden = true'));
     assert(dashboardScript.indexOf('qmsPasswordProtected') < dashboardScript.indexOf('QmsMessenger.mount'));
     assert(worker.includes('extraHex'));

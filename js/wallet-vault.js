@@ -32,7 +32,9 @@ const WalletVault = (function () {
   const QMS_PWHASH_OPSLIMIT = 2;
   const QMS_PWHASH_MEMLIMIT = 64 * 1024 * 1024;
   const QMS_PWHASH_BYTES = 32;
+  const QMS_STORE_PREFIX = 'qwc-qms1-fast-store:';
   let qmsUnlockKey = null;
+  let qmsKdfMetadata = null;
 
   function b64(bytes) {
     let s = '';
@@ -80,11 +82,51 @@ const WalletVault = (function () {
     qmsUnlockKey = value ? new Uint8Array(value) : null;
   }
 
+  function validateQmsKdf(value) {
+    if (!value || value.name !== 'argon2id13'
+        || !Number.isInteger(value.opslimit) || value.opslimit < 1 || value.opslimit > 4
+        || !Number.isInteger(value.memlimit) || value.memlimit < 8 * 1024 * 1024 || value.memlimit > 128 * 1024 * 1024
+        || typeof value.salt !== 'string') return null;
+    let salt;
+    try { salt = unb64(value.salt); } catch (_) { return null; }
+    if (salt.length !== 16) return null;
+    return {
+      name: 'argon2id13',
+      opslimit: value.opslimit,
+      memlimit: value.memlimit,
+      salt: value.salt
+    };
+  }
+
+  function replaceQmsKdfMetadata(value) {
+    qmsKdfMetadata = validateQmsKdf(value);
+  }
+
+  async function qmsStorageKey(address) {
+    const bytes = new TextEncoder().encode(String(address || ''));
+    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+    return QMS_STORE_PREFIX + Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('');
+  }
+
+  async function persistedQmsKdf(address) {
+    if (!address || typeof localStorage === 'undefined') return null;
+    try {
+      const envelope = JSON.parse(localStorage.getItem(await qmsStorageKey(address)) || 'null');
+      return envelope && envelope.version === 2 && envelope.profile === 'qms1-fast'
+        ? validateQmsKdf(envelope.kdf)
+        : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /**
    * Store wallet keys. If password is empty/falsy the keys are stored
    * in plaintext (encrypted:false). Otherwise they are AES-GCM encrypted.
    */
   async function store(keys, password) {
+    replaceQmsUnlockKey(null);
+    replaceQmsKdfMetadata(null);
     // If this is a freshly-created wallet, set the sessionStorage flag
     // here so it's impossible to miss regardless of which UI button
     // triggers the store.
@@ -92,7 +134,6 @@ const WalletVault = (function () {
       try { sessionStorage.setItem('monero-web-fresh-wallet', '1'); } catch (e) {}
     }
     if (!password) {
-      replaceQmsUnlockKey(null);
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
         encrypted: false,
         keys
@@ -100,7 +141,13 @@ const WalletVault = (function () {
       return;
     }
     const salt = crypto.getRandomValues(new Uint8Array(16));
-    const qmsSalt = (typeof sodium !== 'undefined') ? crypto.getRandomValues(new Uint8Array(16)) : null;
+    const persistedKdf = (typeof sodium !== 'undefined') ? await persistedQmsKdf(keys && keys.address) : null;
+    const qmsKdf = (typeof sodium !== 'undefined') ? (persistedKdf || {
+      name: 'argon2id13',
+      opslimit: QMS_PWHASH_OPSLIMIT,
+      memlimit: QMS_PWHASH_MEMLIMIT,
+      salt: b64(crypto.getRandomValues(new Uint8Array(16)))
+    }) : null;
     const iv   = crypto.getRandomValues(new Uint8Array(12));
     const key  = await deriveKey(password, salt, PBKDF2_ITERATIONS);
     const ct   = new Uint8Array(await crypto.subtle.encrypt(
@@ -108,10 +155,11 @@ const WalletVault = (function () {
       key,
       new TextEncoder().encode(JSON.stringify(keys))
     ));
-    const qmsKey = qmsSalt
-      ? await deriveQmsUnlockKey(password, qmsSalt, QMS_PWHASH_OPSLIMIT, QMS_PWHASH_MEMLIMIT)
+    const qmsKey = qmsKdf
+      ? await deriveQmsUnlockKey(password, unb64(qmsKdf.salt), qmsKdf.opslimit, qmsKdf.memlimit)
       : null;
     replaceQmsUnlockKey(qmsKey);
+    replaceQmsKdfMetadata(qmsKdf);
     const envelope = {
       encrypted:  true,
       version:    1,
@@ -120,12 +168,7 @@ const WalletVault = (function () {
       iv:         b64(iv),
       ciphertext: b64(ct)
     };
-    if (qmsSalt) envelope.qmsKdf = {
-        name: 'argon2id13',
-        opslimit: QMS_PWHASH_OPSLIMIT,
-        memlimit: QMS_PWHASH_MEMLIMIT,
-        salt: b64(qmsSalt)
-      };
+    if (qmsKdf) envelope.qmsKdf = qmsKdf;
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(envelope));
   }
 
@@ -153,6 +196,8 @@ const WalletVault = (function () {
    * Throws on wrong password / corrupted ciphertext.
    */
   async function unlock(password) {
+    replaceQmsUnlockKey(null);
+    replaceQmsKdfMetadata(null);
     const b = readBlob();
     if (!b || !b.encrypted) throw new Error('No encrypted vault to unlock');
     const salt       = unb64(b.salt);
@@ -166,13 +211,13 @@ const WalletVault = (function () {
     } catch (e) {
       throw new Error('Wrong password');
     }
-    const qmsKdf = b.qmsKdf;
-    if (!qmsKdf || qmsKdf.name !== 'argon2id13'
-        || !Number.isInteger(qmsKdf.opslimit) || qmsKdf.opslimit < 1 || qmsKdf.opslimit > 4
-        || !Number.isInteger(qmsKdf.memlimit) || qmsKdf.memlimit < 8 * 1024 * 1024 || qmsKdf.memlimit > 128 * 1024 * 1024) {
+    const qmsKdf = validateQmsKdf(b.qmsKdf);
+    if (!qmsKdf) {
       replaceQmsUnlockKey(null);
+      replaceQmsKdfMetadata(null);
     } else {
       replaceQmsUnlockKey(await deriveQmsUnlockKey(password, unb64(qmsKdf.salt), qmsKdf.opslimit, qmsKdf.memlimit));
+      replaceQmsKdfMetadata(qmsKdf);
     }
     return JSON.parse(new TextDecoder().decode(plain));
   }
@@ -185,12 +230,17 @@ const WalletVault = (function () {
     return !!(qmsUnlockKey && qmsUnlockKey.length === QMS_PWHASH_BYTES);
   }
 
+  function qmsKdf() {
+    return qmsKdfMetadata ? Object.assign({}, qmsKdfMetadata) : null;
+  }
+
   function clear() {
     replaceQmsUnlockKey(null);
+    replaceQmsKdfMetadata(null);
     sessionStorage.removeItem(STORAGE_KEY);
   }
 
-  return { store, hasBlob, isLocked, readPlain, unlock, qmsKey, hasQmsKey, clear };
+  return { store, hasBlob, isLocked, readPlain, unlock, qmsKey, qmsKdf, hasQmsKey, clear };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = WalletVault;

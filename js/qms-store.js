@@ -47,6 +47,27 @@ const QmsStore = (() => {
     if (key.length !== 32) throw new Error(`${label} must be exactly 32 bytes`);
     return key;
   }
+  function normalizeKdf(value) {
+    if (!value) return null;
+    if (value.name !== 'argon2id13'
+        || !Number.isInteger(value.opslimit) || value.opslimit < 1 || value.opslimit > 4
+        || !Number.isInteger(value.memlimit) || value.memlimit < 8 * 1024 * 1024 || value.memlimit > 128 * 1024 * 1024
+        || typeof value.salt !== 'string') throw new Error('Invalid QMS1/Fast KDF metadata');
+    let salt;
+    try { salt = unb64(value.salt); } catch (_) { throw new Error('Invalid QMS1/Fast KDF salt'); }
+    if (salt.length !== 16) throw new Error('Invalid QMS1/Fast KDF salt');
+    return {
+      name: 'argon2id13',
+      opslimit: value.opslimit,
+      memlimit: value.memlimit,
+      salt: value.salt
+    };
+  }
+  function sameKdf(left, right) {
+    return !!left === !!right && (!left || (left.name === right.name
+      && left.opslimit === right.opslimit && left.memlimit === right.memlimit
+      && left.salt === right.salt));
+  }
   function encrypt(key, nonce, plaintext, additionalData) {
     return sodiumApi().crypto_aead_xchacha20poly1305_ietf_encrypt(
       plaintext, additionalData, null, nonce, key);
@@ -60,12 +81,13 @@ const QmsStore = (() => {
     }
   }
 
-  async function open(wallet, unlockKey) {
+  async function open(wallet, unlockKey, kdfMetadata) {
     await sodiumApi().ready;
     if (!wallet || !wallet.address || !wallet.privateSpendKeyHex) {
       throw new Error('QMS1/Fast requires an unlocked full wallet');
     }
     let wrappingKey = requireKey(unlockKey, 'QMS1/Fast session key');
+    const kdf = normalizeKdf(kdfMetadata);
     const storageKey = PREFIX + await walletId(wallet.address);
     let envelope = null;
     try {
@@ -80,6 +102,10 @@ const QmsStore = (() => {
       if (envelope.version !== 2 || envelope.profile !== 'qms1-fast'
           || envelope.cipher !== 'xchacha20poly1305-ietf') {
         throw new Error('Unsupported QMS1/Fast store version');
+      }
+      const persistedKdf = normalizeKdf(envelope.kdf);
+      if (persistedKdf && !sameKdf(persistedKdf, kdf)) {
+        throw new Error('QMS1/Fast Session password metadata does not match this wallet store');
       }
       dataKey = requireKey(decrypt(
         wrappingKey,
@@ -114,7 +140,7 @@ const QmsStore = (() => {
       const wrapNonce = sodiumApi().randombytes_buf(24);
       const stateNonce = sodiumApi().randombytes_buf(24);
       try {
-        return JSON.stringify({
+        const envelope = {
           version: 2,
           profile: 'qms1-fast',
           cipher: 'xchacha20poly1305-ietf',
@@ -126,7 +152,9 @@ const QmsStore = (() => {
           ciphertext: b64(encrypt(
             dataKey, stateNonce, plaintext,
             associatedData(storageKey, 'state')))
-        });
+        };
+        if (kdf) envelope.kdf = kdf;
+        return JSON.stringify(envelope);
       } finally {
         sodiumApi().memzero(plaintext);
       }

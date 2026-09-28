@@ -2024,6 +2024,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     QmsMessenger.mount({
       getWalletKeys: () => walletKeys,
       getQmsKey: () => WalletVault.qmsKey(),
+      getQmsKdf: () => WalletVault.qmsKdf(),
       getWallet: getQwcWallet,
       getRestoreHeight: getQwcRestoreHeight,
       createScanner: () => QwcWalletEngine.createDaemonScanner()
