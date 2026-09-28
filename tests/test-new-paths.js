@@ -322,6 +322,10 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
       'integration QWC RPC endpoint missing');
     assert(pathProxy.includes('https://integration-explorer.qwertycoin.org/api/v1/wallet-rpc'),
       'path-based integration QWC RPC endpoint missing');
+    assert(pathProxy.includes('"/get_blocks_by_height.bin"'),
+      'canonical block scan RPC path is not allowed');
+    assert(!pathProxy.includes('"/getblocks_by_height.bin"'),
+      'non-canonical block scan RPC path must not replace the daemon route');
     assert(proxy.includes('/get_outs'), 'get outs RPC path missing');
     assert(proxy.includes('/get_output_distribution.bin'), 'output distribution RPC path missing');
     assert(blockScanRoute.includes('proxyQwcRpc(context, "/get_blocks_by_height.bin")'),

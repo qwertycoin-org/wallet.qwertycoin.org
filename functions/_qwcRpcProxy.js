@@ -23,7 +23,7 @@ const JSON_RPC_METHODS = new Set([
 const ROOT_RPC_PATHS = new Set([
   "/json_rpc",
   "/getblocks.bin",
-  "/getblocks_by_height.bin",
+  "/get_blocks_by_height.bin",
   "/gethashes.bin",
   "/get_o_indexes.bin",
   "/get_output_distribution.bin",
