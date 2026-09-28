@@ -134,7 +134,10 @@ const QwcWalletEngine = (() => {
     MAINNET,
     createDaemonScanner: async () => {
       const daemonId = newId("daemon");
-      await invoke(daemonId, "connectDaemonRpc", [getDefaultServerConfig()]);
+      await invoke(daemonId, "connectDaemonRpc", [{
+        server: getDefaultServerConfig(),
+        proxyToWorker: false
+      }]);
       return {
         getHeight: () => invoke(daemonId, "daemonGetHeight", []),
         getBlocksByRange: (start, end) => invoke(daemonId, "daemonGetBlocksByRangeChunked", [start, end, DAEMON_CHUNK_BYTES])

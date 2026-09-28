@@ -11,7 +11,11 @@ class BrowserWorker {
   constructor(scriptUrl) {
     const relativeScript = scriptUrl.replace(/^\/+/, '').split('?')[0];
     this.worker = new NodeWorker(path.join(__dirname, 'qwc-worker-node-shim.js'), {
-      workerData: { script: path.resolve(__dirname, '..', relativeScript) }
+      workerData: {
+        script: path.resolve(__dirname, '..', relativeScript),
+        browserLike: true,
+        origin: global.location.origin
+      }
     });
     workerInstance = this.worker;
     this.worker.on('message', data => {
@@ -46,6 +50,11 @@ const QwcWalletEngine = require('../js/qwc-wallet-engine.js');
       walletHeight >= daemonHeightBefore && walletHeight <= daemonHeightAfter,
       `wallet height ${walletHeight} must fall within the observed daemon window ${daemonHeightBefore}..${daemonHeightAfter}`
     );
+    const scanner = await QwcWalletEngine.createDaemonScanner();
+    const scannerHeight = await scanner.getHeight();
+    const blocks = await scanner.getBlocksByRange(scannerHeight - 1, scannerHeight - 1);
+    assert(Array.isArray(blocks) && blocks.length === 1, 'Messenger scanner must return the requested block');
+    assert.strictEqual(Number(blocks[0].height), scannerHeight - 1, 'Messenger scanner returned the wrong block');
     console.log(`  actual QWC worker/WASM genesis sync passed at height ${walletHeight}`);
   } finally {
     if (restored) await restored.close();

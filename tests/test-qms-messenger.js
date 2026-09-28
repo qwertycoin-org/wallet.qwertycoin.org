@@ -356,6 +356,8 @@ async function test(name, fn) {
     assert(engine.includes('monero.worker.js?v=6e067bb0fd551614'));
     assert(engine.includes('invoke(walletId, "freezeOutput", [keyImage])'));
     assert(engine.includes('daemonGetBlocksByRangeChunked'));
+    assert(engine.includes('server: getDefaultServerConfig()'));
+    assert(engine.includes('proxyToWorker: false'));
     assert(engine.includes('const DAEMON_CHUNK_BYTES = 3000000'));
     assert(messengerScript.includes("name === 'overview' && activePlan(state)"));
     assert(messengerScript.includes('overviewTab.disabled = recovering || !!activePlan(state)'));
