@@ -102,6 +102,10 @@ function responseContentType(path, upstreamContentType, requestContentType) {
   return requestContentType || "application/json";
 }
 
+function upstreamPath(path) {
+  return path === "/get_blocks_by_height.bin" ? "/getblocks_by_height.bin" : path;
+}
+
 export async function onRequestOptions(context) {
   return new Response(null, { status: 204, headers: corsHeaders(context.request) });
 }
@@ -143,7 +147,7 @@ export async function onRequestPost(context) {
   let lastError = "No upstream nodes configured";
   for (const node of QWC_NODES) {
     try {
-      const upstream = await fetch(node + path, {
+      const upstream = await fetch(node + upstreamPath(path), {
         method: "POST",
         headers: { "Content-Type": requestContentType },
         body: path.endsWith(".bin") ? new Uint8Array(body) : body,

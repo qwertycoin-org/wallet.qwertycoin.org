@@ -1,5 +1,5 @@
 # Qwertycoin Web Wallet build manifest
-# Generated 2026-09-28T13:40:10Z from commit ee34137
+# Generated 2026-09-28T13:43:50Z from commit 8a6b16a
 #
 # Verify the live deployment matches a specific git tag with:
 #   git checkout v0.1.0
