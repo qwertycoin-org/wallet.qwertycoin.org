@@ -80,6 +80,20 @@ const QwcWalletEngine = require('../js/qwc-wallet-engine.js');
       assert.match(genesisRange[offset].prevHash, /^[0-9a-f]{64}$/i,
         `Messenger scanner returned a genesis block without a previous hash at offset ${offset}`);
     }
+    const messengerRegressionBlocks = await scanner.getBlocksByRange(10602, 10645);
+    const messengerRegressionCases = [
+      { height: 10602, txHash: 'b24727104f05efbdfc825061dbbca9daa03b6bb2ffd7b4c0e78a2b69e34ee024' },
+      { height: 10645, txHash: '83b4636857b9dcb94a76eaae16d7305de1ca3f52bd53287f688410b60d2fbe54' }
+    ];
+    for (const regression of messengerRegressionCases) {
+      const block = messengerRegressionBlocks.find(candidate => Number(candidate.height) === regression.height);
+      assert(block, `Messenger regression block ${regression.height} is missing`);
+      const txs = [].concat(block.minerTx ? [block.minerTx] : [], Array.isArray(block.txs) ? block.txs : []);
+      const tx = txs.find(candidate => candidate && candidate.hash === regression.txHash);
+      assert(tx, `Messenger regression transaction ${regression.txHash} is missing`);
+      assert((Array.isArray(tx.extra) && tx.extra.length > 0) || (typeof tx.extraHex === 'string' && tx.extraHex.length > 0),
+        `Messenger regression transaction ${regression.txHash} has no carrier extra`);
+    }
     console.log(`  actual QWC worker/WASM genesis sync passed at height ${walletHeight}`);
   } finally {
     if (restored) await restored.close();
