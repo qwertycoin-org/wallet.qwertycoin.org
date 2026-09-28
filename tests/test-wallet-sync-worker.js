@@ -37,11 +37,15 @@ const QwcWalletEngine = require('../js/qwc-wallet-engine.js');
     await generated.close();
     generated = null;
     restored = await QwcWalletEngine.restoreFromSeed(seed, 0);
-    const daemonHeight = await restored.getDaemonHeight();
-    assert(Number.isSafeInteger(daemonHeight) && daemonHeight > 0, 'daemon height must be positive');
+    const daemonHeightBefore = await restored.getDaemonHeight();
+    assert(Number.isSafeInteger(daemonHeightBefore) && daemonHeightBefore > 0, 'daemon height must be positive');
     await restored.sync(0);
     const walletHeight = await restored.getHeight();
-    assert.strictEqual(walletHeight, daemonHeight, 'wallet must reach the daemon height');
+    const daemonHeightAfter = await restored.getDaemonHeight();
+    assert(
+      walletHeight >= daemonHeightBefore && walletHeight <= daemonHeightAfter,
+      `wallet height ${walletHeight} must fall within the observed daemon window ${daemonHeightBefore}..${daemonHeightAfter}`
+    );
     console.log(`  actual QWC worker/WASM genesis sync passed at height ${walletHeight}`);
   } finally {
     if (restored) await restored.close();
