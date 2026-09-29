@@ -196,6 +196,10 @@ CHROMIUM_PATH=/ms-playwright/chromium-1243/chrome-linux64/chrome \
 npm run test:browser-qms-ui
 ```
 
+Set `QMS_BROWSER=firefox` or `QMS_BROWSER=webkit` to run the same behavioral
+gates in those Playwright engines. `QMS_BROWSER_PATH` may point to an explicit
+engine executable; otherwise Playwright's installed-browser registry is used.
+
 The optional Core interoperability gate compiles a temporary probe against the
 pinned Core build and proves complete carriers in both directions without a
 network broadcast:

@@ -3,8 +3,8 @@
 Date: 2026-09-29  
 Scope: Web Wallet PR #14, based on
 `670cf48d377e6f6c8b31bd8ddb8b24f759c4d3df`  
-Live-tested hardened code SHA: `4dab9a3734c6c35060fe7d9c7fd8b2fb457e80d5`
-Implementation/evidence commits: 18 reviewable commits from `c628e06` through `4dab9a3`
+Live-send hardened code SHA: `4dab9a3734c6c35060fe7d9c7fd8b2fb457e80d5`
+Implementation/evidence commits: 21 reviewable commits from `c628e06` through `44f409b`
 
 This report distinguishes automated evidence from remaining release work. A
 green source-string assertion is not treated as browser or fault-injection
@@ -17,7 +17,7 @@ evidence.
 | F01 | Fixed | Save/close lifecycle rejects new writes, drains accepted writes before key destruction, and has close-before/between-write regressions (`c628e06`). |
 | F02 | Fixed | One origin-wide Web Lock per network/wallet; the real Chromium test opens a second tab/store and verifies fail-closed behavior (`c628e06`). |
 | F03 | Fixed | Durable outbox state machine, operation mutex, journal-before-relay, `broadcast_unknown`, identical-payload retry and no ambiguous thaw (`a2b4a47`). |
-| F04 | Fixed | Capacity/storage errors stop the cursor; unknown senders use a separate bounded queue; stale pressure records a bounded rescan anchor; authenticated but undecryptable foreign payloads are classified and discarded (`839b0be`, `3d0c46f`, `5db2b35`). |
+| F04 | Fixed | Capacity/storage errors stop the cursor; unknown senders use a separate bounded queue; stale pressure records a bounded rescan anchor; authenticated but undecryptable payloads and malformed foreign `0x72` nonce fields are classified and discarded (`839b0be`, `3d0c46f`, `5db2b35`, `7f3f2c7`). |
 | F05 | Fixed | `tx_extra` tag `0x04` parses a varint count × 32-byte keys; valid/truncated Core-shaped fixtures are covered (`839b0be`). |
 | F06 | Fixed | Scanning and contact management continue while a plan exists; only spend/prepare paths affected by reserved inputs remain blocked (`a2b4a47`, `839b0be`). |
 | F07 | Fixed | Encrypted IndexedDB records, changed-row persistence, explicit quotas and bounded contacts/messages/plans (`4aaa4e1`, `84c730f`). |
@@ -25,9 +25,9 @@ evidence.
 | F09 | Fixed | Authenticated encrypted backup/import and atomic Session-password/data-key rewrap (`ea1073f`, `92a7789`). |
 | F10 | Fixed | Import and verification are separate; `verifiedAt`, grouped fingerprints and per-contact discovery invitations are persisted (`231ecc1`, `72a8d07`). |
 | F11 | Fixed | Persistent start height, cross-batch hash chain, checkpoints, atomic cursor/data commit and controlled rollback/rescan (`839b0be`). |
-| F12 | Partly proven | Real Chromium IndexedDB/Web Locks/UI/mobile/performance tests, bidirectional Web↔Core byte interoperability and a final-SHA Web→chain→Web QMS receive are present. Firefox, WebKit/Safari and an installed Desktop-GUI network round-trip remain release gates. |
+| F12 | Partly proven | Real Chromium, Firefox and WebKit IndexedDB/Web Locks/UI/mobile tests, Chromium performance data, bidirectional Web↔Core byte interoperability and a hardened Web→chain→Web QMS receive are present. An installed Desktop-GUI network round-trip remains a release gate. |
 
-No P0 item remains open in this source tree. F12's remaining browser/Desktop
+No P0 item remains open in this source tree. F12's remaining installed-Desktop
 matrix must be completed before a regular release; it is not closed by naming
 the Core protocol test “Desktop”.
 
@@ -37,17 +37,18 @@ the Core protocol test “Desktop”.
 - 15 presentation-contract tests
 - message-signing and actual bundled worker/WASM custom-`tx_extra` bridge
 - 33 QMS1 protocol/store/scanner/outbox tests
-- real Chromium IndexedDB, Web Locks, password rotation and KDF-worker test
-- real Chromium chat, pagination, drafts, unread/filter, invitation QR/file,
-  verification gate and 390 px navigation test
+- real Chromium, Firefox and WebKit IndexedDB, Web Locks, password rotation and
+  KDF-worker tests
+- real Chromium, Firefox and WebKit chat, pagination, drafts, unread/filter,
+  invitation QR/file, verification gate and 390 px navigation tests
 - Core `a62ac68…` focused suite: 9/9
 - temporary cross-language probe: Web carrier opened by Core; Core reply carrier
   opened by Web
 - repository manifest/vendor provenance check
 
-Available locally for this report: Chromium `153.0.8010.12`. Firefox and
-WebKit were not installed, so no claim is made for those engines. Safari-style
-behavior is not inferred from Chromium viewport emulation.
+Engines used for this report: Chromium `153.0.8010.12`, Firefox `153.0` and
+Playwright WebKit `26.5`. WebKit is the Linux Playwright engine, not a claim
+that physical iOS Safari hardware was exercised.
 
 ## Performance
 
@@ -104,9 +105,19 @@ production seed or primary wallet was used, and no ambiguous response was
 retried with a newly built transaction.
 
 The encrypted IndexedDB reimport path is proven separately by the real Chromium
-test: the same wallet plus Session password reopens its history, while a wrong
-password cannot replace it. The final network test intentionally did not expose
-or copy the wallet seeds into logs, source files or commits.
+test and repeated in Firefox/WebKit: the same wallet plus Session password
+reopens its history, while a wrong password cannot replace it. The final network
+test intentionally did not expose or copy the wallet seeds into logs, source
+files or commits.
+
+After the live send, a real user scan exposed one foreign on-chain nonce whose
+first byte was `0x72` but whose content was not a valid QMS segment. The scanner
+previously surfaced `invalid QMS nonce segment` and stopped the batch. Commit
+`7f3f2c7` classifies only this untrusted wire-decode failure as
+`QMS_INVALID_FRAGMENT`; the scanner discards it without advancing past storage,
+capacity or infrastructure errors. A Production Explorer scan across the latest
+100 blocks reproduced one rejected foreign nonce and completed through height
+11211.
 
 Earlier Web transport evidence remains useful as a historical regression:
 
@@ -123,8 +134,7 @@ Before a regular release, complete and attach:
 
 1. installed Desktop GUI Web→Desktop and Desktop→Web chain tests with exact
    GUI/Core SHAs;
-2. Firefox and WebKit/Safari desktop plus 360/390 px runs;
-3. screenshots for chat, fingerprint verification, fee review, capacity/error
+2. screenshots for chat, fingerprint verification, fee review, capacity/error
    state and mobile list→conversation navigation.
 
 No production seed or primary wallet is used by the automated suites. Network
