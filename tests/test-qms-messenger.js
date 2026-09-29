@@ -69,6 +69,7 @@ function browserContext() {
   for (const file of [
     'vendor/libsodium/libsodium-sumo.js',
     'vendor/libsodium/libsodium-wrappers.js',
+    'js/qms-kdf.js',
     'js/wallet-vault.js',
     'js/qms-protocol.js',
     'js/qms-store.js',

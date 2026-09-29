@@ -66,16 +66,9 @@ const WalletVault = (function () {
   }
 
   async function deriveQmsUnlockKey(password, salt, opslimit, memlimit) {
-    if (typeof sodium === 'undefined') throw new Error('QMS1 password protection is unavailable');
+    if (typeof sodium === 'undefined' || typeof QmsKdf === 'undefined') throw new Error('QMS1 password protection is unavailable');
     await sodium.ready;
-    const key = sodium.crypto_pwhash(
-      QMS_PWHASH_BYTES,
-      String(password),
-      salt,
-      opslimit,
-      memlimit,
-      sodium.crypto_pwhash_ALG_ARGON2ID13
-    );
+    const key = await QmsKdf.derive(String(password), salt, opslimit, memlimit, QMS_PWHASH_BYTES);
     if (!(key instanceof Uint8Array) || key.length !== QMS_PWHASH_BYTES) throw new Error('QMS1 Argon2id key derivation failed');
     return key;
   }

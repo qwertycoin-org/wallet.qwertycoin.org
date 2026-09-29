@@ -57,7 +57,9 @@ const contentTypes = {
   const context = await browser.newContext();
   const page = await context.newPage();
   const pageErrors = [];
+  const requests = [];
   page.on('pageerror', error => pageErrors.push(error.message));
+  page.on('request', request => requests.push(request.url()));
   try {
     await page.goto(origin + '/', { waitUntil: 'domcontentloaded' });
     await page.evaluate(async () => {
@@ -72,12 +74,18 @@ const contentTypes = {
     for (const script of [
       'vendor/libsodium/libsodium-sumo.js',
       'vendor/libsodium/libsodium-wrappers.js',
+      'js/qms-kdf.js',
       'js/wallet-vault.js',
       'js/qms-store.js'
     ]) await page.addScriptTag({ url: `${origin}/${script}` });
 
     const result = await page.evaluate(async () => {
       await sodium.ready;
+      const longTasks = [];
+      const observer = typeof PerformanceObserver !== 'undefined'
+        ? new PerformanceObserver(list => longTasks.push(...list.getEntries().map(entry => entry.duration)))
+        : null;
+      if (observer) observer.observe({ type: 'longtask', buffered: true });
       const wallet = { address: 'QWC-browser-indexeddb-regression', network: 'mainnet', privateSpendKeyHex: '7b'.repeat(32) };
       const password = 'browser IndexedDB regression password';
       await WalletVault.store(wallet, password);
@@ -128,6 +136,7 @@ const contentTypes = {
       await changedPasswordStore.close();
       const wrongPasswordError = await QmsStore.open(wallet, new Uint8Array(32))
         .then(() => '', error => error.message);
+      if (observer) observer.disconnect();
       return {
         contactId,
         messageId,
@@ -138,7 +147,8 @@ const contentTypes = {
         passwordChangeCleanupPending: changeResult.cleanupPending,
         changedPasswordMessageId,
         rowCount: rows.filter(row => row.key.startsWith(storageKey + '\u0000')).length,
-        plaintextLeaked: serialized.includes('encrypted browser contact') || serialized.includes('encrypted browser message')
+        plaintextLeaked: serialized.includes('encrypted browser contact') || serialized.includes('encrypted browser message'),
+        maxMainThreadLongTaskMs: longTasks.length ? Math.max(...longTasks) : 0
       };
     });
 
@@ -155,6 +165,8 @@ const contentTypes = {
     assert.strictEqual(result.changedPasswordMessageId, 'browser-message');
     assert(result.rowCount >= 4, `expected separate encrypted records, got ${result.rowCount}`);
     assert.strictEqual(result.plaintextLeaked, false);
+    assert(requests.some(url => url.endsWith('/js/qms-kdf-worker.js')), 'Argon2id worker was not loaded');
+    assert.strictEqual(result.maxMainThreadLongTaskMs, 0, `unexpected QMS main-thread long task: ${result.maxMainThreadLongTaskMs}ms`);
     assert.deepStrictEqual(pageErrors, []);
     console.log(JSON.stringify({ indexedDb: true, webLocks: true, ...result }));
   } finally {

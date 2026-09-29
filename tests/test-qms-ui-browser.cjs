@@ -61,7 +61,7 @@ const fixture = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" hre
     });
     for (const script of [
       'vendor/libsodium/libsodium-sumo.js', 'vendor/libsodium/libsodium-wrappers.js',
-      'js/qms-protocol.js', 'js/qms-store.js', 'js/qms-messenger.js'
+      'js/qms-kdf.js', 'js/qms-protocol.js', 'js/qms-store.js', 'js/qms-messenger.js'
     ]) await page.addScriptTag({ url: `${origin}/${script}` });
 
     const setup = await page.evaluate(async () => {

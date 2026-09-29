@@ -111,7 +111,7 @@ const QmsStore = (() => {
       envelope.kdf.memlimit, envelope.kdf.salt
     ].join('\u0000'));
   }
-  function deriveBackupKey(password, kdf) {
+  async function deriveBackupKey(password, kdf) {
     if (typeof password !== 'string' || password.length < 12 || password.length > 1024) {
       throw new Error('Messenger backup password must contain 12 to 1,024 characters');
     }
@@ -119,14 +119,10 @@ const QmsStore = (() => {
     if (!normalized || normalized.opslimit < 2 || normalized.memlimit < 32 * 1024 * 1024) {
       throw new Error('Messenger backup KDF parameters are too weak');
     }
-    return requireKey(sodiumApi().crypto_pwhash(
-      32,
-      password,
-      unb64(normalized.salt),
-      normalized.opslimit,
-      normalized.memlimit,
-      sodiumApi().crypto_pwhash_ALG_ARGON2ID13
-    ), 'Messenger backup key');
+    if (typeof QmsKdf === 'undefined') throw new Error('Messenger backup KDF is unavailable');
+    return requireKey(await QmsKdf.derive(
+      password, unb64(normalized.salt), normalized.opslimit, normalized.memlimit, 32),
+    'Messenger backup key');
   }
   function validateBackupState(value) {
     const state = cloneState(value);
@@ -570,7 +566,7 @@ const QmsStore = (() => {
       };
       const plaintext = te.encode(JSON.stringify(payload));
       if (plaintext.length > BACKUP_MAX_BYTES) throw new Error('Messenger backup exceeds the 16 MiB size limit');
-      const backupKey = deriveBackupKey(password, kdf);
+      const backupKey = await deriveBackupKey(password, kdf);
       try {
         envelope.ciphertext = b64(encrypt(backupKey, nonce, plaintext, backupHeaderAad(envelope)));
         return JSON.stringify(envelope);
@@ -593,7 +589,7 @@ const QmsStore = (() => {
           || typeof envelope.nonce !== 'string' || typeof envelope.ciphertext !== 'string') {
         throw new Error('Messenger backup does not belong to this wallet and network');
       }
-      const backupKey = deriveBackupKey(password, envelope.kdf);
+      const backupKey = await deriveBackupKey(password, envelope.kdf);
       let plaintext;
       try {
         plaintext = decrypt(
