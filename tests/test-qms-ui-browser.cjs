@@ -1,4 +1,4 @@
-/* Real Chromium QMS chat/UI regression. */
+/* Real Chromium/Firefox/WebKit QMS chat/UI regression. */
 'use strict';
 
 const assert = require('assert');
@@ -8,8 +8,10 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const playwrightPath = process.env.PLAYWRIGHT_CORE_PATH || 'playwright-core';
-const executablePath = process.env.CHROMIUM_PATH;
-if (!executablePath) throw new Error('CHROMIUM_PATH is required');
+const browserName = process.env.QMS_BROWSER || 'chromium';
+const executablePath = process.env.QMS_BROWSER_PATH || process.env.CHROMIUM_PATH;
+if (!['chromium', 'firefox', 'webkit'].includes(browserName)) throw new Error(`Unsupported QMS_BROWSER: ${browserName}`);
+if (browserName === 'chromium' && !executablePath) throw new Error('CHROMIUM_PATH or QMS_BROWSER_PATH is required');
 
 const dashboard = fs.readFileSync(path.join(root, 'dashboard.html'), 'utf8');
 const fragmentStart = dashboard.indexOf('<div class="wallet-tabs');
@@ -32,23 +34,26 @@ const fixture = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" hre
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
-  const { chromium } = require(playwrightPath);
-  const xdgConfig = '/tmp/qwc-qms-ui-xdg-config';
-  const xdgCache = '/tmp/qwc-qms-ui-xdg-cache';
+  const browserType = require(playwrightPath)[browserName];
+  const xdgConfig = `/tmp/qwc-qms-ui-${browserName}-xdg-config`;
+  const xdgCache = `/tmp/qwc-qms-ui-${browserName}-xdg-cache`;
   fs.mkdirSync(xdgConfig, { recursive: true });
   fs.mkdirSync(xdgCache, { recursive: true });
-  const browser = await chromium.launch({
-    executablePath,
+  const launchOptions = {
     headless: true,
-    env: Object.assign({}, process.env, { XDG_CONFIG_HOME: xdgConfig, XDG_CACHE_HOME: xdgCache }),
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-  });
-  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  const page = await context.newPage();
+    env: Object.assign({}, process.env, { XDG_CONFIG_HOME: xdgConfig, XDG_CACHE_HOME: xdgCache })
+  };
+  if (executablePath) launchOptions.executablePath = executablePath;
+  if (browserName === 'chromium') launchOptions.args = ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'];
+  let browser;
+  let context;
   const pageErrors = [];
-  page.on('pageerror', error => pageErrors.push(error.message));
-  page.on('dialog', dialog => dialog.accept());
   try {
+    browser = await browserType.launch(launchOptions);
+    context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const page = await context.newPage();
+    page.on('pageerror', error => pageErrors.push(error.message));
+    page.on('dialog', dialog => dialog.accept());
     await page.goto(origin + '/', { waitUntil: 'domcontentloaded' });
     await page.evaluate(async () => {
       localStorage.clear();
@@ -207,10 +212,10 @@ const fixture = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" hre
     assert.strictEqual(persistedUiState.drafts['Existing Contact'], 'draft for existing contact');
     assert.strictEqual(persistedUiState.drafts['Unread Contact'], 'draft for unread contact');
     assert.match(persistedUiState.unreadReadAt, /^\d{4}-\d{2}-\d{2}T/);
-    console.log(JSON.stringify({ pagination: [100, 200], drafts: true, unread: true, filter: true, mobileNavigation: true, verificationGate: true, invitationQr: true, invitationFile: true, carrierPreview: 1, mobileWidth: 390, horizontalOverflow }));
+    console.log(JSON.stringify({ browser: browserName, pagination: [100, 200], drafts: true, unread: true, filter: true, mobileNavigation: true, verificationGate: true, invitationQr: true, invitationFile: true, carrierPreview: 1, mobileWidth: 390, horizontalOverflow }));
   } finally {
-    await context.close();
-    await browser.close();
+    if (context) await context.close();
+    if (browser) await browser.close();
     await new Promise(resolve => server.close(resolve));
   }
 })().catch(error => {

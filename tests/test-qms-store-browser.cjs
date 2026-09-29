@@ -1,5 +1,6 @@
 /* Optional real-browser IndexedDB/Web Locks regression:
  * PLAYWRIGHT_CORE_PATH=/app/node_modules/playwright-core \
+ * QMS_BROWSER=chromium \
  * CHROMIUM_PATH=/ms-playwright/chromium-1243/chrome-linux64/chrome \
  * npm run test:browser-qms-store
  */
@@ -12,8 +13,10 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const playwrightPath = process.env.PLAYWRIGHT_CORE_PATH || 'playwright-core';
-const executablePath = process.env.CHROMIUM_PATH;
-if (!executablePath) throw new Error('CHROMIUM_PATH is required');
+const browserName = process.env.QMS_BROWSER || 'chromium';
+const executablePath = process.env.QMS_BROWSER_PATH || process.env.CHROMIUM_PATH;
+if (!['chromium', 'firefox', 'webkit'].includes(browserName)) throw new Error(`Unsupported QMS_BROWSER: ${browserName}`);
+if (browserName === 'chromium' && !executablePath) throw new Error('CHROMIUM_PATH or QMS_BROWSER_PATH is required');
 
 const contentTypes = {
   '.js': 'text/javascript; charset=utf-8',
@@ -40,27 +43,30 @@ const contentTypes = {
   const address = server.address();
   const origin = `http://127.0.0.1:${address.port}`;
 
-  const { chromium } = require(playwrightPath);
-  const xdgConfig = '/tmp/qwc-qms-store-xdg-config';
-  const xdgCache = '/tmp/qwc-qms-store-xdg-cache';
+  const browserType = require(playwrightPath)[browserName];
+  const xdgConfig = `/tmp/qwc-qms-store-${browserName}-xdg-config`;
+  const xdgCache = `/tmp/qwc-qms-store-${browserName}-xdg-cache`;
   fs.mkdirSync(xdgConfig, { recursive: true });
   fs.mkdirSync(xdgCache, { recursive: true });
-  const browser = await chromium.launch({
-    executablePath,
+  const launchOptions = {
     headless: true,
     env: Object.assign({}, process.env, {
       XDG_CONFIG_HOME: xdgConfig,
       XDG_CACHE_HOME: xdgCache
-    }),
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-  });
-  const context = await browser.newContext();
-  const page = await context.newPage();
+    })
+  };
+  if (executablePath) launchOptions.executablePath = executablePath;
+  if (browserName === 'chromium') launchOptions.args = ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'];
+  let browser;
+  let context;
   const pageErrors = [];
   const requests = [];
-  page.on('pageerror', error => pageErrors.push(error.message));
-  page.on('request', request => requests.push(request.url()));
   try {
+    browser = await browserType.launch(launchOptions);
+    context = await browser.newContext();
+    const page = await context.newPage();
+    page.on('pageerror', error => pageErrors.push(error.message));
+    page.on('request', request => requests.push(request.url()));
     await page.goto(origin + '/', { waitUntil: 'domcontentloaded' });
     await page.evaluate(async () => {
       localStorage.clear();
@@ -174,10 +180,10 @@ const contentTypes = {
     assert(requests.some(url => url.endsWith('/js/qms-kdf-worker.js')), 'Argon2id worker was not loaded');
     assert.strictEqual(result.maxMainThreadLongTaskMs, 0, `unexpected QMS main-thread long task: ${result.maxMainThreadLongTaskMs}ms`);
     assert.deepStrictEqual(pageErrors, []);
-    console.log(JSON.stringify({ indexedDb: true, webLocks: true, ...result }));
+    console.log(JSON.stringify({ browser: browserName, indexedDb: true, webLocks: true, ...result }));
   } finally {
-    await context.close();
-    await browser.close();
+    if (context) await context.close();
+    if (browser) await browser.close();
     await new Promise(resolve => server.close(resolve));
   }
 })().catch(error => {
