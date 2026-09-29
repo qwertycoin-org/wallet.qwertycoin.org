@@ -20,6 +20,10 @@ const QmsMessenger = (() => {
   const MAX_REASSEMBLY_BYTES = 8 * 1024 * 1024;
   const MAX_UNMATCHED_MESSAGES = 32;
   const MAX_UNMATCHED_BYTES = 4 * 1024 * 1024;
+  const MAX_MESSAGES = 10000;
+  const MAX_CONTACTS = 1000;
+  const MAX_PLANS = 128;
+  const MESSAGE_PAGE_SIZE = 100;
 
   function nowIso() { return new Date().toISOString(); }
   function messengerError(code, message) { const error = new Error(message); error.code = code; return error; }
@@ -230,6 +234,7 @@ const QmsMessenger = (() => {
       return null;
     }
     if (message) {
+      if (state.messages.length >= MAX_MESSAGES) throw messengerError('QMS_CAPACITY', 'Messenger message limit reached; scan cursor was not advanced');
       state.messages.push(message);
       state.reassembly = state.reassembly.filter(item => item !== partial);
     }
@@ -261,6 +266,7 @@ const QmsMessenger = (() => {
           sourceFragments: records
         };
         if (!state.messages.some(item => item.id === message.id && item.direction === 'in')) {
+          if (state.messages.length >= MAX_MESSAGES) throw messengerError('QMS_CAPACITY', 'Messenger message limit reached while matching a stored sender');
           state.messages.push(message);
           opened.push(message);
         }
@@ -270,6 +276,7 @@ const QmsMessenger = (() => {
     for (const partial of state.reassembly.slice()) {
       const message = openCompletePartial(state, partial, identity, ownInvitation);
       if (!message || message.unmatched || state.messages.some(item => item.id === message.id && item.direction === 'in')) continue;
+      if (state.messages.length >= MAX_MESSAGES) throw messengerError('QMS_CAPACITY', 'Messenger message limit reached while completing fragments');
       state.messages.push(message); opened.push(message);
       state.reassembly = state.reassembly.filter(item => item !== partial);
     }
@@ -524,6 +531,11 @@ const QmsMessenger = (() => {
     let scanning = false;
     let recovering = true;
     let scannerPromise = null;
+    let scanFailures = 0;
+    let nextScanAt = 0;
+    const messageLimits = new Map();
+    let renderedMessageKey = '';
+    let renderedContactId = null;
     const operations = createOperationMutex();
     const el = id => document.getElementById(id);
     const section = el('qms-section'), overviewTab = el('wallet-tab-overview'), messengerTab = el('wallet-tab-messenger');
@@ -534,6 +546,15 @@ const QmsMessenger = (() => {
     function showStatus(message, type) { if (closed) return; const node = el('qms-status'); node.textContent = message || ''; node.className = 'qms-status' + (type ? ' ' + type : ''); }
     function showError(error) { if (closed || (error && error.name === 'AbortError')) return; showStatus(error && error.message ? error.message : String(error), 'error'); }
     function emptyNotice(message) { const node = document.createElement('div'); node.className = 'qms-empty'; node.textContent = message; return node; }
+    function withTimeout(promise, label, timeoutMs = 20000) {
+      let timer;
+      return Promise.race([
+        Promise.resolve(promise),
+        new Promise((_, reject) => {
+          timer = setTimeout(() => reject(new Error(`${label} timed out after ${Math.round(timeoutMs / 1000)} seconds`)), timeoutMs);
+        })
+      ]).finally(() => clearTimeout(timer));
+    }
     async function synchronizedWallet(statusMessage) {
       assertActive();
       if (statusMessage) showStatus(statusMessage);
@@ -572,7 +593,10 @@ const QmsMessenger = (() => {
         const fingerprint = document.createElement('span'); fingerprint.textContent = `${short(item.fingerprint)} · ${item.verifiedAt ? 'verified' : 'unverified'}`;
         button.append(name, fingerprint);
         button.addEventListener('click', () => {
-          selectedId = item.id; render();
+          if (selectedId === item.id) return;
+          selectedId = item.id;
+          renderedMessageKey = '';
+          render();
         });
         list.appendChild(button);
       }
@@ -580,30 +604,56 @@ const QmsMessenger = (() => {
 
     function updateComposer() {
       const item = contact(), lockedPlan = activePlan(state), size = messageByteCount();
-      el('qms-byte-count').textContent = `${size.toLocaleString()} / 4,096 UTF-8 bytes`;
+      const carriers = size ? Math.ceil((size + 272) / 600) : 0;
+      el('qms-byte-count').textContent = `${size.toLocaleString()} / 4,096 UTF-8 bytes · ${carriers} carrier transaction${carriers === 1 ? '' : 's'} · fees calculated during preparation`;
       el('qms-message-input').disabled = recovering || !item || !!lockedPlan;
-      el('qms-prepare').disabled = recovering || !item || !!lockedPlan || !size || size > QmsProtocol.C.MAX_TEXT_BYTES;
+      el('qms-prepare').disabled = recovering || !item || !item.verifiedAt || !!lockedPlan || !size || size > QmsProtocol.C.MAX_TEXT_BYTES;
     }
 
     function renderMessages() {
       const item = contact();
       const messages = state.messages.filter(message => message.contactId === selectedId).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
       el('qms-chat-name').textContent = item ? item.name : 'Select a contact'; el('qms-chat-fingerprint').textContent = item ? item.fingerprint : '';
-      const list = el('qms-message-list'); list.replaceChildren();
-      if (!messages.length) list.appendChild(emptyNotice(item ? 'No messages in this chat yet.' : 'Import a personal invitation to begin.'));
-      for (const message of messages) {
-        const row = document.createElement('div'); row.className = 'qms-message ' + (message.direction === 'out' ? 'me' : 'them');
-        const bubble = document.createElement('div'); bubble.className = 'qms-bubble';
-        const text = document.createElement('div'); text.textContent = message.text; bubble.appendChild(text);
-        const meta = document.createElement('div'); meta.className = 'qms-bubble-meta';
-        const who = document.createElement('span'); who.textContent = message.direction === 'out' ? 'Me' : item.name;
-        const when = document.createElement('span'); when.textContent = formatDate(message.createdAt);
-        const status = document.createElement('span');
-        status.className = 'qms-message-status' + (['broadcast_unknown', 'recovery_required'].includes(message.status) ? ' error' : '');
-        status.textContent = statusLabel(message.status);
-        meta.append(who, when, status); bubble.appendChild(meta); row.appendChild(bubble); list.appendChild(row);
+      const limit = messageLimits.get(selectedId) || MESSAGE_PAGE_SIZE;
+      const visible = messages.slice(-limit);
+      const messageKey = JSON.stringify(visible.map(message => [message.id, message.status, message.createdAt, message.text]));
+      const list = el('qms-message-list');
+      if (renderedContactId !== selectedId || renderedMessageKey !== messageKey) {
+        const sameContact = renderedContactId === selectedId;
+        const nearBottom = !sameContact || list.scrollHeight - list.scrollTop - list.clientHeight < 48;
+        const previousHeight = list.scrollHeight;
+        const previousTop = list.scrollTop;
+        list.replaceChildren();
+        if (!messages.length) list.appendChild(emptyNotice(item ? 'No messages in this chat yet.' : 'Import a personal invitation to begin.'));
+        if (visible.length < messages.length) {
+          const loadOlder = document.createElement('button');
+          loadOlder.type = 'button';
+          loadOlder.className = 'action-btn qms-load-older';
+          loadOlder.textContent = `Load ${Math.min(MESSAGE_PAGE_SIZE, messages.length - visible.length)} older messages`;
+          loadOlder.addEventListener('click', () => {
+            messageLimits.set(selectedId, limit + MESSAGE_PAGE_SIZE);
+            renderedMessageKey = '';
+            renderMessages();
+          });
+          list.appendChild(loadOlder);
+        }
+        for (const message of visible) {
+          const row = document.createElement('div'); row.className = 'qms-message ' + (message.direction === 'out' ? 'me' : 'them');
+          const bubble = document.createElement('div'); bubble.className = 'qms-bubble';
+          const text = document.createElement('div'); text.textContent = message.text; bubble.appendChild(text);
+          const meta = document.createElement('div'); meta.className = 'qms-bubble-meta';
+          const who = document.createElement('span'); who.textContent = message.direction === 'out' ? 'Me' : item.name;
+          const when = document.createElement('span'); when.textContent = formatDate(message.createdAt);
+          const status = document.createElement('span');
+          status.className = 'qms-message-status' + (['broadcast_unknown', 'recovery_required'].includes(message.status) ? ' error' : '');
+          status.textContent = statusLabel(message.status);
+          meta.append(who, when, status); bubble.appendChild(meta); row.appendChild(bubble); list.appendChild(row);
+        }
+        if (nearBottom) list.scrollTop = list.scrollHeight;
+        else list.scrollTop = previousTop + Math.max(0, list.scrollHeight - previousHeight);
+        renderedContactId = selectedId;
+        renderedMessageKey = messageKey;
       }
-      list.scrollTop = list.scrollHeight;
       const plan = preparedForSelected(); el('qms-review').hidden = !plan;
       if (plan) {
         el('qms-review-count').textContent = `${plan.txs.length} transaction${plan.txs.length === 1 ? '' : 's'}`;
@@ -656,7 +706,7 @@ const QmsMessenger = (() => {
           }
           if (!confirm(`Remove ${item.name}? Existing local chat history will be retained and will reappear if this invitation is imported again.`)) return;
           item.archivedAt = nowIso();
-          if (selectedId === item.id) selectedId = firstActiveContact() ? firstActiveContact().id : null;
+          if (selectedId === item.id) { selectedId = firstActiveContact() ? firstActiveContact().id : null; renderedMessageKey = ''; }
           await persist(); render(); showStatus('Contact removed from the chat list. Its local invitation and history were retained for compatibility.', 'ok');
         });
         row.append(input, rename, fingerprint, verify, copyInvitation, remove); list.appendChild(row);
@@ -766,6 +816,7 @@ const QmsMessenger = (() => {
           delete imported.archivedAt;
           if (!imported.localInvitationHex) imported.localInvitationHex = QmsProtocol.hex(QmsProtocol.encodeInvitation(QmsProtocol.createInvitation(identity)));
         } else {
+          if (state.contacts.length >= MAX_CONTACTS) throw new Error('Messenger contact limit reached');
           imported = {
             id: fp,
             fingerprint: fp,
@@ -791,6 +842,8 @@ const QmsMessenger = (() => {
         const recipientContact = contact(); if (!recipientContact) throw new Error('Select a contact');
         if (!recipientContact.verifiedAt) throw new Error('Verify this contact’s complete fingerprint before preparing a message');
         if (activePlan(state)) throw new Error('Send or cancel the existing prepared message first');
+        if (state.messages.length >= MAX_MESSAGES) throw new Error('Messenger local message limit reached; export a backup before compacting history');
+        if (state.plans.length >= MAX_PLANS) throw new Error('Messenger transaction journal limit reached; resolve or archive older plans first');
         const text = el('qms-message-input').value;
         const textSize = new TextEncoder().encode(text).length;
         if (!textSize || textSize > QmsProtocol.C.MAX_TEXT_BYTES) throw new Error('Enter a message of at most 4,096 UTF-8 bytes');
@@ -880,9 +933,21 @@ const QmsMessenger = (() => {
       }
       return out;
     }
-    async function getScanner() { assertActive(); if (!scannerPromise) scannerPromise = options.createScanner(); const scanner = await scannerPromise; assertActive(); return scanner; }
+    async function getScanner() {
+      assertActive();
+      if (!scannerPromise) {
+        scannerPromise = withTimeout(options.createScanner(), 'Messenger scanner startup').then(scanner => ({
+          getHeight: () => withTimeout(scanner.getHeight(), 'Messenger height request'),
+          getBlocksByRange: (start, end) => withTimeout(scanner.getBlocksByRange(start, end), `Messenger block request ${start}-${end}`)
+        })).catch(error => { scannerPromise = null; throw error; });
+      }
+      const scanner = await scannerPromise;
+      assertActive();
+      return scanner;
+    }
     async function scan() {
       if (scanning || recovering || !options.createScanner) return;
+      if (Date.now() < nextScanAt) return;
       scanning = true;
       try {
         showStatus('Scanning QWC blocks for encrypted messages…');
@@ -940,7 +1005,19 @@ const QmsMessenger = (() => {
           expectedPrevHash = state.scan.blockHash;
           next = end + 1;
         }
+        scanFailures = 0;
+        nextScanAt = Date.now() + 30000;
         render(); showStatus(`Messenger scan complete at block ${Math.max(0, tip - 1).toLocaleString()}.`, 'ok');
+      } catch (error) {
+        scanFailures += 1;
+        const delay = Math.min(5 * 60 * 1000, 30000 * (2 ** Math.min(4, scanFailures - 1)));
+        nextScanAt = Date.now() + delay;
+        if (error && error.code === 'QMS_CAPACITY') {
+          error.message += ' Free local Messenger capacity or import the missing contact, then retry.';
+        } else if (error && !error.name) {
+          error.message += ` Automatic retry is delayed for ${Math.round(delay / 1000)} seconds.`;
+        }
+        throw error;
       } finally { scanning = false; }
     }
 
@@ -992,7 +1069,8 @@ const QmsMessenger = (() => {
         if (options.setWalletSpendBlocked) options.setWalletSpendBlocked(false);
         await closeStore();
       },
-      scan
+      scan,
+      resumeScan() { nextScanAt = 0; return scan(); }
     };
   }
 
