@@ -61,7 +61,7 @@ const fixture = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" hre
     });
     for (const script of [
       'vendor/libsodium/libsodium-sumo.js', 'vendor/libsodium/libsodium-wrappers.js',
-      'js/qms-kdf.js', 'js/qms-protocol.js', 'js/qms-store.js', 'js/qms-messenger.js'
+      'js/qrcodegen.js', 'js/qms-kdf.js', 'js/qms-protocol.js', 'js/qms-store.js', 'js/qms-messenger.js'
     ]) await page.addScriptTag({ url: `${origin}/${script}` });
 
     const setup = await page.evaluate(async () => {
@@ -124,8 +124,21 @@ const fixture = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" hre
     assert.strictEqual(await page.locator('.qms-message').count(), 200);
 
     await page.locator('#qms-manage-toggle').click();
+    await page.locator('#qms-toggle-invitation-qr').click();
+    assert.strictEqual(await page.locator('#qms-own-invitation-qr canvas').count(), 1);
+    assert.strictEqual(await page.locator('#qms-toggle-invitation-qr').getAttribute('aria-expanded'), 'true');
+    const invitationDownload = page.waitForEvent('download');
+    await page.locator('#qms-export-invitation').click();
+    assert.strictEqual((await invitationDownload).suggestedFilename(), 'qms1-bootstrap-invitation.json');
     await page.locator('#qms-contact-name').fill('Unverified Contact');
-    await page.locator('#qms-contact-invitation').fill(setup.importedInvitation);
+    await page.locator('#qms-contact-invitation-file').setInputFiles({
+      name: 'contact-invitation.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify({
+        type: 'qwc-qms1-invitation', version: 1, profile: 'qms1-fast', invitation: setup.importedInvitation
+      }))
+    });
+    assert.strictEqual(await page.locator('#qms-contact-invitation').inputValue(), setup.importedInvitation);
     await page.locator('#qms-import-contact').click();
     await page.locator('#qms-status').filter({ hasText: 'as unverified' }).waitFor();
     await page.locator('#qms-manage-back').click();
@@ -146,7 +159,7 @@ const fixture = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" hre
     assert.strictEqual(horizontalOverflow, false);
     assert.deepStrictEqual(pageErrors, []);
     await page.evaluate(() => window.qmsController.clear());
-    console.log(JSON.stringify({ pagination: [100, 200], verificationGate: true, carrierPreview: 1, mobileWidth: 390, horizontalOverflow }));
+    console.log(JSON.stringify({ pagination: [100, 200], verificationGate: true, invitationQr: true, invitationFile: true, carrierPreview: 1, mobileWidth: 390, horizontalOverflow }));
   } finally {
     await context.close();
     await browser.close();

@@ -570,6 +570,33 @@ const QmsMessenger = (() => {
     function preparedForSelected() { return state.plans.find(plan => plan.contactId === selectedId && ACTIVE_PLAN_STATUSES.has(plan.status) && plan.status !== 'building') || null; }
     function formatDate(value) { try { return new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)); } catch (_) { return value; } }
     function messageByteCount() { return new TextEncoder().encode(el('qms-message-input').value).length; }
+    function downloadJson(filename, value) {
+      const blob = new Blob([JSON.stringify(value)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url; link.download = filename; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    }
+    function invitationDocument(invitationHex) {
+      invitationFromHex(invitationHex);
+      return { type: 'qwc-qms1-invitation', version: 1, profile: 'qms1-fast', invitation: invitationHex };
+    }
+    function renderInvitationQr(container, invitationHex) {
+      container.replaceChildren();
+      const qr = qrcode(0, 'L');
+      qr.addData(`qwc-qms1-invite:${invitationHex}`); qr.make();
+      const modules = qr.getModuleCount(), scale = 4, margin = 4;
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = (modules + margin * 2) * scale;
+      canvas.setAttribute('aria-label', 'QMS1 invitation QR code');
+      const context = canvas.getContext('2d');
+      context.fillStyle = '#fff'; context.fillRect(0, 0, canvas.width, canvas.height);
+      context.fillStyle = '#000';
+      for (let row = 0; row < modules; row++) for (let column = 0; column < modules; column++) {
+        if (qr.isDark(row, column)) context.fillRect((column + margin) * scale, (row + margin) * scale, scale, scale);
+      }
+      container.appendChild(canvas);
+    }
 
     function setTab(name) {
       const messenger = name === 'messenger'; section.hidden = !messenger;
@@ -698,6 +725,17 @@ const QmsMessenger = (() => {
           await navigator.clipboard.writeText(item.localInvitationHex);
           showStatus(`Dedicated invitation for ${item.name} copied. Share it confidentially.`, 'ok');
         });
+        const exportInvitation = document.createElement('button'); exportInvitation.className = 'action-btn'; exportInvitation.textContent = 'Export invitation file'; exportInvitation.disabled = recovering;
+        exportInvitation.addEventListener('click', () => {
+          downloadJson(`qms1-invitation-${item.id.slice(0, 12)}.json`, invitationDocument(item.localInvitationHex));
+          showStatus(`Dedicated invitation file for ${item.name} exported. Share it privately.`, 'ok');
+        });
+        const showQr = document.createElement('button'); showQr.className = 'action-btn'; showQr.textContent = 'Show local QR'; showQr.disabled = recovering; showQr.setAttribute('aria-expanded', 'false');
+        const qr = document.createElement('div'); qr.className = 'qms-invitation-qr'; qr.hidden = true;
+        showQr.addEventListener('click', () => {
+          qr.hidden = !qr.hidden; showQr.textContent = qr.hidden ? 'Show local QR' : 'Hide local QR'; showQr.setAttribute('aria-expanded', String(!qr.hidden));
+          if (!qr.hidden && !qr.firstChild) renderInvitationQr(qr, item.localInvitationHex);
+        });
         const remove = document.createElement('button'); remove.className = 'action-btn'; remove.textContent = 'Remove'; remove.disabled = input.disabled;
         remove.addEventListener('click', async () => {
           if ((state.plans || []).some(plan => plan.contactId === item.id && ACTIVE_PLAN_STATUSES.has(plan.status))) {
@@ -709,7 +747,7 @@ const QmsMessenger = (() => {
           if (selectedId === item.id) { selectedId = firstActiveContact() ? firstActiveContact().id : null; renderedMessageKey = ''; }
           await persist(); render(); showStatus('Contact removed from the chat list. Its local invitation and history were retained for compatibility.', 'ok');
         });
-        row.append(input, rename, fingerprint, verify, copyInvitation, remove); list.appendChild(row);
+        row.append(input, rename, fingerprint, verify, copyInvitation, exportInvitation, showQr, remove, qr); list.appendChild(row);
       }
     }
     function render() { if (closed) return; renderContacts(); renderMessages(); renderManage(); }
@@ -719,6 +757,32 @@ const QmsMessenger = (() => {
     });
     el('qms-manage-back').addEventListener('click', () => { el('qms-manage-view').hidden = true; el('qms-chat-view').hidden = false; render(); });
     el('qms-copy-invitation').addEventListener('click', async () => { await navigator.clipboard.writeText(state.ownInvitation); showStatus('Complete personal invitation copied.', 'ok'); });
+    el('qms-export-invitation').addEventListener('click', () => {
+      downloadJson('qms1-bootstrap-invitation.json', invitationDocument(state.ownInvitation));
+      showStatus('Bootstrap invitation file exported. Share it privately.', 'ok');
+    });
+    el('qms-toggle-invitation-qr').addEventListener('click', event => {
+      const qr = el('qms-own-invitation-qr');
+      qr.hidden = !qr.hidden;
+      event.currentTarget.textContent = qr.hidden ? 'Show local QR' : 'Hide local QR';
+      event.currentTarget.setAttribute('aria-expanded', String(!qr.hidden));
+      if (!qr.hidden && !qr.firstChild) renderInvitationQr(qr, state.ownInvitation);
+    });
+    el('qms-contact-invitation-file').addEventListener('change', async event => {
+      try {
+        const file = event.target.files && event.target.files[0];
+        if (!file) return;
+        if (file.size > 4096) throw new Error('Invitation file exceeds the 4 KiB limit');
+        const value = JSON.parse(await file.text());
+        if (!value || value.type !== 'qwc-qms1-invitation' || value.version !== 1
+            || value.profile !== 'qms1-fast' || typeof value.invitation !== 'string') {
+          throw new Error('Unsupported Messenger invitation file');
+        }
+        invitationFromHex(value.invitation);
+        el('qms-contact-invitation').value = value.invitation.toLowerCase();
+        showStatus('Invitation file loaded. Import it, then verify the fingerprint independently.', 'ok');
+      } catch (error) { event.target.value = ''; showError(error); }
+    });
     el('qms-backup-file').addEventListener('change', event => {
       const file = event.target.files && event.target.files[0];
       el('qms-backup-file-name').textContent = file ? `${file.name} · ${file.size.toLocaleString()} bytes` : 'No backup file selected.';

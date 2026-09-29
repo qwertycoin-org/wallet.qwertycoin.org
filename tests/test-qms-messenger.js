@@ -761,6 +761,7 @@ async function test(name, fn) {
       'id="qms-section"', 'Manage contacts',
       'Encrypt &amp; review', 'Send encrypted message', 'Copy bootstrap invitation',
       'id="qms-export-backup"', 'id="qms-import-backup"', 'Separate backup password',
+      'id="qms-export-invitation"', 'id="qms-toggle-invitation-qr"', 'id="qms-contact-invitation-file"',
       'id="qms-change-session-password"', 'New Session password (12+ characters)'
     ]) assert(html.includes(value), `missing Messenger UI contract: ${value}`);
     assert(html.indexOf('vendor/libsodium/libsodium-sumo.js') < html.indexOf('js/qms-protocol.js'));
