@@ -350,12 +350,16 @@ const QmsStore = (() => {
       throw new Error('Unsupported QMS1/Fast record store version');
     }
     const persistedKdf = normalizeKdf(meta.kdf);
-    if (persistedKdf && !sameKdf(persistedKdf, suppliedKdf)) {
+    const pendingKdf = meta.pendingWrap ? normalizeKdf(meta.pendingWrap.kdf) : null;
+    const usePending = !!(meta.pendingWrap && sameKdf(pendingKdf, suppliedKdf));
+    if (!usePending && persistedKdf && !sameKdf(persistedKdf, suppliedKdf)) {
       throw new Error('QMS1/Fast Session password metadata does not match this wallet store');
     }
+    const wrap = usePending ? meta.pendingWrap : meta;
     const dataKey = requireKey(decrypt(
-      wrappingKey, unb64(meta.wrapNonce), unb64(meta.wrappedKey),
-      associatedData(storageKey, `data-key\u0000${network}`), 'Messenger key'), 'QMS1/Fast data key');
+      wrappingKey, unb64(wrap.wrapNonce), unb64(wrap.wrappedKey),
+      associatedData(storageKey, usePending ? `data-key\u0000${network}\u0000pending` : `data-key\u0000${network}`),
+      'Messenger key'), 'QMS1/Fast data key');
     const state = blank();
     const arrays = { contact: [], message: [], plan: [], reassembly: [] };
     const seen = new Set(), recordCache = new Map();
@@ -384,7 +388,7 @@ const QmsStore = (() => {
       for (const [type, property] of [['contact', 'contacts'], ['message', 'messages'], ['plan', 'plans'], ['reassembly', 'reassembly']]) {
         state[property] = arrays[type].sort((left, right) => left.order - right.order).map(entry => entry.value);
       }
-      return { state: cloneState(state), dataKey, revision: meta.revision, recordCache };
+      return { state: cloneState(state), dataKey, revision: meta.revision, recordCache, openedPending: usePending };
     } catch (error) {
       sodiumApi().memzero(dataKey);
       throw error;
@@ -436,7 +440,7 @@ const QmsStore = (() => {
       throw new Error('QMS1/Fast requires an unlocked full wallet');
     }
     let wrappingKey = requireKey(unlockKey, 'QMS1/Fast session key');
-    const kdf = normalizeKdf(kdfMetadata);
+    let kdf = normalizeKdf(kdfMetadata);
     const network = String(wallet.network || 'mainnet');
     if (!/^[a-z0-9_-]{1,32}$/i.test(network)) throw new Error('Invalid QMS1/Fast wallet network');
     const storageKey = PREFIX + await walletId(wallet.address);
@@ -445,10 +449,18 @@ const QmsStore = (() => {
     let state = blank();
     let revision = 0;
     let recordCache = new Map();
+    let openedPending = false;
     try {
       const records = await loadRecords(storageKey);
       if (records.length) {
-        ({ state, dataKey, revision, recordCache } = decodeRecordSet(storageKey, network, records, wrappingKey, kdf));
+        ({ state, dataKey, revision, recordCache, openedPending } = decodeRecordSet(storageKey, network, records, wrappingKey, kdf));
+        if (openedPending) {
+          const finalized = buildRecordSet(storageKey, network, state, revision + 1, wrappingKey, dataKey, kdf, recordCache);
+          await replaceRecords(storageKey, finalized.records);
+          recordCache = finalized.cache;
+          revision += 1;
+          persistLocator(storageKey, kdf);
+        }
       } else {
         let envelope = null;
         try { envelope = JSON.parse(localStorage.getItem(storageKey) || 'null'); }
@@ -598,9 +610,65 @@ const QmsStore = (() => {
       await commit(candidate, currentRevision);
       return state;
     }
+    function changeWrappingKey(nextUnlockKey, nextKdfMetadata, updateVault) {
+      ensureOpen();
+      if (typeof updateVault !== 'function') throw new Error('Session password update callback is required');
+      const nextKey = requireKey(nextUnlockKey, 'new QMS1/Fast session key');
+      const nextKdf = normalizeKdf(nextKdfMetadata);
+      if (!nextKdf) { sodiumApi().memzero(nextKey); throw new Error('New QMS1/Fast KDF metadata is required'); }
+      const candidate = cloneState(state);
+      const operation = saveQueue.then(async () => {
+        const staged = buildRecordSet(storageKey, network, candidate, revision + 1, wrappingKey, dataKey, kdf, recordCache);
+        const pendingNonce = sodiumApi().randombytes_buf(24);
+        staged.records[0].pendingWrap = {
+          kdf: nextKdf,
+          wrapNonce: b64(pendingNonce),
+          wrappedKey: b64(encrypt(
+            nextKey, pendingNonce, dataKey,
+            associatedData(storageKey, `data-key\u0000${network}\u0000pending`)))
+        };
+        await replaceRecords(storageKey, staged.records);
+        recordCache = staged.cache;
+        revision += 1;
+        try {
+          await updateVault();
+        } catch (error) {
+          const rollback = buildRecordSet(storageKey, network, candidate, revision + 1, wrappingKey, dataKey, kdf, recordCache);
+          await replaceRecords(storageKey, rollback.records);
+          recordCache = rollback.cache;
+          revision += 1;
+          persistLocator(storageKey, kdf);
+          sodiumApi().memzero(nextKey);
+          throw error;
+        }
+
+        const oldKey = wrappingKey;
+        wrappingKey = nextKey;
+        kdf = nextKdf;
+        sodiumApi().memzero(oldKey);
+        persistLocator(storageKey, kdf);
+        const finalized = buildRecordSet(storageKey, network, candidate, revision + 1, wrappingKey, dataKey, kdf, recordCache);
+        try {
+          await replaceRecords(storageKey, finalized.records);
+          recordCache = finalized.cache;
+          revision += 1;
+          return { cleanupPending: false };
+        } catch (_) {
+          // The staged record contains both wraps. The new Session can open it
+          // and finalizes the pending wrap before exposing Messenger state.
+          return { cleanupPending: true };
+        }
+      });
+      const pending = operation.catch(error => {
+        if (wrappingKey !== nextKey) sodiumApi().memzero(nextKey);
+        throw error;
+      });
+      saveQueue = pending.catch(() => {});
+      return pending;
+    }
     return {
       get state() { ensureOpen(); return state; },
-      save, snapshot, commit, exportBackup, importBackup, close, storageKey
+      save, snapshot, commit, exportBackup, importBackup, changeWrappingKey, close, storageKey
     };
   }
 

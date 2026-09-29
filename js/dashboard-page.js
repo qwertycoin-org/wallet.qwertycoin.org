@@ -2058,6 +2058,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       getWalletKeys: () => walletKeys,
       getQmsKey: () => WalletVault.qmsKey(),
       getQmsKdf: () => WalletVault.qmsKdf(),
+      preparePasswordChange: (currentPassword, newPassword) => WalletVault.preparePasswordChange(currentPassword, newPassword),
       getWallet: getQwcWallet,
       getRestoreHeight: getQwcRestoreHeight,
       createScanner: () => QwcWalletEngine.createDaemonScanner(),

@@ -592,6 +592,32 @@ const QmsMessenger = (() => {
         button.disabled = !(fileInput.files && fileInput.files[0]);
       }
     }).catch(showError));
+    el('qms-change-session-password').addEventListener('click', () => operations.run('password change', async () => {
+      if (typeof options.preparePasswordChange !== 'function') throw new Error('Session password change is unavailable');
+      const currentInput = el('qms-current-session-password');
+      const nextInput = el('qms-new-session-password');
+      const button = el('qms-change-session-password');
+      button.disabled = true;
+      let prepared = null;
+      try {
+        prepared = await options.preparePasswordChange(currentInput.value, nextInput.value);
+        assertActive();
+        const result = await store.changeWrappingKey(
+          prepared.qmsKey,
+          prepared.qmsKdf,
+          () => prepared.commit()
+        );
+        assertActive();
+        showStatus(result.cleanupPending
+          ? 'Session password changed. Messenger key cleanup will finish on the next save or unlock.'
+          : 'Session password and Messenger data-key wrapping changed atomically.', 'ok');
+      } finally {
+        currentInput.value = '';
+        nextInput.value = '';
+        button.disabled = false;
+        if (prepared) prepared.dispose();
+      }
+    }).catch(showError));
     el('qms-import-contact').addEventListener('click', async () => {
       try {
         const name = el('qms-contact-name').value.trim(), invitationHex = el('qms-contact-invitation').value.trim().toLowerCase();

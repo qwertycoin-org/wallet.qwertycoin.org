@@ -149,13 +149,22 @@ const WalletVault = (function () {
   async function persistedQmsKdf(address) {
     if (!address) return null;
     const storageKey = await qmsStorageKey(address);
+    let localEnvelope = null;
+    if (typeof localStorage !== 'undefined') {
+      try { localEnvelope = JSON.parse(localStorage.getItem(storageKey) || 'null'); } catch (_) {}
+    }
+    // A version-3 locator is updated synchronously during an atomic password
+    // change and therefore wins over an older staged IndexedDB wrap.
+    if (localEnvelope && localEnvelope.version === 3 && localEnvelope.profile === 'qms1-fast') {
+      const located = validateQmsKdf(localEnvelope.kdf);
+      if (located) return located;
+    }
     const indexed = await indexedQmsKdf(storageKey);
     if (indexed) return indexed;
     if (typeof localStorage === 'undefined') return null;
     try {
-      const envelope = JSON.parse(localStorage.getItem(storageKey) || 'null');
-      return envelope && (envelope.version === 2 || envelope.version === 3) && envelope.profile === 'qms1-fast'
-        ? validateQmsKdf(envelope.kdf)
+      return localEnvelope && localEnvelope.version === 2 && localEnvelope.profile === 'qms1-fast'
+        ? validateQmsKdf(localEnvelope.kdf)
         : null;
     } catch (_) {
       return null;
@@ -264,6 +273,71 @@ const WalletVault = (function () {
     return JSON.parse(new TextDecoder().decode(plain));
   }
 
+  async function preparePasswordChange(currentPassword, newPassword) {
+    const b = readBlob();
+    if (!b || !b.encrypted) throw new Error('An encrypted wallet Session is required to change its password');
+    if (typeof newPassword !== 'string' || newPassword.length < 12 || newPassword.length > 1024) {
+      throw new Error('New Session password must contain 12 to 1,024 characters');
+    }
+    const currentKey = await deriveKey(
+      currentPassword,
+      unb64(b.salt),
+      (typeof b.iterations === 'number') ? b.iterations : PBKDF2_ITERATIONS
+    );
+    let plain;
+    try {
+      plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(b.iv) }, currentKey, unb64(b.ciphertext));
+    } catch (_) {
+      throw new Error('Current Session password is wrong');
+    }
+    let keys;
+    try { keys = JSON.parse(new TextDecoder().decode(plain)); }
+    catch (_) { throw new Error('Encrypted wallet Session is invalid'); }
+    finally { new Uint8Array(plain).fill(0); }
+
+    const qmsKdf = {
+      name: 'argon2id13',
+      opslimit: QMS_PWHASH_OPSLIMIT,
+      memlimit: QMS_PWHASH_MEMLIMIT,
+      salt: b64(crypto.getRandomValues(new Uint8Array(16)))
+    };
+    const qmsKey = await deriveQmsUnlockKey(
+      newPassword, unb64(qmsKdf.salt), qmsKdf.opslimit, qmsKdf.memlimit);
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const nextVaultKey = await deriveKey(newPassword, salt, PBKDF2_ITERATIONS);
+    const ciphertext = new Uint8Array(await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv }, nextVaultKey, new TextEncoder().encode(JSON.stringify(keys))));
+    const envelope = JSON.stringify({
+      encrypted: true,
+      version: 1,
+      iterations: PBKDF2_ITERATIONS,
+      salt: b64(salt),
+      iv: b64(iv),
+      ciphertext: b64(ciphertext),
+      qmsKdf
+    });
+    let disposed = false;
+    let committed = false;
+    return {
+      qmsKey: new Uint8Array(qmsKey),
+      qmsKdf: Object.assign({}, qmsKdf),
+      commit() {
+        if (disposed) throw new Error('Password change preparation was discarded');
+        if (committed) return;
+        sessionStorage.setItem(STORAGE_KEY, envelope);
+        replaceQmsUnlockKey(qmsKey);
+        replaceQmsKdfMetadata(qmsKdf);
+        committed = true;
+      },
+      dispose() {
+        if (disposed) return;
+        disposed = true;
+        if (typeof sodium !== 'undefined' && sodium.memzero) sodium.memzero(qmsKey);
+      }
+    };
+  }
+
   function qmsKey() {
     return qmsUnlockKey ? new Uint8Array(qmsUnlockKey) : null;
   }
@@ -282,7 +356,7 @@ const WalletVault = (function () {
     sessionStorage.removeItem(STORAGE_KEY);
   }
 
-  return { store, hasBlob, isLocked, readPlain, unlock, qmsKey, qmsKdf, hasQmsKey, clear };
+  return { store, hasBlob, isLocked, readPlain, unlock, preparePasswordChange, qmsKey, qmsKdf, hasQmsKey, clear };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = WalletVault;

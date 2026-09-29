@@ -111,7 +111,21 @@ const contentTypes = {
       const reopened = await QmsStore.open(wallet, WalletVault.qmsKey(), WalletVault.qmsKdf());
       const contactId = reopened.state.contacts[0].id;
       const messageId = reopened.state.messages[0].id;
+      const indexedKdfRecovered = WalletVault.qmsKdf().salt === locator.kdf.salt;
+      const nextPassword = 'replacement browser Session password';
+      const passwordChange = await WalletVault.preparePasswordChange(password, nextPassword);
+      const changeResult = await reopened.changeWrappingKey(
+        passwordChange.qmsKey,
+        passwordChange.qmsKdf,
+        () => passwordChange.commit()
+      );
+      passwordChange.dispose();
       await reopened.close();
+      WalletVault.clear();
+      await WalletVault.store(wallet, nextPassword);
+      const changedPasswordStore = await QmsStore.open(wallet, WalletVault.qmsKey(), WalletVault.qmsKdf());
+      const changedPasswordMessageId = changedPasswordStore.state.messages[0].id;
+      await changedPasswordStore.close();
       const wrongPasswordError = await QmsStore.open(wallet, new Uint8Array(32))
         .then(() => '', error => error.message);
       return {
@@ -120,7 +134,9 @@ const contentTypes = {
         duplicateError,
         wrongPasswordError,
         locator,
-        indexedKdfRecovered: WalletVault.qmsKdf().salt === locator.kdf.salt,
+        indexedKdfRecovered,
+        passwordChangeCleanupPending: changeResult.cleanupPending,
+        changedPasswordMessageId,
         rowCount: rows.filter(row => row.key.startsWith(storageKey + '\u0000')).length,
         plaintextLeaked: serialized.includes('encrypted browser contact') || serialized.includes('encrypted browser message')
       };
@@ -135,6 +151,8 @@ const contentTypes = {
     assert.strictEqual(result.locator.backend, 'indexeddb');
     assert.strictEqual(result.locator.kdf.name, 'argon2id13');
     assert.strictEqual(result.indexedKdfRecovered, true);
+    assert.strictEqual(result.passwordChangeCleanupPending, false);
+    assert.strictEqual(result.changedPasswordMessageId, 'browser-message');
     assert(result.rowCount >= 4, `expected separate encrypted records, got ${result.rowCount}`);
     assert.strictEqual(result.plaintextLeaked, false);
     assert.deepStrictEqual(pageErrors, []);

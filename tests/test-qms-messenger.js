@@ -596,6 +596,53 @@ async function test(name, fn) {
     await foreign.close();
   });
 
+  await test('Session password change preserves the old wrap on failure and recovers a staged new wrap', async () => {
+    const wallet = { address: 'QWC-password-rewrap-test', network: 'mainnet', privateSpendKeyHex: '64'.repeat(32) };
+    const oldPassword = 'original Session password';
+    const newPassword = 'replacement Session password';
+    await vault.store(wallet, oldPassword);
+    const active = await store.open(wallet, vault.qmsKey(), vault.qmsKdf());
+    active.state.messages.push({ id: 'rewrap-history', direction: 'in', text: 'survives key rewrap' });
+    await active.save();
+
+    await assert.rejects(vault.preparePasswordChange('wrong current password', newPassword), /Current Session password is wrong/);
+    const failedPreparation = await vault.preparePasswordChange(oldPassword, newPassword);
+    await assert.rejects(active.changeWrappingKey(
+      failedPreparation.qmsKey,
+      failedPreparation.qmsKdf,
+      () => { throw new Error('sessionStorage write rejected'); }
+    ), /sessionStorage write rejected/);
+    failedPreparation.dispose();
+    await active.close();
+
+    vault.clear();
+    await vault.store(wallet, oldPassword);
+    const oldStillWorks = await store.open(wallet, vault.qmsKey(), vault.qmsKdf());
+    assert.strictEqual(oldStillWorks.state.messages[0].id, 'rewrap-history');
+    const prepared = await vault.preparePasswordChange(oldPassword, newPassword);
+    const changed = await oldStillWorks.changeWrappingKey(
+      prepared.qmsKey,
+      prepared.qmsKdf,
+      () => {
+        prepared.commit();
+        store.testing.failNextWrite(new Error('final wrap cleanup interrupted'));
+      }
+    );
+    assert.strictEqual(changed.cleanupPending, true);
+    prepared.dispose();
+    await oldStillWorks.close();
+
+    vault.clear();
+    await vault.store(wallet, newPassword);
+    const recovered = await store.open(wallet, vault.qmsKey(), vault.qmsKdf());
+    assert.strictEqual(recovered.state.messages[0].text, 'survives key rewrap');
+    await recovered.close();
+
+    vault.clear();
+    await vault.store(wallet, oldPassword);
+    await assert.rejects(store.open(wallet, vault.qmsKey(), vault.qmsKdf()), /metadata does not match|Unable to decrypt/);
+  });
+
   await test('closing waits for accepted writes and never encrypts with destroyed keys', async () => {
     const wallet = { address: 'QWC-close-race-test', privateSpendKeyHex: '66'.repeat(32) };
     const key = env.ctx.sodium.randombytes_buf(32);
@@ -659,7 +706,8 @@ async function test(name, fn) {
       'id="wallet-tab-messenger" type="button" role="tab" aria-selected="false" hidden',
       'id="qms-section"', 'Manage contacts',
       'Encrypt &amp; review', 'Send encrypted message', 'Copy complete invitation',
-      'id="qms-export-backup"', 'id="qms-import-backup"', 'Separate backup password'
+      'id="qms-export-backup"', 'id="qms-import-backup"', 'Separate backup password',
+      'id="qms-change-session-password"', 'New Session password (12+ characters)'
     ]) assert(html.includes(value), `missing Messenger UI contract: ${value}`);
     assert(html.indexOf('vendor/libsodium/libsodium-sumo.js') < html.indexOf('js/qms-protocol.js'));
     assert(html.indexOf('js/qms-messenger.js') < html.indexOf('js/dashboard-page.js'));
