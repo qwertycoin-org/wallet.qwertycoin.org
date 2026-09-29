@@ -218,26 +218,79 @@ async function test(name, fn) {
     const fragments = qms.fragmentCiphertext(bobInvite, messageId, qms.sealText(alice, bobInvite, messageId, text)).reverse();
     const state = {
       contacts: [
-        { id: 'mallory', invitationHex: invitationHex(qms, malloryInvite) },
-        { id: 'alice', invitationHex: invitationHex(qms, aliceInvite) }
+        ...Array.from({ length: 32 }, (_, index) => ({ id: `mallory-${index}`, fingerprint: qms.hex(qms.fingerprint(mallory.boxPublic, mallory.signPublic)), invitationHex: invitationHex(qms, malloryInvite) })),
+        { id: 'alice', fingerprint: qms.hex(qms.fingerprint(alice.boxPublic, alice.signPublic)), invitationHex: invitationHex(qms, aliceInvite) }
       ],
       messages: [], plans: [], reassembly: [], scan: { height: 0, blockHash: '' }
     };
-    for (let index = 0; index < fragments.length; index++) {
-      messenger.testing.acceptFragment(state, bob, bobInvite, fragments[index], {
-        txHash: String(index).padStart(64, '0'),
-        blockHeight: 100 + index,
-        blockHash: `block-${index}`,
-        createdAt: new Date(1700000000000 + index * 1000).toISOString()
-      });
-      assert(state.reassembly.length <= 1, 'one ciphertext must not be duplicated per contact');
+    const originalSealOpen = env.ctx.sodium.crypto_box_seal_open;
+    let sealOpenCalls = 0;
+    env.ctx.sodium.crypto_box_seal_open = (...args) => { sealOpenCalls += 1; return originalSealOpen(...args); };
+    try {
+      for (let index = 0; index < fragments.length; index++) {
+        messenger.testing.acceptFragment(state, bob, bobInvite, fragments[index], {
+          txHash: String(index).padStart(64, '0'),
+          blockHeight: 100 + index,
+          blockHash: `block-${index}`,
+          createdAt: new Date(1700000000000 + index * 1000).toISOString()
+        });
+        assert(state.reassembly.length <= 1, 'one ciphertext must not be duplicated per contact');
+      }
+    } finally {
+      env.ctx.sodium.crypto_box_seal_open = originalSealOpen;
     }
+    assert.strictEqual(sealOpenCalls, 1, 'a complete ciphertext must be opened once, not once per contact');
     assert.strictEqual(state.messages.length, 1);
     assert.strictEqual(state.messages[0].contactId, 'alice');
     assert.strictEqual(state.messages[0].text, text);
     assert.strictEqual(state.messages[0].status, 'confirmed');
     assert.strictEqual(state.reassembly.length, 0);
     assert.strictEqual(messenger.testing.acceptFragment(state, bob, bobInvite, fragments[0], {}), null);
+  });
+
+  await test('dedicated per-contact recipient invitations remain compatible with the legacy bootstrap invitation', async () => {
+    const dedicatedBobInvite = qms.createInvitation(bob);
+    const messageId = qms.random(16);
+    const fragment = qms.fragmentCiphertext(
+      dedicatedBobInvite,
+      messageId,
+      qms.sealText(alice, dedicatedBobInvite, messageId, 'dedicated invitation delivery')
+    )[0];
+    const state = {
+      contacts: [{
+        id: qms.hex(qms.fingerprint(alice.boxPublic, alice.signPublic)),
+        fingerprint: qms.hex(qms.fingerprint(alice.boxPublic, alice.signPublic)),
+        invitationHex: invitationHex(qms, aliceInvite),
+        localInvitationHex: invitationHex(qms, dedicatedBobInvite),
+        verifiedAt: new Date().toISOString()
+      }],
+      messages: [], plans: [], reassembly: [], scan: { height: 0, blockHash: '' }
+    };
+    const received = messenger.testing.acceptFragment(state, bob, bobInvite, fragment, { blockHeight: 12 });
+    assert.strictEqual(received.text, 'dedicated invitation delivery');
+    assert.strictEqual(state.reassembly.length, 0);
+  });
+
+  await test('complete unknown-sender ciphertext leaves reassembly capacity and opens after contact import', async () => {
+    const messageId = qms.random(16);
+    const fragment = qms.fragmentCiphertext(
+      bobInvite,
+      messageId,
+      qms.sealText(alice, bobInvite, messageId, 'arrived before contact import')
+    )[0];
+    const state = { contacts: [], messages: [], plans: [], reassembly: [], unmatched: [], scan: { height: 0, blockHash: '' } };
+    assert.strictEqual(messenger.testing.acceptFragment(state, bob, bobInvite, fragment, { blockHeight: 44 }), null);
+    assert.strictEqual(state.reassembly.length, 0);
+    assert.strictEqual(state.unmatched.length, 1);
+    state.contacts.push({
+      id: qms.hex(qms.fingerprint(alice.boxPublic, alice.signPublic)),
+      fingerprint: qms.hex(qms.fingerprint(alice.boxPublic, alice.signPublic)),
+      invitationHex: invitationHex(qms, aliceInvite)
+    });
+    const opened = messenger.testing.retryCompleteReassemblies(state, bob, bobInvite);
+    assert.strictEqual(opened.length, 1);
+    assert.strictEqual(opened[0].text, 'arrived before contact import');
+    assert.strictEqual(state.unmatched.length, 0);
   });
 
   await test('incomplete ciphertext state is capped before contact amplification', async () => {
@@ -705,7 +758,7 @@ async function test(name, fn) {
     for (const value of [
       'id="wallet-tab-messenger" type="button" role="tab" aria-selected="false" hidden',
       'id="qms-section"', 'Manage contacts',
-      'Encrypt &amp; review', 'Send encrypted message', 'Copy complete invitation',
+      'Encrypt &amp; review', 'Send encrypted message', 'Copy bootstrap invitation',
       'id="qms-export-backup"', 'id="qms-import-backup"', 'Separate backup password',
       'id="qms-change-session-password"', 'New Session password (12+ characters)'
     ]) assert(html.includes(value), `missing Messenger UI contract: ${value}`);

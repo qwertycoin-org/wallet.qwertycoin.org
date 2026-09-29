@@ -48,13 +48,14 @@ const QmsStore = (() => {
       messages: [],
       plans: [],
       reassembly: [],
+      unmatched: [],
       scan: { height: 0, blockHash: '', startHeight: null, checkpoints: [] }
     };
   }
   function validateState(state) {
     if (!state || state.version !== 1 || !Array.isArray(state.contacts)
         || !Array.isArray(state.messages) || !Array.isArray(state.plans)
-        || !Array.isArray(state.reassembly) || !state.scan) {
+        || !Array.isArray(state.reassembly) || !Array.isArray(state.unmatched || []) || !state.scan) {
       throw new Error('invalid encrypted QMS1/Fast store');
     }
     return state;
@@ -135,7 +136,8 @@ const QmsStore = (() => {
         || !/^[0-9a-f]{128}$/i.test(state.identity.signSecret || '')
         || typeof state.ownInvitation !== 'string' || state.ownInvitation.length > 2048
         || state.contacts.length > 1000 || state.messages.length > 10000
-        || state.plans.length > 128 || state.reassembly.length > 64) {
+        || state.plans.length > 128 || state.reassembly.length > 64
+        || (state.unmatched || []).length > 32) {
       throw new Error('Messenger backup exceeds supported identity or resource limits');
     }
     return state;
@@ -334,7 +336,8 @@ const QmsStore = (() => {
     if (state.identity !== null) records.push(encryptedRecord(storageKey, network, 'identity', 'identity', 0, state.identity, dataKey, recordCache, nextCache));
     if (state.ownInvitation !== null) records.push(encryptedRecord(storageKey, network, 'invitation', 'own', 0, state.ownInvitation, dataKey, recordCache, nextCache));
     for (const [type, values] of [
-      ['contact', state.contacts], ['message', state.messages], ['plan', state.plans], ['reassembly', state.reassembly]
+      ['contact', state.contacts], ['message', state.messages], ['plan', state.plans],
+      ['reassembly', state.reassembly], ['unmatched', state.unmatched || []]
     ]) values.forEach((value, index) => records.push(encryptedRecord(
       storageKey, network, type, String(index).padStart(10, '0'), index, value, dataKey, recordCache, nextCache)));
     records.push(encryptedRecord(storageKey, network, 'scan', 'scan', 0, state.scan, dataKey, recordCache, nextCache));
@@ -361,7 +364,7 @@ const QmsStore = (() => {
       associatedData(storageKey, usePending ? `data-key\u0000${network}\u0000pending` : `data-key\u0000${network}`),
       'Messenger key'), 'QMS1/Fast data key');
     const state = blank();
-    const arrays = { contact: [], message: [], plan: [], reassembly: [] };
+    const arrays = { contact: [], message: [], plan: [], reassembly: [], unmatched: [] };
     const seen = new Set(), recordCache = new Map();
     try {
       for (const record of records) {
@@ -385,7 +388,7 @@ const QmsStore = (() => {
         else if (arrays[record.type]) arrays[record.type].push({ order: record.order, value });
         else throw new Error('Unsupported encrypted QMS1/Fast record type');
       }
-      for (const [type, property] of [['contact', 'contacts'], ['message', 'messages'], ['plan', 'plans'], ['reassembly', 'reassembly']]) {
+      for (const [type, property] of [['contact', 'contacts'], ['message', 'messages'], ['plan', 'plans'], ['reassembly', 'reassembly'], ['unmatched', 'unmatched']]) {
         state[property] = arrays[type].sort((left, right) => left.order - right.order).map(entry => entry.value);
       }
       return { state: cloneState(state), dataKey, revision: meta.revision, recordCache, openedPending: usePending };
