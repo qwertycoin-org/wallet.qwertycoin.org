@@ -190,11 +190,11 @@ async function test(name, fn) {
     const fragments = qms.fragmentCiphertext(bobInvite, messageId, qms.sealText(alice, bobInvite, messageId, 'integrity'));
     const missing = qms.encodeSegments(fragments[0]);
     missing.pop();
-    assert.throws(() => qms.decodeSegments(missing));
+    assert.throws(() => qms.decodeSegments(missing), error => error.code === 'QMS_INVALID_FRAGMENT');
     const duplicateSegment = qms.encodeSegments(fragments[0]);
     if (duplicateSegment.length > 1) {
       duplicateSegment[1] = Uint8Array.from(duplicateSegment[0]);
-      assert.throws(() => qms.decodeSegments(duplicateSegment));
+      assert.throws(() => qms.decodeSegments(duplicateSegment), error => error.code === 'QMS_INVALID_FRAGMENT');
     }
     assert.throws(() => qms.extractSegmentsFromExtra(Uint8Array.from([0x01, 0x00])));
     assert.throws(() => qms.extractSegmentsFromExtra(Uint8Array.from([0x02, 0x80])));

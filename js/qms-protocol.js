@@ -194,9 +194,14 @@ const QmsProtocol = (() => {
     for (let i = 0; i < count; i++) out.push(concat([C.NONCE_SUBTYPE], MAGIC, [i, count], record.slice(i * 248, Math.min((i + 1) * 248, record.length)))); return out;
   }
   function decodeSegments(nonces) {
-    if (!nonces.length || nonces.length > 3) throw new Error('invalid QMS segment count'); const map = new Map(); let count = 0;
-    for (const raw of nonces) { const n = bytes(raw); if (n.length < 7 || n.length > 255 || n[0] !== 0x72 || !equal(n.slice(1, 5), MAGIC)) throw new Error('invalid QMS nonce segment'); if (!count) count = n[6]; if (n[6] !== count || !count || count > 3 || n[5] >= count || map.has(n[5])) throw new Error('invalid QMS segment set'); map.set(n[5], n.slice(7)); }
-    if (map.size !== count) throw new Error('missing QMS segment'); return decodeFragment(concat(...Array.from({ length: count }, (_, i) => map.get(i))));
+    try {
+      if (!nonces.length || nonces.length > 3) throw new Error('invalid QMS segment count'); const map = new Map(); let count = 0;
+      for (const raw of nonces) { const n = bytes(raw); if (n.length < 7 || n.length > 255 || n[0] !== 0x72 || !equal(n.slice(1, 5), MAGIC)) throw new Error('invalid QMS nonce segment'); if (!count) count = n[6]; if (n[6] !== count || !count || count > 3 || n[5] >= count || map.has(n[5])) throw new Error('invalid QMS segment set'); map.set(n[5], n.slice(7)); }
+      if (map.size !== count) throw new Error('missing QMS segment'); return decodeFragment(concat(...Array.from({ length: count }, (_, i) => map.get(i))));
+    } catch (error) {
+      error.code = error.code || 'QMS_INVALID_FRAGMENT';
+      throw error;
+    }
   }
   function varint(value) { const out = []; do { let b = value & 0x7f; value >>>= 7; if (value) b |= 0x80; out.push(b); } while (value); return new Uint8Array(out); }
   function carrierExtra(f) {

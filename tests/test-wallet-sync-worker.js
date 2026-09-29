@@ -31,6 +31,16 @@ class BrowserWorker {
 
 global.Worker = BrowserWorker;
 const QwcWalletEngine = require('../js/qwc-wallet-engine.js');
+const QmsProtocol = require('../js/qms-protocol.js');
+
+function transactionExtras(block) {
+  const txs = [].concat(block && block.minerTx ? [block.minerTx] : [], block && Array.isArray(block.txs) ? block.txs : []);
+  return txs.map(tx => {
+    if (tx && Array.isArray(tx.extra)) return new Uint8Array(tx.extra);
+    if (tx && typeof tx.extraHex === 'string') return QmsProtocol.unhex(tx.extraHex);
+    return null;
+  }).filter(Boolean);
+}
 
 (async () => {
   let generated;
@@ -94,7 +104,22 @@ const QwcWalletEngine = require('../js/qwc-wallet-engine.js');
       assert((Array.isArray(tx.extra) && tx.extra.length > 0) || (typeof tx.extraHex === 'string' && tx.extraHex.length > 0),
         `Messenger regression transaction ${regression.txHash} has no carrier extra`);
     }
-    console.log(`  actual QWC worker/WASM genesis sync passed at height ${walletHeight}`);
+    const recentStart = Math.max(0, scannerHeight - 100);
+    const recentBlocks = await scanner.getBlocksByRange(recentStart, scannerHeight - 1);
+    let validCarriers = 0;
+    let rejectedForeignNonces = 0;
+    for (const block of recentBlocks) for (const extra of transactionExtras(block)) {
+      let segments;
+      try { segments = QmsProtocol.extractSegmentsFromExtra(extra); }
+      catch (_) { continue; }
+      if (!segments.length) continue;
+      try { QmsProtocol.decodeSegments(segments); validCarriers += 1; }
+      catch (error) {
+        assert.strictEqual(error.code, 'QMS_INVALID_FRAGMENT', 'malformed nonce data must be classified as an ignorable foreign carrier');
+        rejectedForeignNonces += 1;
+      }
+    }
+    console.log(`  actual QWC worker/WASM genesis sync passed at height ${walletHeight}; recent QMS carriers valid=${validCarriers} rejected-foreign=${rejectedForeignNonces}`);
   } finally {
     if (restored) await restored.close();
     if (generated) await generated.close();
