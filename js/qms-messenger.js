@@ -20,6 +20,7 @@ const QmsMessenger = (() => {
   const MAX_REASSEMBLY_BYTES = 8 * 1024 * 1024;
   const MAX_UNMATCHED_MESSAGES = 32;
   const MAX_UNMATCHED_BYTES = 4 * 1024 * 1024;
+  const REASSEMBLY_RETENTION_BLOCKS = 2048;
   const MAX_MESSAGES = 10000;
   const MAX_CONTACTS = 1000;
   const MAX_PLANS = 128;
@@ -129,6 +130,41 @@ const QmsMessenger = (() => {
   }
 
   function totalReassemblyBytes(state) { return state.reassembly.reduce((sum, partial) => sum + Number(partial.bytes || 0), 0); }
+  function sourceHeights(records) {
+    return (records || []).map(record => Number(record && record.blockHeight || 0)).filter(height => Number.isSafeInteger(height) && height >= 0);
+  }
+  function rememberDeferredRescan(state, heights) {
+    if (!heights.length) return;
+    const earliest = Math.min(...heights);
+    const existing = Number(state.scan && state.scan.rescanFrom);
+    state.scan.rescanFrom = Number.isSafeInteger(existing) && existing >= 0 ? Math.min(existing, earliest) : earliest;
+  }
+  function evictStaleInboundState(state, currentHeight) {
+    const height = Number(currentHeight);
+    if (!Number.isSafeInteger(height) || height < REASSEMBLY_RETENTION_BLOCKS) return 0;
+    const cutoff = height - REASSEMBLY_RETENTION_BLOCKS;
+    let removed = 0;
+    state.reassembly = state.reassembly.filter(partial => {
+      const heights = sourceHeights(Object.values(partial.fragments || {}));
+      if (!heights.length || Math.max(...heights) > cutoff) return true;
+      rememberDeferredRescan(state, heights); removed += 1; return false;
+    });
+    state.unmatched = (state.unmatched || []).filter(message => {
+      const heights = sourceHeights(message.sourceFragments);
+      if (!heights.length || Math.max(...heights) > cutoff) return true;
+      rememberDeferredRescan(state, heights); removed += 1; return false;
+    });
+    return removed;
+  }
+  function resetDeferredRescan(state) {
+    const from = Number(state.scan && state.scan.rescanFrom);
+    if (!Number.isSafeInteger(from) || from < 0) return null;
+    state.scan.height = Math.min(Number(state.scan.height || from), from);
+    state.scan.blockHash = '';
+    state.scan.checkpoints = (state.scan.checkpoints || []).filter(checkpoint => Number(checkpoint.height) < from);
+    delete state.scan.rescanFrom;
+    return from;
+  }
   function invitationCandidates(state, fallbackInvitation) {
     const result = [], seen = new Set();
     const add = invitation => {
@@ -149,6 +185,7 @@ const QmsMessenger = (() => {
     const recipientInvitationHex = QmsProtocol.hex(QmsProtocol.encodeInvitation(recipientInvitation));
     let partial = state.reassembly.find(item => item.messageId === messageId && item.hash === hash);
     if (!partial) {
+      evictStaleInboundState(state, source.blockHeight);
       if (state.reassembly.length >= MAX_REASSEMBLIES) throw messengerError('QMS_CAPACITY', 'Messenger reassembly limit reached; scan cursor was not advanced');
       partial = { messageId, hash, count: fragment.count, ciphertextSize: fragment.ciphertextSize, recipientInvitationHex, fragments: {}, bytes: 0 };
       state.reassembly.push(partial);
@@ -234,6 +271,8 @@ const QmsMessenger = (() => {
     const partial = addFragmentRecord(state, fragment, source, recipientInvitation);
     const message = openCompletePartial(state, partial, identity, ownInvitation);
     if (message && message.unmatched) {
+      const newestHeight = Math.max(0, ...sourceHeights(message.sourceFragments));
+      evictStaleInboundState(state, newestHeight);
       const unmatchedBytes = state.unmatched.reduce((sum, item) => sum + Number(item.bytes || 0), 0);
       if (state.unmatched.length >= MAX_UNMATCHED_MESSAGES || unmatchedBytes + message.bytes > MAX_UNMATCHED_BYTES) {
         throw messengerError('QMS_CAPACITY', 'Messenger unknown-sender queue is full; scan cursor was not advanced');
@@ -952,7 +991,9 @@ const QmsMessenger = (() => {
         selectedId = fp;
         restoreDraft();
         retryCompleteReassemblies(state, identity, own);
+        const deferredRescanFrom = resetDeferredRescan(state);
         await persist(); el('qms-contact-name').value = ''; el('qms-contact-invitation').value = ''; render(); showStatus(`Imported ${name} as unverified. Compare the complete fingerprint before sending: ${fp}`, 'ok');
+        if (deferredRescanFrom !== null) showStatus(`Imported ${name} as unverified. A bounded Messenger rescan will resume at block ${deferredRescanFrom.toLocaleString()} for previously deferred unknown senders. Verify the complete fingerprint before sending: ${fp}`, 'ok');
       } catch (error) { showError(error); }
     });
     el('qms-contact-filter').addEventListener('input', renderContacts);
@@ -1140,7 +1181,9 @@ const QmsMessenger = (() => {
         }
         scanFailures = 0;
         nextScanAt = Date.now() + 30000;
-        render(); showStatus(`Messenger scan complete at block ${Math.max(0, tip - 1).toLocaleString()}.`, 'ok');
+        render(); showStatus(state.scan.rescanFrom === undefined
+          ? `Messenger scan complete at block ${Math.max(0, tip - 1).toLocaleString()}.`
+          : `Messenger scan complete. Stale unmatched carriers were deferred with a bounded rescan anchor at block ${Number(state.scan.rescanFrom).toLocaleString()}. Importing the matching sender invitation retries them.`, 'ok');
       } catch (error) {
         scanFailures += 1;
         const delay = Math.min(5 * 60 * 1000, 30000 * (2 ** Math.min(4, scanFailures - 1)));
@@ -1213,7 +1256,7 @@ const QmsMessenger = (() => {
     };
   }
 
-  return { mount, testing: { normalizeState, activePlan, acceptFragment, retryCompleteReassemblies, rollbackForReorg, validateBlockSequence, findCommonCheckpoint, removeDraft, recomputePlanStatus, releasePlanInputs, createOperationMutex, beginBroadcastAttempt, completeBroadcastAttempt, markBroadcastUnknown, relayPlan, statusLabel } };
+  return { mount, testing: { normalizeState, activePlan, acceptFragment, retryCompleteReassemblies, evictStaleInboundState, resetDeferredRescan, rollbackForReorg, validateBlockSequence, findCommonCheckpoint, removeDraft, recomputePlanStatus, releasePlanInputs, createOperationMutex, beginBroadcastAttempt, completeBroadcastAttempt, markBroadcastUnknown, relayPlan, statusLabel } };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = QmsMessenger;

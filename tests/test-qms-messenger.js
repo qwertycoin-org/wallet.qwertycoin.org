@@ -309,6 +309,23 @@ async function test(name, fn) {
     );
   });
 
+  await test('stale capacity pressure records a bounded rescan instead of blocking forever', async () => {
+    const state = { contacts: [], messages: [], plans: [], reassembly: [], unmatched: [], scan: { height: 3000, blockHash: 'aa'.repeat(32), checkpoints: [{ height: 2999, hash: 'aa'.repeat(32) }] } };
+    const payload = new Uint8Array(601).fill(7);
+    for (let index = 0; index < 64; index++) {
+      const first = qms.fragmentCiphertext(bobInvite, qms.random(16), payload)[0];
+      messenger.testing.acceptFragment(state, bob, bobInvite, first, { blockHeight: index + 1 });
+    }
+    const fresh = qms.fragmentCiphertext(bobInvite, qms.random(16), payload)[0];
+    messenger.testing.acceptFragment(state, bob, bobInvite, fresh, { blockHeight: 3000 });
+    assert.strictEqual(state.reassembly.length, 1);
+    assert.strictEqual(state.scan.rescanFrom, 1);
+    assert.strictEqual(messenger.testing.resetDeferredRescan(state), 1);
+    assert.strictEqual(state.scan.height, 1);
+    assert.strictEqual(state.scan.blockHash, '');
+    assert.deepStrictEqual(state.scan.checkpoints, []);
+  });
+
   await test('block continuity checks hashes across batch boundaries', async () => {
     const zero = '00'.repeat(32), first = '11'.repeat(32), second = '22'.repeat(32), third = '33'.repeat(32);
     assert.strictEqual(messenger.testing.validateBlockSequence([
