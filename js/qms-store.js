@@ -198,6 +198,7 @@ const QmsStore = (() => {
     }
 
     let saveQueue = Promise.resolve();
+    let revision = 0;
     let closed = false;
     let closePromise = null;
     function ensureOpen() {
@@ -235,6 +236,26 @@ const QmsStore = (() => {
       const serializedEnvelope = buildEnvelope(snapshot);
       const pending = saveQueue.then(() => {
         localStorage.setItem(storageKey, serializedEnvelope);
+        revision += 1;
+      });
+      saveQueue = pending.catch(() => {});
+      return pending;
+    }
+    function snapshot() {
+      ensureOpen();
+      return { revision, state: JSON.parse(JSON.stringify(state)) };
+    }
+    function commit(nextState, expectedRevision) {
+      ensureOpen();
+      if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) throw new Error('Invalid QMS1/Fast store revision');
+      const candidate = JSON.parse(JSON.stringify(validateState(nextState)));
+      const serializedEnvelope = buildEnvelope(candidate);
+      const pending = saveQueue.then(() => {
+        if (revision !== expectedRevision) throw new Error('QMS1/Fast store changed while the scan batch was in progress');
+        localStorage.setItem(storageKey, serializedEnvelope);
+        state = candidate;
+        revision += 1;
+        return state;
       });
       saveQueue = pending.catch(() => {});
       return pending;
@@ -250,7 +271,7 @@ const QmsStore = (() => {
       return closePromise;
     }
 
-    return { get state() { return state; }, save, close, storageKey };
+    return { get state() { ensureOpen(); return state; }, save, snapshot, commit, close, storageKey };
   }
 
   return { open, blank, validateState };

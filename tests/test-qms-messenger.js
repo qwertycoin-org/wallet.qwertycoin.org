@@ -16,9 +16,17 @@ function browserContext() {
   const values = new Map();
   const sessionValues = new Map();
   const heldLocks = new Set();
+  let nextLocalWriteError = null;
   const localStorage = {
     getItem: key => values.has(key) ? values.get(key) : null,
-    setItem: (key, value) => values.set(key, String(value)),
+    setItem: (key, value) => {
+      if (nextLocalWriteError) {
+        const error = nextLocalWriteError;
+        nextLocalWriteError = null;
+        throw error;
+      }
+      values.set(key, String(value));
+    },
     removeItem: key => values.delete(key),
     clear: () => values.clear()
   };
@@ -68,6 +76,7 @@ function browserContext() {
   return {
     ctx,
     values,
+    failNextLocalWrite: error => { nextLocalWriteError = error; },
     qms: vm.runInContext('QmsProtocol', ctx),
     vault: vm.runInContext('WalletVault', ctx),
     store: vm.runInContext('QmsStore', ctx),
@@ -150,9 +159,12 @@ async function test(name, fn) {
       finalExtra[0] = 0x01;
       finalExtra.set(carrier, 33);
       assert(qms.equal(qms.encodeFragment(fragment), qms.encodeFragment(qms.decodeSegments(qms.extractSegmentsFromExtra(finalExtra)))));
-      const withAdditionalKeys = new Uint8Array(finalExtra.length + 3);
-      withAdditionalKeys.set(Uint8Array.from([0x04, 0x01, 0x00]));
-      withAdditionalKeys.set(finalExtra, 3);
+      // Core tx_extra_additional_pub_keys serializes a vector count followed by
+      // exactly count * 32 raw public-key bytes (not a byte-length field).
+      const withAdditionalKeys = new Uint8Array(finalExtra.length + 34);
+      withAdditionalKeys.set(Uint8Array.from([0x04, 0x01]));
+      withAdditionalKeys.set(new Uint8Array(32).fill(0x42), 2);
+      withAdditionalKeys.set(finalExtra, 34);
       assert(qms.equal(qms.encodeFragment(fragment), qms.encodeFragment(qms.decodeSegments(qms.extractSegmentsFromExtra(withAdditionalKeys)))));
       const withLegacyField = new Uint8Array(finalExtra.length + 4);
       withLegacyField.set(Uint8Array.from([0xde, 0x01, 0x01, 0x00]));
@@ -188,6 +200,8 @@ async function test(name, fn) {
     assert.throws(() => qms.extractSegmentsFromExtra(Uint8Array.from([0x82, 0x00])), /non-canonical/);
     assert.throws(() => qms.extractSegmentsFromExtra(Uint8Array.from([0x00, 0x01])), /terminal/);
     assert.throws(() => qms.extractSegmentsFromExtra(Uint8Array.from([0x7f])));
+    assert.throws(() => qms.extractSegmentsFromExtra(Uint8Array.from([0x04, 0x01, 0x42])), /additional tx public keys/);
+    assert.throws(() => qms.extractSegmentsFromExtra(Uint8Array.from([0x04, 0xff, 0xff, 0xff, 0xff, 0x0f])), /additional tx public keys/);
     const badMac = Object.assign({}, fragments[0], { data: Uint8Array.from(fragments[0].data) });
     badMac.data[0] ^= 1;
     assert(!qms.verifyFragment(bobInvite, badMac));
@@ -234,7 +248,48 @@ async function test(name, fn) {
     }
     assert.strictEqual(state.reassembly.length, 64);
     const overflow = qms.fragmentCiphertext(bobInvite, qms.random(16), payload)[0];
-    assert.throws(() => messenger.testing.acceptFragment(state, bob, bobInvite, overflow, {}), /reassembly limit/);
+    assert.throws(
+      () => messenger.testing.acceptFragment(state, bob, bobInvite, overflow, {}),
+      error => error && error.code === 'QMS_CAPACITY' && /cursor was not advanced/.test(error.message)
+    );
+  });
+
+  await test('block continuity checks hashes across batch boundaries', async () => {
+    const zero = '00'.repeat(32), first = '11'.repeat(32), second = '22'.repeat(32), third = '33'.repeat(32);
+    assert.strictEqual(messenger.testing.validateBlockSequence([
+      { height: 0, hash: first, prevHash: zero },
+      { height: 1, hash: second, prevHash: first }
+    ], 0, ''), second);
+    assert.strictEqual(messenger.testing.validateBlockSequence([
+      { height: 2, hash: third, prevHash: second }
+    ], 2, second), third);
+    assert.throws(() => messenger.testing.validateBlockSequence([
+      { height: 2, hash: third, prevHash: first }
+    ], 2, second), /disconnected/);
+  });
+
+  await test('reorg rollback retains messages and confirmations before the common ancestor', async () => {
+    const state = {
+      contacts: [],
+      messages: [
+        { id: 'old-in', direction: 'in', sourceFragments: [{ blockHeight: 90 }] },
+        { id: 'new-in', direction: 'in', sourceFragments: [{ blockHeight: 110 }] },
+        { id: 'old-out', direction: 'out', status: 'confirmed' },
+        { id: 'new-out', direction: 'out', status: 'confirmed' }
+      ],
+      plans: [
+        { id: 'old-out', status: 'confirmed', txs: [{ status: 'confirmed', blockHeight: 90, blockHash: 'old' }] },
+        { id: 'new-out', status: 'confirmed', txs: [{ status: 'confirmed', blockHeight: 110, blockHash: 'new' }] }
+      ],
+      reassembly: [],
+      scan: { height: 120, blockHash: 'tip', startHeight: 0, checkpoints: [{ height: 99, hash: 'common' }, { height: 119, hash: 'tip' }] }
+    };
+    messenger.testing.rollbackForReorg(state, 100, 'common');
+    assert.deepStrictEqual(state.messages.map(message => message.id), ['old-in', 'old-out', 'new-out']);
+    assert.strictEqual(state.plans[0].status, 'confirmed');
+    assert.strictEqual(state.plans[1].status, 'broadcast');
+    assert.strictEqual(state.messages.find(message => message.id === 'new-out').status, 'broadcast');
+    assert.deepStrictEqual(state.scan, { height: 100, blockHash: 'common', startHeight: 0, checkpoints: [{ height: 99, hash: 'common' }] });
   });
 
   await test('prepared-plan cancellation deletes its message and safely releases unique inputs', async () => {
@@ -461,6 +516,27 @@ async function test(name, fn) {
     const second = await store.open(wallet, key);
     assert.strictEqual(second.state.messages[0].id, 'first-writer');
     await second.close();
+  });
+
+  await test('atomic scan commit keeps the in-memory cursor unchanged on quota failure', async () => {
+    const wallet = { address: 'QWC-atomic-scan-test', privateSpendKeyHex: '88'.repeat(32) };
+    const key = env.ctx.sodium.randombytes_buf(32);
+    const active = await store.open(wallet, key);
+    await active.save();
+    const snapshot = active.snapshot();
+    snapshot.state.scan = { height: 20, blockHash: 'aa'.repeat(32), startHeight: 0, checkpoints: [] };
+    env.failNextLocalWrite(new Error('quota exceeded'));
+    await assert.rejects(active.commit(snapshot.state, snapshot.revision), /quota exceeded/);
+    assert.strictEqual(active.state.scan.height, 0);
+
+    const stale = active.snapshot();
+    active.state.messages.push({ id: 'concurrent-change', text: 'preserve me' });
+    await active.save();
+    stale.state.scan.height = 40;
+    await assert.rejects(active.commit(stale.state, stale.revision), /changed while/);
+    assert.strictEqual(active.state.scan.height, 0);
+    assert.strictEqual(active.state.messages[0].id, 'concurrent-change');
+    await active.close();
   });
 
   await test('shipped UI, worker and provenance are bound to the reviewed Messenger assets', async () => {

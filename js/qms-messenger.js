@@ -20,6 +20,7 @@ const QmsMessenger = (() => {
   const MAX_REASSEMBLY_BYTES = 8 * 1024 * 1024;
 
   function nowIso() { return new Date().toISOString(); }
+  function messengerError(code, message) { const error = new Error(message); error.code = code; return error; }
   function short(value) { return value ? value.slice(0, 16) + '…' : ''; }
   function atomic(value) {
     const n = BigInt(String(value || 0));
@@ -54,7 +55,8 @@ const QmsMessenger = (() => {
 
   function normalizeState(state) {
     if (!Array.isArray(state.reassembly)) state.reassembly = [];
-    if (!state.scan || !Number.isSafeInteger(Number(state.scan.height)) || Number(state.scan.height) < 0) state.scan = { height: 0, blockHash: '' };
+    if (!state.scan || !Number.isSafeInteger(Number(state.scan.height)) || Number(state.scan.height) < 0) state.scan = { height: 0, blockHash: '', startHeight: null, checkpoints: [] };
+    if (!Array.isArray(state.scan.checkpoints)) state.scan.checkpoints = [];
 
     // Early development builds keyed one copy of the same ciphertext by every
     // contact. Merge those copies into one recipient-authenticated reassembly.
@@ -95,19 +97,19 @@ const QmsMessenger = (() => {
     const hash = QmsProtocol.hex(fragment.ciphertextHash);
     let partial = state.reassembly.find(item => item.messageId === messageId && item.hash === hash);
     if (!partial) {
-      if (state.reassembly.length >= MAX_REASSEMBLIES) throw new Error('Messenger reassembly limit reached');
+      if (state.reassembly.length >= MAX_REASSEMBLIES) throw messengerError('QMS_CAPACITY', 'Messenger reassembly limit reached; scan cursor was not advanced');
       partial = { messageId, hash, count: fragment.count, ciphertextSize: fragment.ciphertextSize, fragments: {}, bytes: 0 };
       state.reassembly.push(partial);
     }
-    if (partial.count !== fragment.count || partial.ciphertextSize !== fragment.ciphertextSize) throw new Error('Conflicting Messenger fragment metadata');
+    if (partial.count !== fragment.count || partial.ciphertextSize !== fragment.ciphertextSize) throw messengerError('QMS_INVALID_FRAGMENT', 'Conflicting Messenger fragment metadata');
 
     const index = String(fragment.index);
     const encoded = QmsProtocol.hex(QmsProtocol.encodeFragment(fragment));
     if (partial.fragments[index]) {
-      if (partial.fragments[index].encoded !== encoded) throw new Error('Conflicting Messenger fragment duplicate');
+      if (partial.fragments[index].encoded !== encoded) throw messengerError('QMS_INVALID_FRAGMENT', 'Conflicting Messenger fragment duplicate');
       return partial;
     }
-    if (totalReassemblyBytes(state) + fragment.data.length > MAX_REASSEMBLY_BYTES) throw new Error('Messenger reassembly byte limit reached');
+    if (totalReassemblyBytes(state) + fragment.data.length > MAX_REASSEMBLY_BYTES) throw messengerError('QMS_CAPACITY', 'Messenger reassembly byte limit reached; scan cursor was not advanced');
     partial.fragments[index] = {
       encoded,
       txHash: source.txHash || '',
@@ -268,17 +270,58 @@ const QmsMessenger = (() => {
     return changed;
   }
 
-  function rollbackForReorg(state, restoreHeight) {
-    state.messages = state.messages.filter(message => message.direction !== 'in');
-    state.reassembly = [];
+  function rollbackForReorg(state, restoreHeight, anchorHash = '') {
+    state.messages = state.messages.filter(message => {
+      if (message.direction !== 'in') return true;
+      const heights = (message.sourceFragments || []).map(record => Number(record.blockHeight || 0));
+      return heights.length > 0 && Math.max(...heights) < restoreHeight;
+    });
+    for (const partial of state.reassembly || []) {
+      for (const [index, record] of Object.entries(partial.fragments || {})) {
+        if (Number(record.blockHeight || 0) >= restoreHeight) delete partial.fragments[index];
+      }
+    }
+    state.reassembly = (state.reassembly || []).filter(partial => Object.keys(partial.fragments || {}).length > 0);
+    normalizeState(state);
     for (const plan of state.plans) {
       for (const tx of plan.txs || []) {
-        if (tx.status === 'confirmed') { tx.status = 'broadcast'; delete tx.blockHeight; delete tx.blockHash; }
+        if (tx.status === 'confirmed' && Number(tx.blockHeight || 0) >= restoreHeight) { tx.status = 'broadcast'; delete tx.blockHeight; delete tx.blockHash; }
       }
       if (plan.status === 'confirmed' || plan.status === 'partially confirmed') plan.status = recomputePlanStatus(plan);
       updateOutgoingMessageStatus(state, plan);
     }
-    state.scan = { height: restoreHeight, blockHash: '' };
+    state.scan.height = restoreHeight;
+    state.scan.blockHash = anchorHash;
+    state.scan.checkpoints = (state.scan.checkpoints || []).filter(checkpoint => Number(checkpoint.height) < restoreHeight);
+  }
+
+  function validateBlockSequence(blocks, startHeight, expectedPrevHash) {
+    let previousHash = expectedPrevHash ? String(expectedPrevHash).toLowerCase() : '';
+    for (let offset = 0; offset < blocks.length; offset++) {
+      const block = blocks[offset], expectedHeight = startHeight + offset;
+      if (Number(block && block.height) !== expectedHeight
+          || typeof block.hash !== 'string' || !/^[0-9a-f]{64}$/i.test(block.hash)
+          || typeof block.prevHash !== 'string' || !/^[0-9a-f]{64}$/i.test(block.prevHash)) {
+        throw new Error('Daemon returned a non-contiguous Messenger block range');
+      }
+      if ((previousHash && block.prevHash.toLowerCase() !== previousHash)
+          || (!previousHash && expectedHeight === 0 && !/^0{64}$/i.test(block.prevHash))) {
+        throw new Error('Daemon returned a disconnected Messenger block range');
+      }
+      previousHash = block.hash.toLowerCase();
+    }
+    return previousHash;
+  }
+
+  async function findCommonCheckpoint(scanner, scan) {
+    const checkpoints = (scan.checkpoints || []).slice(-64).reverse();
+    for (const checkpoint of checkpoints) {
+      const blocks = await scanner.getBlocksByRange(Number(checkpoint.height), Number(checkpoint.height));
+      if (Array.isArray(blocks) && blocks.length === 1
+          && Number(blocks[0].height) === Number(checkpoint.height)
+          && String(blocks[0].hash || '').toLowerCase() === String(checkpoint.hash || '').toLowerCase()) return checkpoint;
+    }
+    return null;
   }
 
   function removeDraft(state, plan) {
@@ -338,7 +381,14 @@ const QmsMessenger = (() => {
     const onAbort = () => { closeStore().catch(() => {}); };
     if (signal) signal.addEventListener('abort', onAbort, { once: true });
 
-    const state = normalizeState(store.state);
+    let state = normalizeState(store.state);
+    const configuredStartHeight = Math.max(0, Number(options.getRestoreHeight() || 0));
+    if (!Number.isSafeInteger(Number(state.scan.startHeight)) || Number(state.scan.startHeight) < 0) state.scan.startHeight = configuredStartHeight;
+    if (Number(state.scan.height) < Number(state.scan.startHeight)) {
+      state.scan.height = Number(state.scan.startHeight);
+      state.scan.blockHash = '';
+      state.scan.checkpoints = [];
+    }
     if (!state.identity) state.identity = identityToJson(QmsProtocol.createIdentity());
     identity = identityFromJson(state.identity);
     if (!state.ownInvitation) state.ownInvitation = QmsProtocol.hex(QmsProtocol.encodeInvitation(QmsProtocol.createInvitation(identity)));
@@ -603,40 +653,65 @@ const QmsMessenger = (() => {
     }
     async function getScanner() { assertActive(); if (!scannerPromise) scannerPromise = options.createScanner(); const scanner = await scannerPromise; assertActive(); return scanner; }
     async function scan() {
-      if (scanning || recovering || !state.contacts.length || !options.createScanner) return;
+      if (scanning || recovering || !options.createScanner) return;
       scanning = true;
       try {
         showStatus('Scanning QWC blocks for encrypted messages…');
         const scanner = await getScanner(); const tip = Number(await scanner.getHeight()); assertActive();
         if (!Number.isSafeInteger(tip) || tip < 0) throw new Error('Daemon returned an invalid height');
-        const restoreHeight = Math.max(0, Number(options.getRestoreHeight() || 0));
+        const restoreHeight = Number(state.scan.startHeight || 0);
         let next = Number(state.scan.height || restoreHeight);
         if (next > tip) throw new Error('Daemon height is behind the saved Messenger scan cursor');
         if (next > restoreHeight && state.scan.blockHash) {
           const anchor = await scanner.getBlocksByRange(next - 1, next - 1); assertActive();
           if (!Array.isArray(anchor) || anchor.length !== 1 || Number(anchor[0].height) !== next - 1) throw new Error('Unable to verify the Messenger scan anchor');
-          if (anchor[0].hash !== state.scan.blockHash) { rollbackForReorg(state, restoreHeight); next = restoreHeight; await persist(); showStatus(`Chain reorganization detected. Rescanning Messenger from block ${restoreHeight.toLocaleString()}…`); }
+          if (anchor[0].hash !== state.scan.blockHash) {
+            const checkpoint = await findCommonCheckpoint(scanner, state.scan); assertActive();
+            const resumeHeight = checkpoint ? Number(checkpoint.height) + 1 : restoreHeight;
+            const snapshot = store.snapshot();
+            rollbackForReorg(snapshot.state, resumeHeight, checkpoint ? checkpoint.hash : '');
+            state = await store.commit(snapshot.state, snapshot.revision); assertActive();
+            next = resumeHeight;
+            showStatus(`Chain reorganization detected. Rescanning Messenger from block ${resumeHeight.toLocaleString()}…`);
+          }
+        }
+        let expectedPrevHash = state.scan.blockHash || '';
+        if (!expectedPrevHash && next > 0) {
+          const predecessor = await scanner.getBlocksByRange(next - 1, next - 1); assertActive();
+          if (!Array.isArray(predecessor) || predecessor.length !== 1 || Number(predecessor[0].height) !== next - 1
+              || typeof predecessor[0].hash !== 'string' || !/^[0-9a-f]{64}$/i.test(predecessor[0].hash)) {
+            throw new Error('Unable to establish the Messenger scan predecessor');
+          }
+          expectedPrevHash = predecessor[0].hash.toLowerCase();
         }
         while (next < tip) {
           const end = Math.min(tip - 1, next + 19), blocks = await scanner.getBlocksByRange(next, end); assertActive();
           if (!Array.isArray(blocks) || blocks.length !== end - next + 1) throw new Error('Daemon returned an incomplete Messenger block range');
+          validateBlockSequence(blocks, next, expectedPrevHash);
+          const snapshot = store.snapshot(), candidate = snapshot.state;
           for (let offset = 0; offset < blocks.length; offset++) {
             const block = blocks[offset], expectedHeight = next + offset;
-            if (Number(block.height) !== expectedHeight || typeof block.hash !== 'string') throw new Error('Daemon returned a non-contiguous Messenger block range');
             for (const entry of transactionExtras(block)) {
-              markOutgoingConfirmed(state, entry.hash, block);
+              markOutgoingConfirmed(candidate, entry.hash, block);
               let segments; try { segments = QmsProtocol.extractSegmentsFromExtra(entry.extra); } catch (_) { continue; }
               if (!segments.length) continue;
               try {
                 const fragment = QmsProtocol.decodeSegments(segments);
-                acceptFragment(state, identity, invitationFromHex(state.ownInvitation), fragment, { txHash: entry.hash, blockHeight: block.height, blockHash: block.hash, createdAt: block.timestamp ? new Date(Number(block.timestamp) * 1000).toISOString() : nowIso() });
-              } catch (_) {}
+                acceptFragment(candidate, identity, invitationFromHex(candidate.ownInvitation), fragment, { txHash: entry.hash, blockHeight: block.height, blockHash: block.hash, createdAt: block.timestamp ? new Date(Number(block.timestamp) * 1000).toISOString() : nowIso() });
+              } catch (error) {
+                if (error && error.code === 'QMS_INVALID_FRAGMENT') continue;
+                throw error;
+              }
             }
-            state.scan = { height: expectedHeight + 1, blockHash: block.hash };
+            candidate.scan.height = expectedHeight + 1;
+            candidate.scan.blockHash = block.hash.toLowerCase();
           }
-          next = end + 1; await persist();
+          candidate.scan.checkpoints = (candidate.scan.checkpoints || []).concat([{ height: end, hash: candidate.scan.blockHash }]).slice(-64);
+          state = await store.commit(candidate, snapshot.revision); assertActive();
+          expectedPrevHash = state.scan.blockHash;
+          next = end + 1;
         }
-        await persist(); render(); showStatus(`Messenger scan complete at block ${Math.max(0, tip - 1).toLocaleString()}.`, 'ok');
+        render(); showStatus(`Messenger scan complete at block ${Math.max(0, tip - 1).toLocaleString()}.`, 'ok');
       } finally { scanning = false; }
     }
 
@@ -692,7 +767,7 @@ const QmsMessenger = (() => {
     };
   }
 
-  return { mount, testing: { normalizeState, activePlan, acceptFragment, retryCompleteReassemblies, rollbackForReorg, removeDraft, recomputePlanStatus, releasePlanInputs, createOperationMutex, beginBroadcastAttempt, completeBroadcastAttempt, markBroadcastUnknown, relayPlan, statusLabel } };
+  return { mount, testing: { normalizeState, activePlan, acceptFragment, retryCompleteReassemblies, rollbackForReorg, validateBlockSequence, findCommonCheckpoint, removeDraft, recomputePlanStatus, releasePlanInputs, createOperationMutex, beginBroadcastAttempt, completeBroadcastAttempt, markBroadcastUnknown, relayPlan, statusLabel } };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = QmsMessenger;

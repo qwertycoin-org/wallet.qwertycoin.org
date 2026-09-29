@@ -205,6 +205,12 @@ const QmsProtocol = (() => {
       if (count > 1 && (octet & 0x7f) === 0) throw new Error('non-canonical tx_extra varint');
       return value >>> 0;
     };
+    const skipBytes = (length, label) => {
+      if (!Number.isSafeInteger(length) || length < 0 || length > b.length - p) throw new Error(`truncated ${label}`);
+      const start = p;
+      p += length;
+      return b.slice(start, p);
+    };
     while (p < b.length) {
       const tag = readVarint();
       if (tag === 0x00) {
@@ -215,11 +221,15 @@ const QmsProtocol = (() => {
         }
         break;
       }
-      if (tag === 0x01) { if (p + 32 > b.length) throw new Error('truncated tx public key'); p += 32; continue; }
-      if (![C.TX_EXTRA_NONCE, 0x03, 0x04, 0x05, 0xde].includes(tag)) throw new Error('unsupported tx_extra field');
-      const length = readVarint();
-      if (p + length > b.length) throw new Error('truncated length-delimited tx_extra field');
-      const field = b.slice(p, p + length); p += length;
+      if (tag === 0x01) { skipBytes(32, 'tx public key'); continue; }
+      if (tag === 0x04) {
+        const count = readVarint();
+        if (count > Math.floor((b.length - p) / 32)) throw new Error('truncated additional tx public keys');
+        skipBytes(count * 32, 'additional tx public keys');
+        continue;
+      }
+      if (![C.TX_EXTRA_NONCE, 0x03, 0x05, 0xde].includes(tag)) throw new Error('unsupported tx_extra field');
+      const field = skipBytes(readVarint(), 'length-delimited tx_extra field');
       if (tag === C.TX_EXTRA_NONCE && field[0] === C.NONCE_SUBTYPE) result.push(field);
     } return result;
   }
