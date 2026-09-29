@@ -3,7 +3,8 @@
 Date: 2026-09-29  
 Scope: Web Wallet PR #14, based on
 `670cf48d377e6f6c8b31bd8ddb8b24f759c4d3df`  
-Implementation commits: 17 reviewable commits from `c628e06` through `5db2b35`
+Live-tested hardened code SHA: `4dab9a3734c6c35060fe7d9c7fd8b2fb457e80d5`
+Implementation/evidence commits: 18 reviewable commits from `c628e06` through `4dab9a3`
 
 This report distinguishes automated evidence from remaining release work. A
 green source-string assertion is not treated as browser or fault-injection
@@ -24,7 +25,7 @@ evidence.
 | F09 | Fixed | Authenticated encrypted backup/import and atomic Session-password/data-key rewrap (`ea1073f`, `92a7789`). |
 | F10 | Fixed | Import and verification are separate; `verifiedAt`, grouped fingerprints and per-contact discovery invitations are persisted (`231ecc1`, `72a8d07`). |
 | F11 | Fixed | Persistent start height, cross-batch hash chain, checkpoints, atomic cursor/data commit and controlled rollback/rescan (`839b0be`). |
-| F12 | Partly proven | Real Chromium IndexedDB/Web Locks/UI/mobile/performance tests and bidirectional Web↔Core byte interoperability are present. Firefox, WebKit/Safari and an installed Desktop-GUI network round-trip remain release gates. |
+| F12 | Partly proven | Real Chromium IndexedDB/Web Locks/UI/mobile/performance tests, bidirectional Web↔Core byte interoperability and a final-SHA Web→chain→Web QMS receive are present. Firefox, WebKit/Safari and an installed Desktop-GUI network round-trip remain release gates. |
 
 No P0 item remains open in this source tree. F12's remaining browser/Desktop
 matrix must be completed before a regular release; it is not closed by naming
@@ -83,7 +84,31 @@ CHROMIUM_PATH=/ms-playwright/chromium-1243/chrome-linux64/chrome \
 QMS_BENCH_ENFORCE=1 npm run test:benchmark-qms-ui
 ```
 
-## Existing network evidence and remaining acceptance
+## Current network evidence and remaining acceptance
+
+Final hardened-preview Web→chain→Web carrier:
+[`770f8d1430c5f9b8c7ec4542e15e6cb33dfef35c6d218e8e2e5795631c6933bf`](https://explorer.qwertycoin.org/tx/770f8d1430c5f9b8c7ec4542e15e6cb33dfef35c6d218e8e2e5795631c6933bf)
+in block 11205. The expressly supplied limited-budget test wallets were both
+restored from their seeds, checked against their expected addresses and
+synchronized through the final Cloudflare preview using the Production
+Explorer gateway. A short signed message produced one 435-byte carrier,
+paid `0.023496 QWC`, relayed in 115.3 ms and was confirmed after 168.8 s. The
+recipient scanner fetched the confirmed block through the Production Explorer,
+verified the fragment MAC, recipient binding and sender signature, and recovered
+the exact UTF-8 plaintext. Measured wallet syncs were 11.6 s and 10.7 s; signed
+carrier construction took 3.47 s. The receiver path itself performed no spend.
+
+The broadcast was performed once. A preceding dry-run verified the same
+one-carrier invariant, final signed `tx_extra` bytes and fee before relay. No
+production seed or primary wallet was used, and no ambiguous response was
+retried with a newly built transaction.
+
+The encrypted IndexedDB reimport path is proven separately by the real Chromium
+test: the same wallet plus Session password reopens its history, while a wrong
+password cannot replace it. The final network test intentionally did not expose
+or copy the wallet seeds into logs, source files or commits.
+
+Earlier Web transport evidence remains useful as a historical regression:
 
 Historical Web test carrier:
 `83b4636857b9dcb94a76eaae16d7305de1ca3f52bd53287f688410b60d2fbe54`
@@ -91,18 +116,15 @@ in block 10645. It used one 440-byte `tx_extra`, paid `0.023568 QWC`, and was
 found and decrypted by the recipient scanner. The Production Explorer scan
 also re-read the earlier carrier
 `b24727104f05efbdfc825061dbbca9daa03b6bb2ffd7b4c0e78a2b69e34ee024`.
-These transactions prove the earlier live transport path, not the final
-hardening commits.
+These older transactions prove the earlier live transport path; the block-11205
+transaction above covers the final hardened preview SHA.
 
 Before a regular release, complete and attach:
 
-1. final Cloudflare preview at the final Web SHA;
-2. funded-test-wallet final Web send/receive/reimport with build and relay
-   timings, including an unfunded receiver;
-3. installed Desktop GUI Web→Desktop and Desktop→Web chain tests with exact
+1. installed Desktop GUI Web→Desktop and Desktop→Web chain tests with exact
    GUI/Core SHAs;
-4. Firefox and WebKit/Safari desktop plus 360/390 px runs;
-5. screenshots for chat, fingerprint verification, fee review, capacity/error
+2. Firefox and WebKit/Safari desktop plus 360/390 px runs;
+3. screenshots for chat, fingerprint verification, fee review, capacity/error
    state and mobile list→conversation navigation.
 
 No production seed or primary wallet is used by the automated suites. Network
