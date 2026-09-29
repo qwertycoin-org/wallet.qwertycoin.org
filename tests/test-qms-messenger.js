@@ -258,6 +258,88 @@ async function test(name, fn) {
     );
   });
 
+  await test('Messenger operations are mutually exclusive beyond button state', async () => {
+    const mutex = messenger.testing.createOperationMutex();
+    let release;
+    const blocker = new Promise(resolve => { release = resolve; });
+    const first = mutex.run('send', async () => blocker);
+    await assert.rejects(mutex.run('cancel', async () => {}), /already in progress: send/);
+    release();
+    await first;
+    assert.strictEqual(mutex.current, null);
+  });
+
+  await test('broadcast timeout journals an unknown outcome and retries identical signed bytes', async () => {
+    const metadata = 'signed-payload-do-not-rebuild';
+    const hash = 'ab'.repeat(32);
+    const tx = { hash, metadata, status: 'prepared' };
+    const plan = { id: 'outbox-timeout', status: 'prepared', txs: [tx] };
+    const durableStatuses = [];
+    let relayedMetadata = null;
+    await assert.rejects(messenger.testing.relayPlan(plan, {
+      persist: async () => { durableStatuses.push(tx.status); },
+      relay: async entries => { relayedMetadata = entries[0]; throw new Error('network timeout'); },
+      assertActive: () => {},
+      updateStatus: () => {}
+    }), /network timeout/);
+    assert.deepStrictEqual(durableStatuses, ['broadcasting', 'broadcast_unknown']);
+    assert.strictEqual(plan.status, 'broadcast_unknown');
+    assert.strictEqual(messenger.testing.statusLabel(plan.status), 'Broadcast outcome unknown');
+    assert.strictEqual(tx.status, 'broadcast_unknown');
+    assert.strictEqual(relayedMetadata, metadata);
+    assert.strictEqual(tx.hash, hash);
+
+    let retryMetadata = null;
+    await messenger.testing.relayPlan(plan, {
+      persist: async () => {},
+      relay: async entries => { retryMetadata = entries[0]; return [hash]; },
+      assertActive: () => {},
+      updateStatus: () => {}
+    });
+    assert.strictEqual(retryMetadata, metadata);
+    assert.strictEqual(tx.hash, hash);
+    assert.strictEqual(tx.broadcastAttempts, 2);
+    assert.strictEqual(tx.status, 'broadcast');
+    assert.strictEqual(plan.status, 'broadcast');
+  });
+
+  await test('partially relayed batches remain recoverable without rebuilding carriers', async () => {
+    const plan = {
+      status: 'broadcast_unknown',
+      txs: [
+        { hash: '01'.repeat(32), metadata: 'already-relayed', status: 'broadcast' },
+        { hash: '02'.repeat(32), metadata: 'same-second-carrier', status: 'prepared' }
+      ]
+    };
+    assert.strictEqual(messenger.testing.recomputePlanStatus(plan), 'broadcast_unknown');
+    const relayed = [];
+    await messenger.testing.relayPlan(plan, {
+      persist: async () => {},
+      relay: async entries => { relayed.push(entries[0]); return ['02'.repeat(32)]; },
+      assertActive: () => {},
+      updateStatus: () => {}
+    });
+    assert.deepStrictEqual(relayed, ['same-second-carrier']);
+    assert.strictEqual(plan.txs[0].broadcastAttempts, undefined);
+    assert.strictEqual(plan.txs[1].broadcastAttempts, 1);
+    assert.strictEqual(plan.status, 'broadcast');
+  });
+
+  await test('relay never starts when the broadcasting journal cannot be persisted', async () => {
+    const tx = { hash: 'cd'.repeat(32), metadata: 'signed', status: 'prepared' };
+    const plan = { id: 'outbox-persist-failure', status: 'prepared', txs: [tx] };
+    let relayCalls = 0;
+    await assert.rejects(messenger.testing.relayPlan(plan, {
+      persist: async () => { throw new Error('quota exceeded'); },
+      relay: async () => { relayCalls += 1; return [tx.hash]; },
+      assertActive: () => {},
+      updateStatus: () => {}
+    }), /quota exceeded/);
+    assert.strictEqual(relayCalls, 0);
+    assert.strictEqual(tx.status, 'recovery_required');
+    assert.strictEqual(plan.status, 'recovery_required');
+  });
+
   await test('outgoing status and reorg rollback retain only chain-independent data', async () => {
     const plan = { id: 'p', status: 'confirmed', txs: [{ status: 'confirmed', blockHeight: 9, blockHash: 'old' }] };
     const state = {
@@ -405,11 +487,15 @@ async function test(name, fn) {
     assert(engine.includes('server: getDefaultServerConfig()'));
     assert(engine.includes('proxyToWorker: false'));
     assert(engine.includes('const DAEMON_CHUNK_BYTES = 3000000'));
-    assert(messengerScript.includes("name === 'overview' && activePlan(state)"));
-    assert(messengerScript.includes('overviewTab.disabled = recovering || !!activePlan(state)'));
+    assert(messengerScript.includes("'broadcast_unknown'"));
+    assert(messengerScript.includes("operations.run('send'"));
+    assert(messengerScript.includes("operations.run('cancel'"));
+    assert(!messengerScript.includes('scanning || recovering || activePlan(state)'), 'prepared sends must not stop receive scanning');
+    assert(messengerScript.includes('overviewTab.disabled = recovering'));
     assert(dashboardScript.includes('await qmsController.scan()'));
     assert(dashboardScript.includes('WalletVault.hasQmsKey()'));
     assert(dashboardScript.includes('getQmsKdf: () => WalletVault.qmsKdf()'));
+    assert(dashboardScript.includes('setWalletSpendBlocked: setQmsSpendBlocked'));
     assert(dashboardScript.includes('qmsTab.hidden = true'));
     assert(dashboardScript.indexOf('qmsPasswordProtected') < dashboardScript.indexOf('QmsMessenger.mount'));
     assert(worker.includes('extraHex'));

@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let qwcUsdPrice = 0;       // cached QWC/USD rate, disabled until a source is configured
   let clearMessageSigningState = function () {};
   let qmsController = null;
+  let qmsSpendBlocked = false;
   let qmsSessionGeneration = 0;
   let qmsMountAbort = null;
 
@@ -23,6 +24,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const controller = qmsController;
     qmsController = null;
     if (controller) await controller.clear();
+  }
+
+  function setQmsSpendBlocked(blocked) {
+    qmsSpendBlocked = !!blocked;
+    const button = document.getElementById('btn-send');
+    if (button) button.title = qmsSpendBlocked ? 'Resolve the prepared Messenger transaction first' : '';
   }
 
   const overlay     = document.getElementById('unlock-overlay');
@@ -1706,6 +1713,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       alert('Watch-only wallets cannot send — the spend key is required.');
       return;
     }
+    if (qmsSpendBlocked) {
+      alert('Resolve the prepared or uncertain Messenger transaction before creating another wallet spend.');
+      return;
+    }
     sendResetForm();
     document.getElementById('send-modal').classList.add('show');
     setSendAvailableDisplay(qwcLastAvailableDisplay);
@@ -1780,6 +1791,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     sendReviewBtn.disabled = true;
     sendReviewBtn.textContent = 'Reviewing…';
     try {
+      if (qmsSpendBlocked) throw new Error('Resolve the prepared Messenger transaction before creating another wallet spend');
       const toAddress = (sendToEl.value || '').trim();
       const xmrAmount = (sendAmountEl.value || '').trim();
       const paymentId = (document.getElementById('send-pid').value || '').trim();
@@ -1842,6 +1854,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     sendShowStep('result');
     sendShowResultState('pending');
     try {
+      if (qmsSpendBlocked) throw new Error('Resolve the prepared Messenger transaction before broadcasting another wallet spend');
       const toAddress = (sendToEl.value || '').trim();
       const xmrAmount = (sendAmountEl.value || '').trim();
       const paymentId = (document.getElementById('send-pid').value || '').trim();
@@ -2039,6 +2052,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const mountGeneration = ++qmsSessionGeneration;
     const mountAbort = new AbortController();
     qmsMountAbort = mountAbort;
+    setQmsSpendBlocked(true);
     QmsMessenger.mount({
       signal: mountAbort.signal,
       getWalletKeys: () => walletKeys,
@@ -2046,7 +2060,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       getQmsKdf: () => WalletVault.qmsKdf(),
       getWallet: getQwcWallet,
       getRestoreHeight: getQwcRestoreHeight,
-      createScanner: () => QwcWalletEngine.createDaemonScanner()
+      createScanner: () => QwcWalletEngine.createDaemonScanner(),
+      setWalletSpendBlocked: setQmsSpendBlocked
     }).then(async controller => {
       if (mountGeneration !== qmsSessionGeneration || mountAbort.signal.aborted) {
         await controller.clear();

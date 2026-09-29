@@ -4,7 +4,18 @@
 const QmsMessenger = (() => {
   'use strict';
 
-  const ACTIVE_PLAN_STATUSES = new Set(['building', 'prepared', 'partially broadcast', 'rollback required']);
+  const ACTIVE_PLAN_STATUSES = new Set(['building', 'prepared', 'broadcasting', 'broadcast_unknown', 'recovery_required']);
+  const STATUS_LABELS = Object.freeze({
+    building: 'Preparing',
+    prepared: 'Ready to send',
+    broadcasting: 'Broadcasting',
+    broadcast_unknown: 'Broadcast outcome unknown',
+    broadcast: 'In the network',
+    'partially confirmed': 'Partially confirmed',
+    confirmed: 'Confirmed',
+    cancelled: 'Cancelled',
+    recovery_required: 'Recovery required'
+  });
   const MAX_REASSEMBLIES = 64;
   const MAX_REASSEMBLY_BYTES = 8 * 1024 * 1024;
 
@@ -20,7 +31,20 @@ const QmsMessenger = (() => {
   function identityToJson(id) { return { boxPublic: QmsProtocol.hex(id.boxPublic), boxSecret: QmsProtocol.hex(id.boxSecret), signPublic: QmsProtocol.hex(id.signPublic), signSecret: QmsProtocol.hex(id.signSecret) }; }
   function identityFromJson(id) { return { boxPublic: QmsProtocol.unhex(id.boxPublic), boxSecret: QmsProtocol.unhex(id.boxSecret), signPublic: QmsProtocol.unhex(id.signPublic), signSecret: QmsProtocol.unhex(id.signSecret) }; }
   function allKeyImages(tx) { return (tx.inputs || []).map(input => input && input.keyImage && input.keyImage.hex).filter(Boolean); }
+  function statusLabel(status) { return STATUS_LABELS[status] || String(status || 'Unknown'); }
   function activePlan(state) { return state.plans.find(plan => ACTIVE_PLAN_STATUSES.has(plan.status)) || null; }
+  function createOperationMutex() {
+    let current = null;
+    return {
+      get current() { return current; },
+      async run(name, operation) {
+        if (current) throw new Error(`Messenger operation already in progress: ${current}`);
+        current = name;
+        try { return await operation(); }
+        finally { current = null; }
+      }
+    };
+  }
   function finalFragmentMatches(extraHex, expected) {
     try {
       const segments = QmsProtocol.extractSegmentsFromExtra(QmsProtocol.unhex(extraHex));
@@ -53,6 +77,15 @@ const QmsMessenger = (() => {
       if (Object.keys(partial.fragments).length) merged.set(key, partial);
     }
     state.reassembly = Array.from(merged.values()).slice(0, MAX_REASSEMBLIES);
+    for (const plan of state.plans || []) {
+      const legacyRecovery = plan.status === 'rollback required';
+      for (const tx of plan.txs || []) {
+        if (tx.status === 'preparing') tx.status = 'recovery_required';
+        if (tx.status === 'broadcasting') tx.status = 'broadcast_unknown';
+      }
+      plan.status = recomputePlanStatus(plan);
+      if (legacyRecovery) plan.status = 'recovery_required';
+    }
     return state;
   }
 
@@ -139,9 +172,81 @@ const QmsMessenger = (() => {
     if (!plan.txs.length) return plan.status;
     const statuses = plan.txs.map(tx => tx.status);
     if (statuses.every(status => status === 'confirmed')) return 'confirmed';
-    if (statuses.some(status => status === 'prepared')) return statuses.some(status => status !== 'prepared') ? 'partially broadcast' : 'prepared';
+    if (statuses.some(status => status === 'recovery_required')) return 'recovery_required';
+    if (statuses.some(status => status === 'broadcast_unknown')) return 'broadcast_unknown';
+    if (statuses.some(status => status === 'broadcasting')) return 'broadcasting';
+    if (statuses.every(status => status === 'prepared')) return 'prepared';
     if (statuses.some(status => status === 'confirmed')) return 'partially confirmed';
+    if (statuses.some(status => status === 'prepared')) return 'broadcast_unknown';
     return 'broadcast';
+  }
+
+  function beginBroadcastAttempt(plan, tx, at = nowIso()) {
+    if (!['prepared', 'broadcast_unknown'].includes(tx.status)) throw new Error('Transaction is not retryable');
+    if (typeof tx.hash !== 'string' || !/^[0-9a-f]{64}$/i.test(tx.hash) || !tx.metadata) {
+      tx.status = 'recovery_required';
+      plan.status = recomputePlanStatus(plan);
+      throw new Error('Prepared transaction journal is incomplete');
+    }
+    tx.hash = tx.hash.toLowerCase();
+    tx.status = 'broadcasting';
+    tx.broadcastAttempts = Number(tx.broadcastAttempts || 0) + 1;
+    tx.broadcastAttemptedAt = at;
+    delete tx.broadcastError;
+    plan.status = recomputePlanStatus(plan);
+    return tx;
+  }
+
+  function completeBroadcastAttempt(plan, tx, returnedHash, at = nowIso()) {
+    if (typeof returnedHash !== 'string' || !/^[0-9a-f]{64}$/i.test(returnedHash)) throw new Error('Wallet did not return a valid broadcast transaction hash');
+    if (tx.hash.toLowerCase() !== returnedHash.toLowerCase()) throw new Error('Broadcast hash does not match the prepared transaction');
+    tx.status = 'broadcast';
+    tx.broadcastAt = at;
+    delete tx.broadcastError;
+    plan.status = recomputePlanStatus(plan);
+    return tx;
+  }
+
+  function markBroadcastUnknown(plan, tx, error) {
+    tx.status = 'broadcast_unknown';
+    tx.broadcastError = error && error.message ? error.message : String(error || 'Broadcast outcome is unknown');
+    plan.status = recomputePlanStatus(plan);
+    return tx;
+  }
+
+  async function relayPlan(plan, dependencies) {
+    for (const tx of plan.txs || []) {
+      if (tx.status === 'broadcast' || tx.status === 'confirmed') continue;
+      beginBroadcastAttempt(plan, tx, dependencies.now ? dependencies.now() : nowIso());
+      dependencies.updateStatus();
+      try {
+        await dependencies.persist();
+      } catch (error) {
+        tx.status = 'recovery_required';
+        tx.broadcastError = error && error.message ? error.message : String(error);
+        plan.status = recomputePlanStatus(plan);
+        dependencies.updateStatus();
+        throw error;
+      }
+
+      try {
+        const hashes = await dependencies.relay([tx.metadata]);
+        dependencies.assertActive();
+        const hash = Array.isArray(hashes) ? hashes[0] : hashes;
+        completeBroadcastAttempt(plan, tx, hash, dependencies.now ? dependencies.now() : nowIso());
+        dependencies.updateStatus();
+        await dependencies.persist();
+      } catch (error) {
+        markBroadcastUnknown(plan, tx, error);
+        dependencies.updateStatus();
+        await dependencies.persist();
+        throw error;
+      }
+    }
+    plan.status = recomputePlanStatus(plan);
+    dependencies.updateStatus();
+    await dependencies.persist();
+    return plan;
   }
 
   function updateOutgoingMessageStatus(state, plan) {
@@ -185,7 +290,7 @@ const QmsMessenger = (() => {
     const failures = [];
     const seen = new Set();
     for (const tx of plan.txs || []) {
-      if (tx.status === 'broadcast' || tx.status === 'confirmed') continue;
+      if (tx.status !== 'prepared' && tx.status !== 'recovery_required') continue;
       for (const keyImage of tx.keyImages || []) {
         if (seen.has(keyImage)) continue;
         seen.add(keyImage);
@@ -253,6 +358,7 @@ const QmsMessenger = (() => {
     let scanning = false;
     let recovering = true;
     let scannerPromise = null;
+    const operations = createOperationMutex();
     const el = id => document.getElementById(id);
     const section = el('qms-section'), overviewTab = el('wallet-tab-overview'), messengerTab = el('wallet-tab-messenger');
     const dashboard = el('dashboard');
@@ -274,15 +380,11 @@ const QmsMessenger = (() => {
       return wallet;
     }
     function contact() { return state.contacts.find(item => item.id === selectedId) || null; }
-    function preparedForSelected() { return state.plans.find(plan => plan.contactId === selectedId && (plan.status === 'prepared' || plan.status === 'partially broadcast' || plan.status === 'rollback required')) || null; }
+    function preparedForSelected() { return state.plans.find(plan => plan.contactId === selectedId && ACTIVE_PLAN_STATUSES.has(plan.status) && plan.status !== 'building') || null; }
     function formatDate(value) { try { return new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)); } catch (_) { return value; } }
     function messageByteCount() { return new TextEncoder().encode(el('qms-message-input').value).length; }
 
     function setTab(name) {
-      if (name === 'overview' && activePlan(state)) {
-        showStatus('Send or cancel the prepared message before returning to the wallet.', 'error');
-        return;
-      }
       const messenger = name === 'messenger'; section.hidden = !messenger;
       overviewNodes.forEach(node => { node.hidden = messenger ? true : originalHidden.get(node); });
       overviewTab.classList.toggle('active', !messenger); messengerTab.classList.toggle('active', messenger);
@@ -293,19 +395,16 @@ const QmsMessenger = (() => {
     messengerTab.addEventListener('click', () => setTab('messenger'));
 
     function renderContacts() {
-      const lockedPlan = activePlan(state);
-      if (lockedPlan && selectedId !== lockedPlan.contactId) selectedId = lockedPlan.contactId;
       const list = el('qms-contact-list'); list.replaceChildren();
       if (!state.contacts.length) { list.appendChild(emptyNotice('No contacts yet')); return; }
       for (const item of state.contacts) {
         const button = document.createElement('button'); button.className = 'qms-contact' + (item.id === selectedId ? ' active' : ''); button.type = 'button';
         button.setAttribute('aria-pressed', String(item.id === selectedId));
-        button.disabled = recovering || (!!lockedPlan && item.id !== lockedPlan.contactId);
+        button.disabled = recovering;
         const name = document.createElement('strong'); name.textContent = item.name;
         const fingerprint = document.createElement('span'); fingerprint.textContent = short(item.fingerprint);
         button.append(name, fingerprint);
         button.addEventListener('click', () => {
-          if (lockedPlan && item.id !== lockedPlan.contactId) { showStatus('Send or cancel the prepared message before changing chats.', 'error'); return; }
           selectedId = item.id; render();
         });
         list.appendChild(button);
@@ -332,7 +431,9 @@ const QmsMessenger = (() => {
         const meta = document.createElement('div'); meta.className = 'qms-bubble-meta';
         const who = document.createElement('span'); who.textContent = message.direction === 'out' ? 'Me' : item.name;
         const when = document.createElement('span'); when.textContent = formatDate(message.createdAt);
-        const status = document.createElement('span'); status.className = 'qms-message-status' + (message.status === 'failed' ? ' error' : ''); status.textContent = message.status;
+        const status = document.createElement('span');
+        status.className = 'qms-message-status' + (['broadcast_unknown', 'recovery_required'].includes(message.status) ? ' error' : '');
+        status.textContent = statusLabel(message.status);
         meta.append(who, when, status); bubble.appendChild(meta); row.appendChild(bubble); list.appendChild(row);
       }
       list.scrollTop = list.scrollHeight;
@@ -342,13 +443,18 @@ const QmsMessenger = (() => {
         el('qms-review-fee').textContent = `Fee ${atomic(plan.totalFee)} QWC`;
         el('qms-review-note').textContent = plan.recoveryError
           ? `This draft is blocked: ${plan.recoveryError}`
+          : plan.status === 'broadcast_unknown'
+          ? 'The last relay outcome is unknown. Retry submits the identical signed transaction; it does not create a new carrier.'
+          : plan.status === 'recovery_required'
+          ? 'The transaction journal requires recovery before any relay is allowed.'
           : 'Review the complete carrier batch. Nothing is broadcast until you select Send encrypted message.';
-        el('qms-send').disabled = recovering || !!plan.recoveryError || plan.status === 'rollback required';
-        el('qms-cancel').disabled = recovering || plan.txs.some(tx => tx.status === 'broadcast' || tx.status === 'confirmed');
+        el('qms-send').disabled = recovering || !!plan.recoveryError || plan.status === 'recovery_required' || plan.status === 'broadcasting';
+        el('qms-cancel').disabled = recovering || plan.txs.some(tx => !['prepared', 'recovery_required'].includes(tx.status));
       }
-      el('qms-manage-toggle').disabled = recovering || !!activePlan(state);
-      overviewTab.disabled = recovering || !!activePlan(state);
+      el('qms-manage-toggle').disabled = recovering;
+      overviewTab.disabled = recovering;
       overviewTab.setAttribute('aria-disabled', String(overviewTab.disabled));
+      if (options.setWalletSpendBlocked) options.setWalletSpendBlocked(!!activePlan(state));
       updateComposer();
     }
 
@@ -359,11 +465,15 @@ const QmsMessenger = (() => {
       const list = el('qms-manage-list'); list.replaceChildren();
       for (const item of state.contacts) {
         const row = document.createElement('div'); row.className = 'qms-manage-row';
-        const input = document.createElement('input'); input.value = item.name; input.maxLength = 80; input.disabled = recovering || !!activePlan(state);
+        const input = document.createElement('input'); input.value = item.name; input.maxLength = 80; input.disabled = recovering;
         const rename = document.createElement('button'); rename.className = 'action-btn'; rename.textContent = 'Rename'; rename.disabled = input.disabled;
         rename.addEventListener('click', async () => { assertActive(); const value = input.value.trim(); if (!value) return; item.name = value; await persist(); render(); showStatus('Contact renamed.', 'ok'); });
         const remove = document.createElement('button'); remove.className = 'action-btn'; remove.textContent = 'Remove'; remove.disabled = input.disabled;
         remove.addEventListener('click', async () => {
+          if ((state.plans || []).some(plan => plan.contactId === item.id && ACTIVE_PLAN_STATUSES.has(plan.status))) {
+            showStatus('Resolve this contact’s prepared Messenger transaction before removing the contact.', 'error');
+            return;
+          }
           if (!confirm(`Remove ${item.name}? Existing local chat history will be retained and will reappear if this invitation is imported again.`)) return;
           state.contacts = state.contacts.filter(candidate => candidate.id !== item.id);
           if (selectedId === item.id) selectedId = state.contacts[0] ? state.contacts[0].id : null;
@@ -375,14 +485,12 @@ const QmsMessenger = (() => {
     function render() { if (closed) return; renderContacts(); renderMessages(); renderManage(); }
 
     el('qms-manage-toggle').addEventListener('click', () => {
-      if (activePlan(state)) { showStatus('Send or cancel the prepared message before managing contacts.', 'error'); return; }
       el('qms-chat-view').hidden = true; el('qms-manage-view').hidden = false;
     });
     el('qms-manage-back').addEventListener('click', () => { el('qms-manage-view').hidden = true; el('qms-chat-view').hidden = false; render(); });
     el('qms-copy-invitation').addEventListener('click', async () => { await navigator.clipboard.writeText(state.ownInvitation); showStatus('Complete personal invitation copied.', 'ok'); });
     el('qms-import-contact').addEventListener('click', async () => {
       try {
-        if (activePlan(state)) throw new Error('Send or cancel the prepared message first');
         const name = el('qms-contact-name').value.trim(), invitationHex = el('qms-contact-invitation').value.trim().toLowerCase();
         if (!name) throw new Error('Enter a contact name');
         const inv = invitationFromHex(invitationHex); if (!QmsProtocol.equal(inv.genesis, QmsProtocol.genesis())) throw new Error('Invitation belongs to a different network');
@@ -398,7 +506,7 @@ const QmsMessenger = (() => {
     });
     el('qms-message-input').addEventListener('input', updateComposer);
 
-    el('qms-prepare').addEventListener('click', async () => {
+    el('qms-prepare').addEventListener('click', () => operations.run('prepare', async () => {
       const button = el('qms-prepare'); button.disabled = true; button.textContent = 'Encrypting…';
       const frozen = [], reserved = new Set(); let plan = null;
       try {
@@ -416,7 +524,11 @@ const QmsMessenger = (() => {
           const txSet = await wallet.createTx({ accountIndex: 0, destinations: [{ address: walletKeys.address, amount: '1' }], extraHex: QmsProtocol.hex(QmsProtocol.carrierExtra(fragment)), priority: 1, relay: false, canSplit: false });
           assertActive();
           if (!txSet || !Array.isArray(txSet.txs) || txSet.txs.length !== 1) throw new Error('Each Messenger carrier must produce exactly one transaction');
-          const tx = txSet.txs[0]; if (!tx.metadata || !tx.extraHex || !finalFragmentMatches(tx.extraHex, fragment)) throw new Error('Wallet construction did not preserve the planned Messenger fragment');
+          const tx = txSet.txs[0];
+          if (!tx.metadata || typeof tx.hash !== 'string' || !/^[0-9a-f]{64}$/i.test(tx.hash)
+              || !tx.extraHex || !finalFragmentMatches(tx.extraHex, fragment)) {
+            throw new Error('Wallet construction did not preserve a complete signed Messenger carrier');
+          }
           const keyImages = allKeyImages(tx); if (!keyImages.length) throw new Error('Prepared carrier did not expose reserved inputs');
           for (const keyImage of keyImages) { if (reserved.has(keyImage)) throw new Error('Prepared carrier batch attempted to reuse an input'); reserved.add(keyImage); }
           const txEntry = { hash: tx.hash || '', metadata: tx.metadata, extraHex: tx.extraHex, fee: String(tx.fee || 0), keyImages, status: 'preparing' };
@@ -425,7 +537,7 @@ const QmsMessenger = (() => {
           txEntry.status = 'prepared';
           plan.totalFee = (BigInt(plan.totalFee) + BigInt(tx.fee || 0)).toString(); await persist();
         }
-        plan.status = 'prepared'; state.messages.push({ id: plan.id, contactId: recipientContact.id, direction: 'out', text, createdAt: plan.createdAt, status: 'ready to send' });
+        plan.status = 'prepared'; state.messages.push({ id: plan.id, contactId: recipientContact.id, direction: 'out', text, createdAt: plan.createdAt, status: 'prepared' });
         await persist(); el('qms-message-input').value = ''; render(); showStatus(`Prepared ${plan.txs.length} carrier transaction(s). Review the total fee before sending.`, 'ok');
       } catch (error) {
         if (closed || (error && error.name === 'AbortError')) return;
@@ -435,7 +547,8 @@ const QmsMessenger = (() => {
         }
         if (plan) {
           if (rollbackError) {
-            plan.status = 'rollback required';
+            plan.status = 'recovery_required';
+            for (const tx of plan.txs || []) if (tx.status !== 'broadcast' && tx.status !== 'confirmed') tx.status = 'recovery_required';
             plan.recoveryError = rollbackError.message;
           } else {
             removeDraft(state, plan);
@@ -444,37 +557,41 @@ const QmsMessenger = (() => {
         await persist();
         showError(rollbackError ? `${error.message || error}. ${rollbackError.message}` : error);
       } finally { button.textContent = 'Encrypt & review'; render(); }
-    });
+    }).catch(showError));
 
-    el('qms-send').addEventListener('click', async () => {
+    el('qms-send').addEventListener('click', () => operations.run('send', async () => {
       const plan = preparedForSelected(); if (!plan || plan.recoveryError) return;
       const button = el('qms-send'); button.disabled = true; button.textContent = 'Sending…';
       try {
         const wallet = await options.getWallet();
-        for (const tx of plan.txs) {
-          if (tx.status === 'broadcast' || tx.status === 'confirmed') continue;
-          const hashes = await wallet.relayTxs([tx.metadata]); assertActive(); const hash = Array.isArray(hashes) ? hashes[0] : hashes;
-          if (typeof hash !== 'string' || !/^[0-9a-f]{64}$/i.test(hash)) throw new Error('Wallet did not return a valid broadcast transaction hash');
-          if (tx.hash && tx.hash.toLowerCase() !== hash.toLowerCase()) throw new Error('Broadcast hash does not match the prepared transaction');
-          tx.hash = hash.toLowerCase(); tx.status = 'broadcast'; await persist();
-        }
-        plan.status = recomputePlanStatus(plan); updateOutgoingMessageStatus(state, plan); await persist(); render(); showStatus('Encrypted message broadcast. Confirmation status will update during scanning.', 'ok');
+        assertActive();
+        await relayPlan(plan, {
+          relay: metadata => wallet.relayTxs(metadata),
+          persist,
+          assertActive,
+          updateStatus: () => updateOutgoingMessageStatus(state, plan)
+        });
+        render(); showStatus('Encrypted message broadcast. Confirmation status will update during scanning.', 'ok');
       } catch (error) {
         if (closed || (error && error.name === 'AbortError')) return;
-        plan.status = recomputePlanStatus(plan); updateOutgoingMessageStatus(state, plan); await persist(); render(); showError(error);
+        render(); showError(plan.status === 'broadcast_unknown'
+          ? new Error(`Broadcast outcome is unknown. Retry will submit the identical signed transaction. ${error.message || error}`)
+          : error);
       } finally { button.disabled = false; button.textContent = 'Send encrypted message'; }
-    });
-    el('qms-cancel').addEventListener('click', async () => {
-      const plan = preparedForSelected(); if (!plan || plan.txs.some(tx => tx.status === 'broadcast' || tx.status === 'confirmed')) return;
+    }).catch(showError));
+    el('qms-cancel').addEventListener('click', () => operations.run('cancel', async () => {
+      const plan = preparedForSelected(); if (!plan || plan.txs.some(tx => !['prepared', 'recovery_required'].includes(tx.status))) return;
       try {
         await releasePlanInputs(await options.getWallet(), plan);
         assertActive(); removeDraft(state, plan); await persist(); render(); showStatus('Prepared draft deleted and unbroadcast inputs released.', 'ok');
       } catch (error) {
         if (closed || (error && error.name === 'AbortError')) return;
-        plan.status = 'rollback required'; plan.recoveryError = error.message || String(error);
+        plan.status = 'recovery_required';
+        for (const tx of plan.txs || []) if (tx.status === 'prepared') tx.status = 'recovery_required';
+        plan.recoveryError = error.message || String(error);
         await persist(); render(); showError(error);
       }
-    });
+    }).catch(showError));
 
     function transactionExtras(block) {
       const txs = [].concat(block && block.minerTx ? [block.minerTx] : [], block && Array.isArray(block.txs) ? block.txs : []), out = [];
@@ -486,7 +603,7 @@ const QmsMessenger = (() => {
     }
     async function getScanner() { assertActive(); if (!scannerPromise) scannerPromise = options.createScanner(); const scanner = await scannerPromise; assertActive(); return scanner; }
     async function scan() {
-      if (scanning || recovering || activePlan(state) || !state.contacts.length || !options.createScanner) return;
+      if (scanning || recovering || !state.contacts.length || !options.createScanner) return;
       scanning = true;
       try {
         showStatus('Scanning QWC blocks for encrypted messages…');
@@ -526,14 +643,18 @@ const QmsMessenger = (() => {
     render();
     try {
       const stale = state.plans.filter(plan => plan.status === 'building');
-      const recoverable = state.plans.filter(plan => plan.status === 'prepared' || plan.status === 'partially broadcast');
+      const recoverable = state.plans.filter(plan => ['prepared', 'broadcast_unknown', 'recovery_required'].includes(plan.status));
       const recoveryWallet = stale.length || recoverable.length
         ? await synchronizedWallet('Synchronizing the wallet before restoring the prepared Messenger journal…')
         : null;
       if (stale.length) {
         for (const plan of stale) {
           try { await releasePlanInputs(recoveryWallet, plan); removeDraft(state, plan); }
-          catch (error) { plan.status = 'rollback required'; plan.recoveryError = error.message || String(error); }
+          catch (error) {
+            plan.status = 'recovery_required';
+            for (const tx of plan.txs || []) if (tx.status !== 'broadcast' && tx.status !== 'confirmed') tx.status = 'recovery_required';
+            plan.recoveryError = error.message || String(error);
+          }
         }
       }
       for (const plan of recoverable) {
@@ -564,13 +685,14 @@ const QmsMessenger = (() => {
         const messageInput = el('qms-message-input'); if (messageInput) messageInput.value = '';
         const messageList = el('qms-message-list'); if (messageList) messageList.replaceChildren();
         const invitation = el('qms-own-invitation'); if (invitation) invitation.value = '';
+        if (options.setWalletSpendBlocked) options.setWalletSpendBlocked(false);
         await closeStore();
       },
       scan
     };
   }
 
-  return { mount, testing: { normalizeState, activePlan, acceptFragment, retryCompleteReassemblies, rollbackForReorg, removeDraft, recomputePlanStatus, releasePlanInputs } };
+  return { mount, testing: { normalizeState, activePlan, acceptFragment, retryCompleteReassemblies, rollbackForReorg, removeDraft, recomputePlanStatus, releasePlanInputs, createOperationMutex, beginBroadcastAttempt, completeBroadcastAttempt, markBroadcastUnknown, relayPlan, statusLabel } };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = QmsMessenger;
