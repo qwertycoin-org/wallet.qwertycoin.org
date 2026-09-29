@@ -15,6 +15,7 @@ const sha256 = file => cryptoNode.createHash('sha256').update(fs.readFileSync(pa
 function browserContext() {
   const values = new Map();
   const sessionValues = new Map();
+  const heldLocks = new Set();
   const localStorage = {
     getItem: key => values.has(key) ? values.get(key) : null,
     setItem: (key, value) => values.set(key, String(value)),
@@ -36,6 +37,18 @@ function browserContext() {
     ArrayBuffer,
     setTimeout,
     clearTimeout,
+    navigator: {
+      locks: {
+        request: async (name, options, callback) => {
+          const available = !heldLocks.has(name);
+          if (!available && options && options.ifAvailable) return callback(null);
+          if (!available) throw new Error('test lock queueing is not implemented');
+          heldLocks.add(name);
+          try { return await callback({ name, mode: options.mode }); }
+          finally { heldLocks.delete(name); }
+        }
+      }
+    },
     localStorage,
     sessionStorage,
     atob: value => Buffer.from(value, 'base64').toString('binary'),
@@ -331,11 +344,41 @@ async function test(name, fn) {
     await Promise.all([saveOne, saveTwo]);
     const envelope = env.values.get(first.storageKey);
     assert(envelope && !envelope.includes('plaintext must not leak') && !envelope.includes('latest snapshot'));
+    await first.close();
     const reopened = await store.open(wallet, key);
     assert.strictEqual(reopened.state.messages.length, 2);
+    await reopened.close();
     await assert.rejects(store.open(wallet, env.ctx.sodium.randombytes_buf(32)), /Unable to decrypt/);
-    first.close();
-    reopened.close();
+  });
+
+  await test('closing waits for accepted writes and never encrypts with destroyed keys', async () => {
+    const wallet = { address: 'QWC-close-race-test', privateSpendKeyHex: '66'.repeat(32) };
+    const key = env.ctx.sodium.randombytes_buf(32);
+    const active = await store.open(wallet, key);
+    active.state.messages.push({ id: 'before-close', text: 'confidential close-race probe' });
+    const pending = active.save();
+    const closing = active.close();
+    assert.throws(() => active.save(), /closed/);
+    await Promise.all([pending, closing]);
+
+    const reopened = await store.open(wallet, key);
+    assert.strictEqual(reopened.state.messages[0].id, 'before-close');
+    await reopened.close();
+    await assert.rejects(store.open(wallet, new Uint8Array(32)), /Unable to decrypt/);
+  });
+
+  await test('a second active writer for the same wallet is rejected fail-closed', async () => {
+    const wallet = { address: 'QWC-exclusive-writer-test', privateSpendKeyHex: '77'.repeat(32) };
+    const key = env.ctx.sodium.randombytes_buf(32);
+    const first = await store.open(wallet, key);
+    first.state.messages.push({ id: 'first-writer', text: 'must survive' });
+    await first.save();
+    await assert.rejects(store.open(wallet, key), /already open/);
+    await first.close();
+
+    const second = await store.open(wallet, key);
+    assert.strictEqual(second.state.messages[0].id, 'first-writer');
+    await second.close();
   });
 
   await test('shipped UI, worker and provenance are bound to the reviewed Messenger assets', async () => {

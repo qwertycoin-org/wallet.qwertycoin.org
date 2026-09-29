@@ -6,8 +6,10 @@ const QmsStore = (() => {
   'use strict';
 
   const PREFIX = 'qwc-qms1-fast-store:';
+  const LOCK_PREFIX = 'qwc-qms1-fast-writer:';
   const te = new TextEncoder();
   const td = new TextDecoder('utf-8', { fatal: true });
+  const localLocks = new Set();
 
   function sodiumApi() {
     if (typeof sodium === 'undefined') throw new Error('libsodium is not loaded');
@@ -81,6 +83,63 @@ const QmsStore = (() => {
     }
   }
 
+  async function acquireWriterLock(storageKey) {
+    const lockName = LOCK_PREFIX + storageKey.slice(PREFIX.length);
+    if (typeof navigator !== 'undefined') {
+      if (!navigator.locks || typeof navigator.locks.request !== 'function') {
+        throw new Error('This browser cannot safely coordinate Messenger storage across tabs');
+      }
+      let settleAcquired;
+      let releaseLock;
+      const acquired = new Promise(resolve => { settleAcquired = resolve; });
+      const request = navigator.locks.request(
+        lockName,
+        { mode: 'exclusive', ifAvailable: true },
+        lock => {
+          if (!lock) {
+            settleAcquired(false);
+            return undefined;
+          }
+          settleAcquired(true);
+          return new Promise(resolve => { releaseLock = resolve; });
+        }
+      ).catch(error => {
+        settleAcquired(error);
+        throw error;
+      });
+      const acquisition = await acquired;
+      if (acquisition instanceof Error) throw acquisition;
+      if (!acquisition) {
+        await request;
+        throw new Error('Messenger is already open for this wallet in another tab');
+      }
+      let released = false;
+      return {
+        release() {
+          if (released) return;
+          released = true;
+          releaseLock();
+        },
+        done: request.catch(() => {})
+      };
+    }
+
+    // Node-based regression tests do not expose navigator.locks. Keep the same
+    // single-writer invariant within that realm without pretending that this
+    // fallback provides browser cross-tab coordination.
+    if (localLocks.has(lockName)) throw new Error('Messenger is already open for this wallet in another tab');
+    localLocks.add(lockName);
+    let released = false;
+    return {
+      release() {
+        if (released) return;
+        released = true;
+        localLocks.delete(lockName);
+      },
+      done: Promise.resolve()
+    };
+  }
+
   async function open(wallet, unlockKey, kdfMetadata) {
     await sodiumApi().ready;
     if (!wallet || !wallet.address || !wallet.privateSpendKeyHex) {
@@ -89,49 +148,58 @@ const QmsStore = (() => {
     let wrappingKey = requireKey(unlockKey, 'QMS1/Fast session key');
     const kdf = normalizeKdf(kdfMetadata);
     const storageKey = PREFIX + await walletId(wallet.address);
+    const writerLock = await acquireWriterLock(storageKey);
     let envelope = null;
-    try {
-      envelope = JSON.parse(localStorage.getItem(storageKey) || 'null');
-    } catch (_) {
-      throw new Error('Invalid QMS1/Fast store envelope');
-    }
-
     let dataKey;
     let state = blank();
-    if (envelope) {
-      if (envelope.version !== 2 || envelope.profile !== 'qms1-fast'
-          || envelope.cipher !== 'xchacha20poly1305-ietf') {
-        throw new Error('Unsupported QMS1/Fast store version');
-      }
-      const persistedKdf = normalizeKdf(envelope.kdf);
-      if (persistedKdf && !sameKdf(persistedKdf, kdf)) {
-        throw new Error('QMS1/Fast Session password metadata does not match this wallet store');
-      }
-      dataKey = requireKey(decrypt(
-        wrappingKey,
-        unb64(envelope.wrapNonce),
-        unb64(envelope.wrappedKey),
-        associatedData(storageKey, 'data-key'),
-        'Messenger key'
-      ), 'QMS1/Fast data key');
-      const plaintext = decrypt(
-        dataKey,
-        unb64(envelope.stateNonce),
-        unb64(envelope.ciphertext),
-        associatedData(storageKey, 'state'),
-        'Messenger store'
-      );
+    try {
       try {
-        state = validateState(JSON.parse(td.decode(plaintext)));
-      } finally {
-        sodiumApi().memzero(plaintext);
+        envelope = JSON.parse(localStorage.getItem(storageKey) || 'null');
+      } catch (_) {
+        throw new Error('Invalid QMS1/Fast store envelope');
       }
-    } else {
-      dataKey = sodiumApi().randombytes_buf(32);
+
+      if (envelope) {
+        if (envelope.version !== 2 || envelope.profile !== 'qms1-fast'
+            || envelope.cipher !== 'xchacha20poly1305-ietf') {
+          throw new Error('Unsupported QMS1/Fast store version');
+        }
+        const persistedKdf = normalizeKdf(envelope.kdf);
+        if (persistedKdf && !sameKdf(persistedKdf, kdf)) {
+          throw new Error('QMS1/Fast Session password metadata does not match this wallet store');
+        }
+        dataKey = requireKey(decrypt(
+          wrappingKey,
+          unb64(envelope.wrapNonce),
+          unb64(envelope.wrappedKey),
+          associatedData(storageKey, 'data-key'),
+          'Messenger key'
+        ), 'QMS1/Fast data key');
+        const plaintext = decrypt(
+          dataKey,
+          unb64(envelope.stateNonce),
+          unb64(envelope.ciphertext),
+          associatedData(storageKey, 'state'),
+          'Messenger store'
+        );
+        try {
+          state = validateState(JSON.parse(td.decode(plaintext)));
+        } finally {
+          sodiumApi().memzero(plaintext);
+        }
+      } else {
+        dataKey = sodiumApi().randombytes_buf(32);
+      }
+    } catch (error) {
+      sodiumApi().memzero(wrappingKey);
+      if (dataKey) sodiumApi().memzero(dataKey);
+      writerLock.release();
+      throw error;
     }
 
     let saveQueue = Promise.resolve();
     let closed = false;
+    let closePromise = null;
     function ensureOpen() {
       if (closed) throw new Error('QMS1/Fast store is closed');
     }
@@ -162,17 +230,24 @@ const QmsStore = (() => {
     function save() {
       ensureOpen();
       const snapshot = JSON.parse(JSON.stringify(state));
+      // Encryption is completed while the store is open. The queued operation
+      // performs only the ordered storage write and never touches key material.
+      const serializedEnvelope = buildEnvelope(snapshot);
       const pending = saveQueue.then(() => {
-        localStorage.setItem(storageKey, buildEnvelope(snapshot));
+        localStorage.setItem(storageKey, serializedEnvelope);
       });
       saveQueue = pending.catch(() => {});
       return pending;
     }
     function close() {
-      if (closed) return;
+      if (closePromise) return closePromise;
       closed = true;
-      sodiumApi().memzero(dataKey);
-      sodiumApi().memzero(wrappingKey);
+      closePromise = saveQueue.finally(() => {
+        sodiumApi().memzero(dataKey);
+        sodiumApi().memzero(wrappingKey);
+        writerLock.release();
+      });
+      return closePromise;
     }
 
     return { get state() { return state; }, save, close, storageKey };
