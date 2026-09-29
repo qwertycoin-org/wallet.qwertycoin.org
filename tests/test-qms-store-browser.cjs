@@ -88,6 +88,10 @@ const contentTypes = {
       if (observer) observer.observe({ type: 'longtask', buffered: true });
       const wallet = { address: 'QWC-browser-indexeddb-regression', network: 'mainnet', privateSpendKeyHex: '7b'.repeat(32) };
       const password = 'browser IndexedDB regression password';
+      const kdfStartedAt = performance.now();
+      const benchmarkKey = await QmsKdf.derive(password, sodium.randombytes_buf(16), 2, 64 * 1024 * 1024, 32);
+      const kdfMs = performance.now() - kdfStartedAt;
+      sodium.memzero(benchmarkKey);
       await WalletVault.store(wallet, password);
       const key = WalletVault.qmsKey();
       const active = await QmsStore.open(wallet, key, WalletVault.qmsKdf());
@@ -148,6 +152,7 @@ const contentTypes = {
         changedPasswordMessageId,
         rowCount: rows.filter(row => row.key.startsWith(storageKey + '\u0000')).length,
         plaintextLeaked: serialized.includes('encrypted browser contact') || serialized.includes('encrypted browser message'),
+        kdfMs,
         maxMainThreadLongTaskMs: longTasks.length ? Math.max(...longTasks) : 0
       };
     });
@@ -165,6 +170,7 @@ const contentTypes = {
     assert.strictEqual(result.changedPasswordMessageId, 'browser-message');
     assert(result.rowCount >= 4, `expected separate encrypted records, got ${result.rowCount}`);
     assert.strictEqual(result.plaintextLeaked, false);
+    assert(result.kdfMs > 0, 'Argon2id duration must be measured');
     assert(requests.some(url => url.endsWith('/js/qms-kdf-worker.js')), 'Argon2id worker was not loaded');
     assert.strictEqual(result.maxMainThreadLongTaskMs, 0, `unexpected QMS main-thread long task: ${result.maxMainThreadLongTaskMs}ms`);
     assert.deepStrictEqual(pageErrors, []);

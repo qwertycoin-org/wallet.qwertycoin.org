@@ -294,6 +294,21 @@ async function test(name, fn) {
     assert.strictEqual(state.unmatched.length, 0);
   });
 
+  await test('authenticated but undecryptable foreign payload is discarded without poisoning capacity', async () => {
+    const aliceId = qms.hex(qms.fingerprint(alice.boxPublic, alice.signPublic));
+    const state = { contacts: [{ id: aliceId, fingerprint: aliceId, invitationHex: invitationHex(qms, aliceInvite) }], messages: [], plans: [], reassembly: [], unmatched: [], scan: { height: 0, blockHash: '' } };
+    const messageId = qms.random(16);
+    const invalid = qms.fragmentCiphertext(bobInvite, messageId, qms.random(277))[0];
+    assert.throws(
+      () => messenger.testing.acceptFragment(state, bob, bobInvite, invalid, { blockHeight: 45 }),
+      error => error && error.code === 'QMS_INVALID_PAYLOAD'
+    );
+    assert.strictEqual(state.reassembly.length, 0);
+    const validId = qms.random(16);
+    const valid = qms.fragmentCiphertext(bobInvite, validId, qms.sealText(alice, bobInvite, validId, 'valid after foreign payload'))[0];
+    assert.strictEqual(messenger.testing.acceptFragment(state, bob, bobInvite, valid, { blockHeight: 46 }).text, 'valid after foreign payload');
+  });
+
   await test('incomplete ciphertext state is capped before contact amplification', async () => {
     const state = { contacts: [], messages: [], plans: [], reassembly: [], scan: { height: 0, blockHash: '' } };
     const payload = new Uint8Array(601).fill(9);
@@ -450,6 +465,12 @@ async function test(name, fn) {
     assert.strictEqual(plan.txs[0].broadcastAttempts, undefined);
     assert.strictEqual(plan.txs[1].broadcastAttempts, 1);
     assert.strictEqual(plan.status, 'broadcast');
+  });
+
+  await test('partial confirmation uses a stable internal status identifier', async () => {
+    const plan = { status: 'broadcast', txs: [{ status: 'confirmed' }, { status: 'broadcast' }] };
+    assert.strictEqual(messenger.testing.recomputePlanStatus(plan), 'partially_confirmed');
+    assert.strictEqual(messenger.testing.statusLabel('partially_confirmed'), 'Partially confirmed');
   });
 
   await test('relay never starts when the broadcasting journal cannot be persisted', async () => {

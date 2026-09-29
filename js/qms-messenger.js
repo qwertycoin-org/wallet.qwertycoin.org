@@ -11,7 +11,7 @@ const QmsMessenger = (() => {
     broadcasting: 'Broadcasting',
     broadcast_unknown: 'Broadcast outcome unknown',
     broadcast: 'In the network',
-    'partially confirmed': 'Partially confirmed',
+    partially_confirmed: 'Partially confirmed',
     confirmed: 'Confirmed',
     cancelled: 'Cancelled',
     recovery_required: 'Recovery required'
@@ -112,6 +112,7 @@ const QmsMessenger = (() => {
       if (contact.draft.length > QmsProtocol.C.MAX_TEXT_BYTES * 2) contact.draft = '';
     }
     for (const message of state.messages || []) {
+      if (message.status === 'partially confirmed') message.status = 'partially_confirmed';
       if (message.direction === 'in' && !Object.prototype.hasOwnProperty.call(message, 'readAt')) {
         message.readAt = message.createdAt || nowIso();
       }
@@ -269,7 +270,12 @@ const QmsMessenger = (() => {
     if (state.messages.some(message => message.id === messageId && message.direction === 'in')) return null;
     if ((state.unmatched || []).some(message => message.messageId === messageId)) return null;
     const partial = addFragmentRecord(state, fragment, source, recipientInvitation);
-    const message = openCompletePartial(state, partial, identity, ownInvitation);
+    let message;
+    try { message = openCompletePartial(state, partial, identity, ownInvitation); }
+    catch (error) {
+      state.reassembly = state.reassembly.filter(item => item !== partial);
+      throw messengerError('QMS_INVALID_PAYLOAD', `Invalid authenticated Messenger payload: ${error && error.message ? error.message : error}`);
+    }
     if (message && message.unmatched) {
       const newestHeight = Math.max(0, ...sourceHeights(message.sourceFragments));
       evictStaleInboundState(state, newestHeight);
@@ -340,7 +346,7 @@ const QmsMessenger = (() => {
     if (statuses.some(status => status === 'broadcast_unknown')) return 'broadcast_unknown';
     if (statuses.some(status => status === 'broadcasting')) return 'broadcasting';
     if (statuses.every(status => status === 'prepared')) return 'prepared';
-    if (statuses.some(status => status === 'confirmed')) return 'partially confirmed';
+    if (statuses.some(status => status === 'confirmed')) return 'partially_confirmed';
     if (statuses.some(status => status === 'prepared')) return 'broadcast_unknown';
     return 'broadcast';
   }
@@ -453,7 +459,7 @@ const QmsMessenger = (() => {
       for (const tx of plan.txs || []) {
         if (tx.status === 'confirmed' && Number(tx.blockHeight || 0) >= restoreHeight) { tx.status = 'broadcast'; delete tx.blockHeight; delete tx.blockHash; }
       }
-      if (plan.status === 'confirmed' || plan.status === 'partially confirmed') plan.status = recomputePlanStatus(plan);
+      if (plan.status === 'confirmed' || plan.status === 'partially_confirmed') plan.status = recomputePlanStatus(plan);
       updateOutgoingMessageStatus(state, plan);
     }
     state.scan.height = restoreHeight;
@@ -1167,7 +1173,7 @@ const QmsMessenger = (() => {
                 const fragment = QmsProtocol.decodeSegments(segments);
                 acceptFragment(candidate, identity, invitationFromHex(candidate.ownInvitation), fragment, { txHash: entry.hash, blockHeight: block.height, blockHash: block.hash, createdAt: block.timestamp ? new Date(Number(block.timestamp) * 1000).toISOString() : nowIso() });
               } catch (error) {
-                if (error && error.code === 'QMS_INVALID_FRAGMENT') continue;
+                if (error && ['QMS_INVALID_FRAGMENT', 'QMS_INVALID_PAYLOAD'].includes(error.code)) continue;
                 throw error;
               }
             }
