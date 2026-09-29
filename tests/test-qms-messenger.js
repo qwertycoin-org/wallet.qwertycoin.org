@@ -540,6 +540,13 @@ async function test(name, fn) {
     assert(dump.includes('contact') && dump.includes('message') && dump.includes('plan'));
     assert(!dump.includes('private contact name') && !dump.includes('private message text'));
     assert.strictEqual(env.values.has(active.storageKey), false);
+    const messageCiphertext = JSON.parse(dump).find(([key]) => key.includes('\u0000message\u0000'))[1].ciphertext;
+    active.state.scan.height = 7;
+    active.state.scan.blockHash = 'ab'.repeat(32);
+    await active.save();
+    const updatedDump = store.testing.dump(active.storageKey);
+    assert.strictEqual(store.testing.lastWriteCount(), 2, 'only metadata and the changed cursor record should be rewritten');
+    assert.strictEqual(JSON.parse(updatedDump).find(([key]) => key.includes('\u0000message\u0000'))[1].ciphertext, messageCiphertext);
     await active.close();
 
     const reopened = await store.open(wallet, key);

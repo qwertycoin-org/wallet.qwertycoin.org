@@ -1,5 +1,5 @@
 # Qwertycoin Web Wallet build manifest
-# Generated 2026-09-29T07:46:49Z from commit 839b0be
+# Generated 2026-09-29T07:49:29Z from commit 4aaa4e1
 #
 # Verify the live deployment matches a specific git tag with:
 #   git checkout v0.1.0
@@ -66,7 +66,7 @@ d3e46c16c1385373afef97db2750f1edf87f33f12bbe710ec515bd5b12d737c0  js/nav-menu.f1
 a89e09d29278744721e647b205a9a85f6dd3622a1f0d2d4c3804333cf28e5061  js/polyseed.js
 6ab57f38895fe9ebf9908a3bb3dd93fed9ab161727d6bc090033595cec16b9bc  js/qms-messenger.js
 87c35453f71eb603a05137aac839f4aed867a3bf0462b211a179a982e797880a  js/qms-protocol.js
-bc6f47e2f7a1aa744a4e2578e52e5262b34f785a108a8cd9f165aa201afe746e  js/qms-store.js
+d33c670501ca99e80609efa179454e4b425bb2ec744cc856750690c259dabcf1  js/qms-store.js
 839e954daff7a6c601479b60403c5ddea4958412405a694a25cdfb18e6c89773  js/qr-scanner.js
 5f5e2c80f5ba8b2b68d771fc44da7b5fd4a3e256526f78f985644f99e0df84c4  js/qrcodegen.js
 eb8b810ae84e6723613b262bb67f150b59587881f368161186dfbf3306f37389  js/qwc-wallet-engine.js

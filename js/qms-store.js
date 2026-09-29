@@ -16,6 +16,7 @@ const QmsStore = (() => {
   const localLocks = new Set();
   const memoryRecords = new Map();
   let nextMemoryWriteError = null;
+  let lastMemoryWriteCount = 0;
   let databasePromise = null;
 
   function sodiumApi() {
@@ -141,27 +142,45 @@ const QmsStore = (() => {
       }
       const replacement = new Map(memoryRecords);
       const prefix = recordPrefix(storageKey);
-      for (const key of replacement.keys()) if (key.startsWith(prefix)) replacement.delete(key);
-      records.forEach(record => replacement.set(prefix + record.key, JSON.parse(JSON.stringify(record))));
+      const desired = new Map(records.map(record => [prefix + record.key, JSON.parse(JSON.stringify(record))]));
+      let changed = 0;
+      for (const key of replacement.keys()) {
+        if (!key.startsWith(prefix)) continue;
+        if (!desired.has(key)) { replacement.delete(key); changed += 1; continue; }
+        const next = desired.get(key);
+        if (JSON.stringify(replacement.get(key)) !== JSON.stringify(next)) {
+          replacement.set(key, next);
+          changed += 1;
+        }
+        desired.delete(key);
+      }
+      desired.forEach((record, key) => { replacement.set(key, record); changed += 1; });
       memoryRecords.clear();
       replacement.forEach((value, key) => memoryRecords.set(key, value));
-      return;
+      lastMemoryWriteCount = changed;
+      return changed;
     }
     const resolved = await db;
     await new Promise((resolve, reject) => {
       const tx = resolved.transaction(OBJECT_STORE, 'readwrite');
       const objectStore = tx.objectStore(OBJECT_STORE);
+      const prefix = recordPrefix(storageKey);
+      const desired = new Map(records.map(record => [prefix + record.key, record]));
       const cursor = objectStore.openCursor(idbRange(storageKey));
       cursor.onerror = () => { try { tx.abort(); } catch (_) {} };
       cursor.onsuccess = () => {
         const current = cursor.result;
         if (current) {
-          current.delete();
+          const next = desired.get(current.key);
+          if (!next) current.delete();
+          else {
+            if (JSON.stringify(current.value.record) !== JSON.stringify(next)) current.update({ key: current.key, record: next });
+            desired.delete(current.key);
+          }
           current.continue();
           return;
         }
-        const prefix = recordPrefix(storageKey);
-        records.forEach(record => objectStore.put({ key: prefix + record.key, record }));
+        desired.forEach((record, key) => objectStore.put({ key, record }));
       };
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error || new Error('Unable to persist encrypted Messenger state'));
@@ -205,12 +224,19 @@ const QmsStore = (() => {
     }
   }
 
-  function encryptedRecord(storageKey, network, type, id, order, value, dataKey) {
-    const plaintext = te.encode(JSON.stringify(value));
+  function encryptedRecord(storageKey, network, type, id, order, value, dataKey, recordCache, nextCache) {
+    const key = `${type}\u0000${id}`;
+    const serialized = JSON.stringify(value);
+    const cached = recordCache && recordCache.get(key);
+    if (cached && cached.serialized === serialized && cached.record.order === order) {
+      nextCache.set(key, cached);
+      return cached.record;
+    }
+    const plaintext = te.encode(serialized);
     const nonce = sodiumApi().randombytes_buf(24);
     try {
-      return {
-        key: `${type}\u0000${id}`,
+      const record = {
+        key,
         schema: RECORD_SCHEMA,
         type,
         id,
@@ -218,11 +244,13 @@ const QmsStore = (() => {
         nonce: b64(nonce),
         ciphertext: b64(encrypt(dataKey, nonce, plaintext, recordAssociatedData(storageKey, network, type, id)))
       };
+      nextCache.set(key, { serialized, record });
+      return record;
     } finally {
       sodiumApi().memzero(plaintext);
     }
   }
-  function buildRecordSet(storageKey, network, snapshot, revision, wrappingKey, dataKey, kdf) {
+  function buildRecordSet(storageKey, network, snapshot, revision, wrappingKey, dataKey, kdf, recordCache = new Map()) {
     const state = cloneState(snapshot);
     const wrapNonce = sodiumApi().randombytes_buf(24);
     const meta = {
@@ -236,15 +264,15 @@ const QmsStore = (() => {
       wrappedKey: b64(encrypt(wrappingKey, wrapNonce, dataKey, associatedData(storageKey, `data-key\u0000${network}`)))
     };
     if (kdf) meta.kdf = kdf;
-    const records = [meta];
-    if (state.identity !== null) records.push(encryptedRecord(storageKey, network, 'identity', 'identity', 0, state.identity, dataKey));
-    if (state.ownInvitation !== null) records.push(encryptedRecord(storageKey, network, 'invitation', 'own', 0, state.ownInvitation, dataKey));
+    const records = [meta], nextCache = new Map();
+    if (state.identity !== null) records.push(encryptedRecord(storageKey, network, 'identity', 'identity', 0, state.identity, dataKey, recordCache, nextCache));
+    if (state.ownInvitation !== null) records.push(encryptedRecord(storageKey, network, 'invitation', 'own', 0, state.ownInvitation, dataKey, recordCache, nextCache));
     for (const [type, values] of [
       ['contact', state.contacts], ['message', state.messages], ['plan', state.plans], ['reassembly', state.reassembly]
     ]) values.forEach((value, index) => records.push(encryptedRecord(
-      storageKey, network, type, String(index).padStart(10, '0'), index, value, dataKey)));
-    records.push(encryptedRecord(storageKey, network, 'scan', 'scan', 0, state.scan, dataKey));
-    return records;
+      storageKey, network, type, String(index).padStart(10, '0'), index, value, dataKey, recordCache, nextCache)));
+    records.push(encryptedRecord(storageKey, network, 'scan', 'scan', 0, state.scan, dataKey, recordCache, nextCache));
+    return { records, cache: nextCache };
   }
   function decodeRecordSet(storageKey, network, records, wrappingKey, suppliedKdf) {
     const metaRecords = records.filter(record => record && record.key === 'meta');
@@ -264,7 +292,7 @@ const QmsStore = (() => {
       associatedData(storageKey, `data-key\u0000${network}`), 'Messenger key'), 'QMS1/Fast data key');
     const state = blank();
     const arrays = { contact: [], message: [], plan: [], reassembly: [] };
-    const seen = new Set();
+    const seen = new Set(), recordCache = new Map();
     try {
       for (const record of records) {
         if (record === meta) continue;
@@ -280,6 +308,7 @@ const QmsStore = (() => {
           recordAssociatedData(storageKey, network, record.type, record.id), 'Messenger record');
         let value;
         try { value = JSON.parse(td.decode(plaintext)); } finally { sodiumApi().memzero(plaintext); }
+        recordCache.set(unique, { serialized: JSON.stringify(value), record });
         if (record.type === 'identity' && record.id === 'identity') state.identity = value;
         else if (record.type === 'invitation' && record.id === 'own') state.ownInvitation = value;
         else if (record.type === 'scan' && record.id === 'scan') state.scan = value;
@@ -289,7 +318,7 @@ const QmsStore = (() => {
       for (const [type, property] of [['contact', 'contacts'], ['message', 'messages'], ['plan', 'plans'], ['reassembly', 'reassembly']]) {
         state[property] = arrays[type].sort((left, right) => left.order - right.order).map(entry => entry.value);
       }
-      return { state: cloneState(state), dataKey, revision: meta.revision };
+      return { state: cloneState(state), dataKey, revision: meta.revision, recordCache };
     } catch (error) {
       sodiumApi().memzero(dataKey);
       throw error;
@@ -349,18 +378,20 @@ const QmsStore = (() => {
     let dataKey;
     let state = blank();
     let revision = 0;
+    let recordCache = new Map();
     try {
       const records = await loadRecords(storageKey);
       if (records.length) {
-        ({ state, dataKey, revision } = decodeRecordSet(storageKey, network, records, wrappingKey, kdf));
+        ({ state, dataKey, revision, recordCache } = decodeRecordSet(storageKey, network, records, wrappingKey, kdf));
       } else {
         let envelope = null;
         try { envelope = JSON.parse(localStorage.getItem(storageKey) || 'null'); }
         catch (_) { throw new Error('Invalid QMS1/Fast store envelope'); }
         if (envelope && envelope.version === 2) {
           ({ state, dataKey, revision } = decodeLegacyEnvelope(storageKey, envelope, wrappingKey, kdf));
-          const migratedRecords = buildRecordSet(storageKey, network, state, revision + 1, wrappingKey, dataKey, kdf);
-          await replaceRecords(storageKey, migratedRecords);
+          const migrated = buildRecordSet(storageKey, network, state, revision + 1, wrappingKey, dataKey, kdf, recordCache);
+          await replaceRecords(storageKey, migrated.records);
+          recordCache = migrated.cache;
           revision += 1;
           persistLocator(storageKey, kdf);
         } else if (envelope && envelope.version === RECORD_SCHEMA) {
@@ -383,15 +414,16 @@ const QmsStore = (() => {
     let closePromise = null;
     function ensureOpen() { if (closed) throw new Error('QMS1/Fast store is closed'); }
     function prepare(snapshot, nextRevision) {
-      return buildRecordSet(storageKey, network, snapshot, nextRevision, wrappingKey, dataKey, kdf);
+      return buildRecordSet(storageKey, network, snapshot, nextRevision, wrappingKey, dataKey, kdf, recordCache);
     }
     function save() {
       ensureOpen();
       const candidate = cloneState(state);
-      const records = prepare(candidate, 0);
+      const prepared = prepare(candidate, 0);
       const pending = saveQueue.then(async () => {
-        records[0].revision = revision + 1;
-        await replaceRecords(storageKey, records);
+        prepared.records[0].revision = revision + 1;
+        await replaceRecords(storageKey, prepared.records);
+        recordCache = prepared.cache;
         revision += 1;
         persistLocator(storageKey, kdf);
       });
@@ -406,11 +438,12 @@ const QmsStore = (() => {
       ensureOpen();
       if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) throw new Error('Invalid QMS1/Fast store revision');
       const candidate = cloneState(nextState);
-      const records = prepare(candidate, expectedRevision + 1);
+      const prepared = prepare(candidate, expectedRevision + 1);
       const pending = saveQueue.then(async () => {
         if (revision !== expectedRevision) throw new Error('QMS1/Fast store changed while the scan batch was in progress');
-        await replaceRecords(storageKey, records);
+        await replaceRecords(storageKey, prepared.records);
         state = candidate;
+        recordCache = prepared.cache;
         revision += 1;
         persistLocator(storageKey, kdf);
         return state;
@@ -433,11 +466,12 @@ const QmsStore = (() => {
 
   const testing = {
     failNextWrite(error) { nextMemoryWriteError = error; },
+    lastWriteCount() { return lastMemoryWriteCount; },
     dump(storageKey) {
       const prefix = recordPrefix(storageKey);
       return JSON.stringify(Array.from(memoryRecords.entries()).filter(([key]) => key.startsWith(prefix)));
     },
-    clear() { memoryRecords.clear(); nextMemoryWriteError = null; }
+    clear() { memoryRecords.clear(); nextMemoryWriteError = null; lastMemoryWriteCount = 0; }
   };
 
   return { open, blank, validateState, testing };
