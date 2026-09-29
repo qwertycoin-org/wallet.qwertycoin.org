@@ -196,17 +196,58 @@ const QmsMessenger = (() => {
   }
 
   async function mount(options) {
+    const signal = options.signal || null;
+    let closed = false;
+    function abortError() {
+      const error = new Error('Messenger session is closed');
+      error.name = 'AbortError';
+      return error;
+    }
+    function assertActive() {
+      if (closed || (signal && signal.aborted)) throw abortError();
+    }
+    assertActive();
     await QmsProtocol.ready();
+    assertActive();
     const walletKeys = options.getWalletKeys();
     if (!walletKeys || !walletKeys.privateSpendKeyHex) throw new Error('Messenger requires an unlocked full wallet');
     const qmsKey = options.getQmsKey && options.getQmsKey();
     if (!(qmsKey instanceof Uint8Array) || qmsKey.length !== 32) throw new Error('Messenger requires a non-empty Session password');
     const qmsKdf = options.getQmsKdf && options.getQmsKdf();
-    const store = await QmsStore.open(walletKeys, qmsKey, qmsKdf), state = normalizeState(store.state);
+    const store = await QmsStore.open(walletKeys, qmsKey, qmsKdf);
+    if (signal && signal.aborted) {
+      await store.close();
+      throw abortError();
+    }
+    let identity = null;
+    let closePromise = null;
+    function closeStore() {
+      if (closePromise) return closePromise;
+      closed = true;
+      if (identity) {
+        try { sodium.memzero(identity.boxSecret); sodium.memzero(identity.signSecret); } catch (_) {}
+      }
+      closePromise = store.close();
+      return closePromise;
+    }
+    const onAbort = () => { closeStore().catch(() => {}); };
+    if (signal) signal.addEventListener('abort', onAbort, { once: true });
+
+    const state = normalizeState(store.state);
     if (!state.identity) state.identity = identityToJson(QmsProtocol.createIdentity());
-    const identity = identityFromJson(state.identity);
+    identity = identityFromJson(state.identity);
     if (!state.ownInvitation) state.ownInvitation = QmsProtocol.hex(QmsProtocol.encodeInvitation(QmsProtocol.createInvitation(identity)));
-    await store.save();
+    async function persist() {
+      assertActive();
+      await store.save();
+      assertActive();
+    }
+    try {
+      await persist();
+    } catch (error) {
+      await closeStore();
+      throw error;
+    }
 
     let selectedId = activePlan(state) ? activePlan(state).contactId : (state.contacts[0] ? state.contacts[0].id : null);
     let scanning = false;
@@ -218,14 +259,18 @@ const QmsMessenger = (() => {
     const overviewNodes = Array.from(dashboard.children).filter(node => node !== section && node.id !== 'wallet-tabs' && !node.classList.contains('wallet-header'));
     const originalHidden = new Map(overviewNodes.map(node => [node, node.hidden]));
 
-    function showStatus(message, type) { const node = el('qms-status'); node.textContent = message || ''; node.className = 'qms-status' + (type ? ' ' + type : ''); }
-    function showError(error) { showStatus(error && error.message ? error.message : String(error), 'error'); }
+    function showStatus(message, type) { if (closed) return; const node = el('qms-status'); node.textContent = message || ''; node.className = 'qms-status' + (type ? ' ' + type : ''); }
+    function showError(error) { if (closed || (error && error.name === 'AbortError')) return; showStatus(error && error.message ? error.message : String(error), 'error'); }
     function emptyNotice(message) { const node = document.createElement('div'); node.className = 'qms-empty'; node.textContent = message; return node; }
     async function synchronizedWallet(statusMessage) {
+      assertActive();
       if (statusMessage) showStatus(statusMessage);
       const wallet = await options.getWallet();
+      assertActive();
       if (wallet.reconnectDaemon) await wallet.reconnectDaemon();
+      assertActive();
       if (wallet.sync) await wallet.sync(Math.max(0, Number(options.getRestoreHeight() || 0)));
+      assertActive();
       return wallet;
     }
     function contact() { return state.contacts.find(item => item.id === selectedId) || null; }
@@ -316,18 +361,18 @@ const QmsMessenger = (() => {
         const row = document.createElement('div'); row.className = 'qms-manage-row';
         const input = document.createElement('input'); input.value = item.name; input.maxLength = 80; input.disabled = recovering || !!activePlan(state);
         const rename = document.createElement('button'); rename.className = 'action-btn'; rename.textContent = 'Rename'; rename.disabled = input.disabled;
-        rename.addEventListener('click', async () => { const value = input.value.trim(); if (!value) return; item.name = value; await store.save(); render(); showStatus('Contact renamed.', 'ok'); });
+        rename.addEventListener('click', async () => { assertActive(); const value = input.value.trim(); if (!value) return; item.name = value; await persist(); render(); showStatus('Contact renamed.', 'ok'); });
         const remove = document.createElement('button'); remove.className = 'action-btn'; remove.textContent = 'Remove'; remove.disabled = input.disabled;
         remove.addEventListener('click', async () => {
           if (!confirm(`Remove ${item.name}? Existing local chat history will be retained and will reappear if this invitation is imported again.`)) return;
           state.contacts = state.contacts.filter(candidate => candidate.id !== item.id);
           if (selectedId === item.id) selectedId = state.contacts[0] ? state.contacts[0].id : null;
-          await store.save(); render(); showStatus('Contact removed. Existing local message history was retained.', 'ok');
+          await persist(); render(); showStatus('Contact removed. Existing local message history was retained.', 'ok');
         });
         row.append(input, rename, remove); list.appendChild(row);
       }
     }
-    function render() { renderContacts(); renderMessages(); renderManage(); }
+    function render() { if (closed) return; renderContacts(); renderMessages(); renderManage(); }
 
     el('qms-manage-toggle').addEventListener('click', () => {
       if (activePlan(state)) { showStatus('Send or cancel the prepared message before managing contacts.', 'error'); return; }
@@ -348,7 +393,7 @@ const QmsMessenger = (() => {
         if (state.contacts.some(item => item.id === fp)) throw new Error('This contact invitation is already imported');
         state.contacts.push({ id: fp, fingerprint: fp, name, invitationHex, addedAt: nowIso() }); selectedId = fp;
         retryCompleteReassemblies(state, identity, own);
-        await store.save(); el('qms-contact-name').value = ''; el('qms-contact-invitation').value = ''; render(); showStatus(`Imported ${name}. Confirm fingerprint ${fp}`, 'ok');
+        await persist(); el('qms-contact-name').value = ''; el('qms-contact-invitation').value = ''; render(); showStatus(`Imported ${name}. Confirm fingerprint ${fp}`, 'ok');
       } catch (error) { showError(error); }
     });
     el('qms-message-input').addEventListener('input', updateComposer);
@@ -365,23 +410,25 @@ const QmsMessenger = (() => {
         const messageId = QmsProtocol.random(16), recipient = invitationFromHex(recipientContact.invitationHex);
         const ciphertext = QmsProtocol.sealText(identity, recipient, messageId, text), fragments = QmsProtocol.fragmentCiphertext(recipient, messageId, ciphertext);
         plan = { id: QmsProtocol.hex(messageId), contactId: recipientContact.id, createdAt: nowIso(), status: 'building', ciphertext: QmsProtocol.hex(ciphertext), fragments: fragments.map(fragment => QmsProtocol.hex(QmsProtocol.encodeFragment(fragment))), txs: [], totalFee: '0' };
-        state.plans.push(plan); await store.save(); render();
+        state.plans.push(plan); await persist(); render();
         const wallet = await synchronizedWallet('Synchronizing spendable outputs before preparing the encrypted carrier batch…');
         for (const fragment of fragments) {
           const txSet = await wallet.createTx({ accountIndex: 0, destinations: [{ address: walletKeys.address, amount: '1' }], extraHex: QmsProtocol.hex(QmsProtocol.carrierExtra(fragment)), priority: 1, relay: false, canSplit: false });
+          assertActive();
           if (!txSet || !Array.isArray(txSet.txs) || txSet.txs.length !== 1) throw new Error('Each Messenger carrier must produce exactly one transaction');
           const tx = txSet.txs[0]; if (!tx.metadata || !tx.extraHex || !finalFragmentMatches(tx.extraHex, fragment)) throw new Error('Wallet construction did not preserve the planned Messenger fragment');
           const keyImages = allKeyImages(tx); if (!keyImages.length) throw new Error('Prepared carrier did not expose reserved inputs');
           for (const keyImage of keyImages) { if (reserved.has(keyImage)) throw new Error('Prepared carrier batch attempted to reuse an input'); reserved.add(keyImage); }
           const txEntry = { hash: tx.hash || '', metadata: tx.metadata, extraHex: tx.extraHex, fee: String(tx.fee || 0), keyImages, status: 'preparing' };
-          plan.txs.push(txEntry); await store.save();
-          for (const keyImage of keyImages) { await wallet.freezeOutput(keyImage); frozen.push(keyImage); }
+          plan.txs.push(txEntry); await persist();
+          for (const keyImage of keyImages) { await wallet.freezeOutput(keyImage); assertActive(); frozen.push(keyImage); }
           txEntry.status = 'prepared';
-          plan.totalFee = (BigInt(plan.totalFee) + BigInt(tx.fee || 0)).toString(); await store.save();
+          plan.totalFee = (BigInt(plan.totalFee) + BigInt(tx.fee || 0)).toString(); await persist();
         }
         plan.status = 'prepared'; state.messages.push({ id: plan.id, contactId: recipientContact.id, direction: 'out', text, createdAt: plan.createdAt, status: 'ready to send' });
-        await store.save(); el('qms-message-input').value = ''; render(); showStatus(`Prepared ${plan.txs.length} carrier transaction(s). Review the total fee before sending.`, 'ok');
+        await persist(); el('qms-message-input').value = ''; render(); showStatus(`Prepared ${plan.txs.length} carrier transaction(s). Review the total fee before sending.`, 'ok');
       } catch (error) {
+        if (closed || (error && error.name === 'AbortError')) return;
         let rollbackError = null;
         if (plan && frozen.length) {
           try { await releasePlanInputs(await options.getWallet(), plan); } catch (releaseError) { rollbackError = releaseError; }
@@ -394,7 +441,7 @@ const QmsMessenger = (() => {
             removeDraft(state, plan);
           }
         }
-        await store.save();
+        await persist();
         showError(rollbackError ? `${error.message || error}. ${rollbackError.message}` : error);
       } finally { button.textContent = 'Encrypt & review'; render(); }
     });
@@ -406,24 +453,26 @@ const QmsMessenger = (() => {
         const wallet = await options.getWallet();
         for (const tx of plan.txs) {
           if (tx.status === 'broadcast' || tx.status === 'confirmed') continue;
-          const hashes = await wallet.relayTxs([tx.metadata]); const hash = Array.isArray(hashes) ? hashes[0] : hashes;
+          const hashes = await wallet.relayTxs([tx.metadata]); assertActive(); const hash = Array.isArray(hashes) ? hashes[0] : hashes;
           if (typeof hash !== 'string' || !/^[0-9a-f]{64}$/i.test(hash)) throw new Error('Wallet did not return a valid broadcast transaction hash');
           if (tx.hash && tx.hash.toLowerCase() !== hash.toLowerCase()) throw new Error('Broadcast hash does not match the prepared transaction');
-          tx.hash = hash.toLowerCase(); tx.status = 'broadcast'; await store.save();
+          tx.hash = hash.toLowerCase(); tx.status = 'broadcast'; await persist();
         }
-        plan.status = recomputePlanStatus(plan); updateOutgoingMessageStatus(state, plan); await store.save(); render(); showStatus('Encrypted message broadcast. Confirmation status will update during scanning.', 'ok');
+        plan.status = recomputePlanStatus(plan); updateOutgoingMessageStatus(state, plan); await persist(); render(); showStatus('Encrypted message broadcast. Confirmation status will update during scanning.', 'ok');
       } catch (error) {
-        plan.status = recomputePlanStatus(plan); updateOutgoingMessageStatus(state, plan); await store.save(); render(); showError(error);
+        if (closed || (error && error.name === 'AbortError')) return;
+        plan.status = recomputePlanStatus(plan); updateOutgoingMessageStatus(state, plan); await persist(); render(); showError(error);
       } finally { button.disabled = false; button.textContent = 'Send encrypted message'; }
     });
     el('qms-cancel').addEventListener('click', async () => {
       const plan = preparedForSelected(); if (!plan || plan.txs.some(tx => tx.status === 'broadcast' || tx.status === 'confirmed')) return;
       try {
         await releasePlanInputs(await options.getWallet(), plan);
-        removeDraft(state, plan); await store.save(); render(); showStatus('Prepared draft deleted and unbroadcast inputs released.', 'ok');
+        assertActive(); removeDraft(state, plan); await persist(); render(); showStatus('Prepared draft deleted and unbroadcast inputs released.', 'ok');
       } catch (error) {
+        if (closed || (error && error.name === 'AbortError')) return;
         plan.status = 'rollback required'; plan.recoveryError = error.message || String(error);
-        await store.save(); render(); showError(error);
+        await persist(); render(); showError(error);
       }
     });
 
@@ -435,24 +484,24 @@ const QmsMessenger = (() => {
       }
       return out;
     }
-    async function getScanner() { if (!scannerPromise) scannerPromise = options.createScanner(); return scannerPromise; }
+    async function getScanner() { assertActive(); if (!scannerPromise) scannerPromise = options.createScanner(); const scanner = await scannerPromise; assertActive(); return scanner; }
     async function scan() {
       if (scanning || recovering || activePlan(state) || !state.contacts.length || !options.createScanner) return;
       scanning = true;
       try {
         showStatus('Scanning QWC blocks for encrypted messages…');
-        const scanner = await getScanner(); const tip = Number(await scanner.getHeight());
+        const scanner = await getScanner(); const tip = Number(await scanner.getHeight()); assertActive();
         if (!Number.isSafeInteger(tip) || tip < 0) throw new Error('Daemon returned an invalid height');
         const restoreHeight = Math.max(0, Number(options.getRestoreHeight() || 0));
         let next = Number(state.scan.height || restoreHeight);
         if (next > tip) throw new Error('Daemon height is behind the saved Messenger scan cursor');
         if (next > restoreHeight && state.scan.blockHash) {
-          const anchor = await scanner.getBlocksByRange(next - 1, next - 1);
+          const anchor = await scanner.getBlocksByRange(next - 1, next - 1); assertActive();
           if (!Array.isArray(anchor) || anchor.length !== 1 || Number(anchor[0].height) !== next - 1) throw new Error('Unable to verify the Messenger scan anchor');
-          if (anchor[0].hash !== state.scan.blockHash) { rollbackForReorg(state, restoreHeight); next = restoreHeight; await store.save(); showStatus(`Chain reorganization detected. Rescanning Messenger from block ${restoreHeight.toLocaleString()}…`); }
+          if (anchor[0].hash !== state.scan.blockHash) { rollbackForReorg(state, restoreHeight); next = restoreHeight; await persist(); showStatus(`Chain reorganization detected. Rescanning Messenger from block ${restoreHeight.toLocaleString()}…`); }
         }
         while (next < tip) {
-          const end = Math.min(tip - 1, next + 19), blocks = await scanner.getBlocksByRange(next, end);
+          const end = Math.min(tip - 1, next + 19), blocks = await scanner.getBlocksByRange(next, end); assertActive();
           if (!Array.isArray(blocks) || blocks.length !== end - next + 1) throw new Error('Daemon returned an incomplete Messenger block range');
           for (let offset = 0; offset < blocks.length; offset++) {
             const block = blocks[offset], expectedHeight = next + offset;
@@ -468,9 +517,9 @@ const QmsMessenger = (() => {
             }
             state.scan = { height: expectedHeight + 1, blockHash: block.hash };
           }
-          next = end + 1; await store.save();
+          next = end + 1; await persist();
         }
-        await store.save(); render(); showStatus(`Messenger scan complete at block ${Math.max(0, tip - 1).toLocaleString()}.`, 'ok');
+        await persist(); render(); showStatus(`Messenger scan complete at block ${Math.max(0, tip - 1).toLocaleString()}.`, 'ok');
       } finally { scanning = false; }
     }
 
@@ -497,7 +546,7 @@ const QmsMessenger = (() => {
           delete plan.recoveryError;
         } catch (error) { plan.recoveryError = error.message || String(error); }
       }
-      await store.save();
+      await persist();
     } finally {
       recovering = false; render();
       const plan = activePlan(state);
@@ -508,10 +557,14 @@ const QmsMessenger = (() => {
     }
 
     return {
-      clear() {
+      async clear() {
+        closed = true;
+        if (signal) signal.removeEventListener('abort', onAbort);
         selectedId = null;
-        try { sodium.memzero(identity.boxSecret); sodium.memzero(identity.signSecret); } catch (_) {}
-        store.close();
+        const messageInput = el('qms-message-input'); if (messageInput) messageInput.value = '';
+        const messageList = el('qms-message-list'); if (messageList) messageList.replaceChildren();
+        const invitation = el('qms-own-invitation'); if (invitation) invitation.value = '';
+        await closeStore();
       },
       scan
     };

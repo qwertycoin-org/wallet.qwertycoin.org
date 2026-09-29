@@ -1,5 +1,5 @@
 # Qwertycoin Web Wallet build manifest
-# Generated 2026-09-29T07:22:58Z from commit 670cf48
+# Generated 2026-09-29T07:25:57Z from commit c628e06
 #
 # Verify the live deployment matches a specific git tag with:
 #   git checkout v0.1.0
@@ -40,7 +40,7 @@ f9a06e79cd3a2a20951c0f0e28f66dd0e6d3fda73911d640a2125c8fcb78f21a  fonts/inter-la
 30c89276ba022bac4126ce8fda93075842bfcfc1bd73da20d311b4a58bd5d798  index.html
 a0bf069d19922a0df40c278c40bc82a8edc55658b587d1bb5a09b5a06ec98244  js/bip39-wordlist.js
 f5d61babe30ae09ed28b1b5183e45fbf17941fcbb208bd4c47e1abfed4494a3e  js/bip39.js
-952d0de559c6f22d7787f53d6e746e2d013fdf85cc784b9857e9f0153c4e2ab3  js/dashboard-page.js
+ee8917a27f1b4d147633e404182730449717ca364cac9d152c24c08ed0fbdf01  js/dashboard-page.js
 ea6ea3459b1a94c83f9bd49534527277bf7d80154ca12aab62a4e4034ff8776f  js/index-page.js
 ca17e7555699565d53195a7404306ac7b9399704d80fa379b61355e5f9b19b20  js/jsqr.js
 b780f029e218e4b7c7142cfdb2161f8fb30248da8f9c022619812bc9180e7d69  js/keccak256.js
@@ -64,7 +64,7 @@ bf22b13d1187c01fe962b65098e47c9fbd29555eef224e91adeaf30c3d4fc155  js/mymonero-co
 ecbb9fca8238f7c0fe3edf2d7901fe4e2501e96512c68901225cc8180119eccd  js/mymonero-loader.js
 d3e46c16c1385373afef97db2750f1edf87f33f12bbe710ec515bd5b12d737c0  js/nav-menu.f152d12.js
 a89e09d29278744721e647b205a9a85f6dd3622a1f0d2d4c3804333cf28e5061  js/polyseed.js
-93a6ce9d032d4a8b4151ab6dfcad316b766c38276f0e15d8dd919776becdf773  js/qms-messenger.js
+3eb17bdebb26779315d34e2221d075c920e474bdf22f0d20a948263c732b5d00  js/qms-messenger.js
 9909447714beb2ac8bdd03b2340da1964e724122f24f6912f84eff436a6eb4f1  js/qms-protocol.js
 0ff406658bc21729d55df0d04fd884d9223425879a618f054c75cc1c8c6b343a  js/qms-store.js
 839e954daff7a6c601479b60403c5ddea4958412405a694a25cdfb18e6c89773  js/qr-scanner.js

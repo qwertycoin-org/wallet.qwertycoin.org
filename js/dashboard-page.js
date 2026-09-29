@@ -13,6 +13,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   let qwcUsdPrice = 0;       // cached QWC/USD rate, disabled until a source is configured
   let clearMessageSigningState = function () {};
   let qmsController = null;
+  let qmsSessionGeneration = 0;
+  let qmsMountAbort = null;
+
+  async function closeQmsSession() {
+    qmsSessionGeneration += 1;
+    if (qmsMountAbort) qmsMountAbort.abort();
+    qmsMountAbort = null;
+    const controller = qmsController;
+    qmsController = null;
+    if (controller) await controller.clear();
+  }
 
   const overlay     = document.getElementById('unlock-overlay');
   const overlayMsg  = document.getElementById('unlock-msg');
@@ -33,8 +44,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     overlayPw.value = '';
   }
 
-  overlayForget.addEventListener('click', () => {
-    if (qmsController) qmsController.clear();
+  overlayForget.addEventListener('click', async () => {
+    await closeQmsSession();
     clearMessageSigningState();
     WalletVault.clear();
     walletKeys = null;
@@ -97,13 +108,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   function resetIdleIfScanning() {
     if (scanningActive) resetIdleTimer();
   }
-  function autoLock() {
+  async function autoLock() {
     // Drop the in-memory keys and reload the page. For an encrypted vault
     // the ciphertext persists in sessionStorage across the reload, so the
     // user can re-enter their password without re-deriving from a seed.
     // For a plaintext vault we wipe and bounce to verify.
     clearMessageSigningState();
-    if (qmsController) qmsController.clear();
+    await closeQmsSession();
     walletKeys = null;
     if (WalletVault.isLocked()) {
       window.location.reload();
@@ -1910,14 +1921,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // ─── Disconnect ───
-  document.getElementById('btn-disconnect').addEventListener('click', () => {
+  document.getElementById('btn-disconnect').addEventListener('click', async () => {
+    await closeQmsSession();
     clearMessageSigningState();
     WalletVault.clear();
     MoneroRPC.disconnect();
     window.location.href = '/';
   });
 
-  window.addEventListener('pagehide', clearMessageSigningState);
+  window.addEventListener('pagehide', () => {
+    clearMessageSigningState();
+    closeQmsSession().catch(() => {});
+  });
 
   // ─── Custom node settings ───
   const customNodeInput = document.getElementById('custom-node');
@@ -2021,14 +2036,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     qmsTab.disabled = false;
     qmsTab.removeAttribute('aria-disabled');
     qmsTab.title = '';
+    const mountGeneration = ++qmsSessionGeneration;
+    const mountAbort = new AbortController();
+    qmsMountAbort = mountAbort;
     QmsMessenger.mount({
+      signal: mountAbort.signal,
       getWalletKeys: () => walletKeys,
       getQmsKey: () => WalletVault.qmsKey(),
       getQmsKdf: () => WalletVault.qmsKdf(),
       getWallet: getQwcWallet,
       getRestoreHeight: getQwcRestoreHeight,
       createScanner: () => QwcWalletEngine.createDaemonScanner()
-    }).then(controller => { qmsController = controller; }).catch(error => {
+    }).then(async controller => {
+      if (mountGeneration !== qmsSessionGeneration || mountAbort.signal.aborted) {
+        await controller.clear();
+        return;
+      }
+      qmsMountAbort = null;
+      qmsController = controller;
+    }).catch(error => {
+      if (mountAbort.signal.aborted || error.name === 'AbortError') return;
       const status = document.getElementById('qms-status');
       if (status) { status.textContent = error.message || String(error); status.className = 'qms-status error'; }
     });
