@@ -10,6 +10,7 @@
     "test:browser-qms-store": "node tests/test-qms-store-browser.cjs",
     "test:browser-qms-ui": "node tests/test-qms-ui-browser.cjs",
     "test:benchmark-qms-ui": "node tests/benchmark-qms-ui-browser.cjs",
+    "test:interop-qms-core": "node tests/test-qms-core-interop.js",
     "test:integration-sync": "node tests/test-wallet-sync-worker.js"
   },
   "engines": {
