@@ -64,8 +64,8 @@ invitation confidentially, verify the shorter fingerprint separately, then use
 **Encrypt & review** before explicitly broadcasting the carrier transactions.
 Received messages appear after every carrier is confirmed and scanned.
 
-Messages are end-to-end encrypted, authenticated and stored locally in a
-password-wrapped XChaCha20-Poly1305 browser record. A short message normally
+Messages are end-to-end encrypted, authenticated and stored locally in
+password-wrapped XChaCha20-Poly1305 IndexedDB records. A short message normally
 fits one carrier transaction. Blockchain timing, transaction hashes,
 fees and carrier activity remain public metadata. QMS1 has no forward secrecy,
 ratchet recovery or post-quantum protection. See
