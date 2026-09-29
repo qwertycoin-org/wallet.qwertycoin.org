@@ -107,6 +107,14 @@ const QmsMessenger = (() => {
         contact.fingerprint = fingerprint;
       } catch (_) {}
       if (typeof contact.verifiedAt !== 'string') contact.verifiedAt = null;
+      if (typeof contact.draft !== 'string') contact.draft = '';
+      if (contact.draft.length > QmsProtocol.C.MAX_TEXT_BYTES * 2) contact.draft = '';
+    }
+    for (const message of state.messages || []) {
+      if (message.direction === 'in' && !Object.prototype.hasOwnProperty.call(message, 'readAt')) {
+        message.readAt = message.createdAt || nowIso();
+      }
+      if (message.direction === 'in' && message.readAt !== null && typeof message.readAt !== 'string') message.readAt = null;
     }
     for (const plan of state.plans || []) {
       const legacyRecovery = plan.status === 'rollback required';
@@ -209,6 +217,7 @@ const QmsMessenger = (() => {
       text: opened.text,
       createdAt: newest.createdAt || nowIso(),
       status: 'confirmed',
+      readAt: null,
       txHash: newest.txHash || '',
       sourceFragments: records
     };
@@ -262,6 +271,7 @@ const QmsMessenger = (() => {
           text: decoded.text,
           createdAt: newest.createdAt || pending.receivedAt || nowIso(),
           status: 'confirmed',
+          readAt: null,
           txHash: newest.txHash || '',
           sourceFragments: records
         };
@@ -536,6 +546,8 @@ const QmsMessenger = (() => {
     const messageLimits = new Map();
     let renderedMessageKey = '';
     let renderedContactId = null;
+    let mobileConversationOpen = false;
+    let uiSaveTimer = null;
     const operations = createOperationMutex();
     const el = id => document.getElementById(id);
     const section = el('qms-section'), overviewTab = el('wallet-tab-overview'), messengerTab = el('wallet-tab-messenger');
@@ -570,6 +582,25 @@ const QmsMessenger = (() => {
     function preparedForSelected() { return state.plans.find(plan => plan.contactId === selectedId && ACTIVE_PLAN_STATUSES.has(plan.status) && plan.status !== 'building') || null; }
     function formatDate(value) { try { return new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)); } catch (_) { return value; } }
     function messageByteCount() { return new TextEncoder().encode(el('qms-message-input').value).length; }
+    function scheduleUiPersist() {
+      clearTimeout(uiSaveTimer);
+      uiSaveTimer = setTimeout(() => {
+        uiSaveTimer = null;
+        persist().catch(showError);
+      }, 400);
+    }
+    function restoreDraft() { el('qms-message-input').value = contact() ? contact().draft || '' : ''; }
+    function markSelectedRead() {
+      if (section.hidden || !selectedId || (window.innerWidth <= 720 && !mobileConversationOpen)) return false;
+      const at = nowIso(); let changed = false;
+      for (const message of state.messages) {
+        if (message.contactId === selectedId && message.direction === 'in' && !message.readAt) {
+          message.readAt = at; changed = true;
+        }
+      }
+      if (changed) scheduleUiPersist();
+      return changed;
+    }
     function downloadJson(filename, value) {
       const blob = new Blob([JSON.stringify(value)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -610,19 +641,42 @@ const QmsMessenger = (() => {
 
     function renderContacts() {
       const list = el('qms-contact-list'); list.replaceChildren();
-      const activeContacts = state.contacts.filter(item => !item.archivedAt);
+      const query = el('qms-contact-filter').value.trim().toLocaleLowerCase();
+      const summaries = new Map();
+      for (const message of state.messages) {
+        let summary = summaries.get(message.contactId);
+        if (!summary) { summary = { latest: null, unread: 0, matches: false }; summaries.set(message.contactId, summary); }
+        if (!summary.latest || summary.latest.createdAt.localeCompare(message.createdAt) < 0) summary.latest = message;
+        if (message.direction === 'in' && !message.readAt) summary.unread += 1;
+        if (query && !summary.matches && String(message.text || '').toLocaleLowerCase().includes(query)) summary.matches = true;
+      }
+      const activeContacts = state.contacts.filter(item => {
+        if (item.archivedAt) return false;
+        if (!query) return true;
+        return item.name.toLocaleLowerCase().includes(query) || String(item.fingerprint || '').toLowerCase().includes(query)
+          || (summaries.get(item.id) && summaries.get(item.id).matches);
+      });
       if (!activeContacts.length) { list.appendChild(emptyNotice('No contacts yet')); return; }
       for (const item of activeContacts) {
         const button = document.createElement('button'); button.className = 'qms-contact' + (item.id === selectedId ? ' active' : ''); button.type = 'button';
         button.setAttribute('aria-pressed', String(item.id === selectedId));
         button.disabled = recovering;
-        const name = document.createElement('strong'); name.textContent = item.name;
-        const fingerprint = document.createElement('span'); fingerprint.textContent = `${short(item.fingerprint)} · ${item.verifiedAt ? 'verified' : 'unverified'}`;
-        button.append(name, fingerprint);
+        const title = document.createElement('div'); title.className = 'qms-contact-title';
+        const name = document.createElement('strong'); name.textContent = item.name; title.appendChild(name);
+        const summary = summaries.get(item.id) || { latest: null, unread: 0 };
+        const unreadCount = summary.unread;
+        if (unreadCount) { const unread = document.createElement('span'); unread.className = 'qms-unread'; unread.textContent = unreadCount > 99 ? '99+' : String(unreadCount); title.appendChild(unread); }
+        const latest = summary.latest;
+        const preview = document.createElement('span'); preview.className = 'qms-contact-preview'; preview.textContent = latest ? `${latest.direction === 'out' ? 'You: ' : ''}${latest.text}` : `${short(item.fingerprint)} · ${item.verifiedAt ? 'verified' : 'unverified'}`;
+        button.append(title, preview);
         button.addEventListener('click', () => {
-          if (selectedId === item.id) return;
+          if (selectedId === item.id && mobileConversationOpen) return;
           selectedId = item.id;
+          mobileConversationOpen = true;
+          el('qms-chat-view').classList.add('qms-mobile-conversation');
           renderedMessageKey = '';
+          restoreDraft();
+          markSelectedRead();
           render();
         });
         list.appendChild(button);
@@ -703,6 +757,7 @@ const QmsMessenger = (() => {
     }
 
     function renderManage() {
+      if (el('qms-manage-view').hidden) return;
       el('qms-own-invitation').value = state.ownInvitation;
       const own = invitationFromHex(state.ownInvitation);
       el('qms-own-fingerprint').textContent = 'Fingerprint: ' + QmsProtocol.hex(QmsProtocol.fingerprint(own.boxPublic, own.signPublic));
@@ -744,16 +799,17 @@ const QmsMessenger = (() => {
           }
           if (!confirm(`Remove ${item.name}? Existing local chat history will be retained and will reappear if this invitation is imported again.`)) return;
           item.archivedAt = nowIso();
-          if (selectedId === item.id) { selectedId = firstActiveContact() ? firstActiveContact().id : null; renderedMessageKey = ''; }
+          if (selectedId === item.id) { selectedId = firstActiveContact() ? firstActiveContact().id : null; renderedMessageKey = ''; restoreDraft(); }
           await persist(); render(); showStatus('Contact removed from the chat list. Its local invitation and history were retained for compatibility.', 'ok');
         });
         row.append(input, rename, fingerprint, verify, copyInvitation, exportInvitation, showQr, remove, qr); list.appendChild(row);
       }
     }
-    function render() { if (closed) return; renderContacts(); renderMessages(); renderManage(); }
+    function render() { if (closed) return; markSelectedRead(); renderContacts(); renderMessages(); renderManage(); }
 
     el('qms-manage-toggle').addEventListener('click', () => {
       el('qms-chat-view').hidden = true; el('qms-manage-view').hidden = false;
+      renderManage();
     });
     el('qms-manage-back').addEventListener('click', () => { el('qms-manage-view').hidden = true; el('qms-chat-view').hidden = false; render(); });
     el('qms-copy-invitation').addEventListener('click', async () => { await navigator.clipboard.writeText(state.ownInvitation); showStatus('Complete personal invitation copied.', 'ok'); });
@@ -825,6 +881,7 @@ const QmsMessenger = (() => {
         state = imported;
         identity = identityFromJson(state.identity);
         selectedId = activePlan(state) ? activePlan(state).contactId : (state.contacts[0] ? state.contacts[0].id : null);
+        restoreDraft();
         fileInput.value = '';
         el('qms-backup-file-name').textContent = 'No backup file selected.';
         render();
@@ -893,11 +950,22 @@ const QmsMessenger = (() => {
           state.contacts.push(imported);
         }
         selectedId = fp;
+        restoreDraft();
         retryCompleteReassemblies(state, identity, own);
         await persist(); el('qms-contact-name').value = ''; el('qms-contact-invitation').value = ''; render(); showStatus(`Imported ${name} as unverified. Compare the complete fingerprint before sending: ${fp}`, 'ok');
       } catch (error) { showError(error); }
     });
-    el('qms-message-input').addEventListener('input', updateComposer);
+    el('qms-contact-filter').addEventListener('input', renderContacts);
+    el('qms-mobile-chat-back').addEventListener('click', () => {
+      mobileConversationOpen = false;
+      el('qms-chat-view').classList.remove('qms-mobile-conversation');
+      renderContacts();
+    });
+    el('qms-message-input').addEventListener('input', () => {
+      const item = contact();
+      if (item) { item.draft = el('qms-message-input').value; scheduleUiPersist(); }
+      updateComposer();
+    });
 
     el('qms-prepare').addEventListener('click', () => operations.run('prepare', async () => {
       const button = el('qms-prepare'); button.disabled = true; button.textContent = 'Encrypting…';
@@ -934,6 +1002,7 @@ const QmsMessenger = (() => {
           plan.totalFee = (BigInt(plan.totalFee) + BigInt(tx.fee || 0)).toString(); await persist();
         }
         plan.status = 'prepared'; state.messages.push({ id: plan.id, contactId: recipientContact.id, direction: 'out', text, createdAt: plan.createdAt, status: 'prepared' });
+        recipientContact.draft = '';
         await persist(); el('qms-message-input').value = ''; render(); showStatus(`Prepared ${plan.txs.length} carrier transaction(s). Review the total fee before sending.`, 'ok');
       } catch (error) {
         if (closed || (error && error.name === 'AbortError')) return;
@@ -1085,6 +1154,7 @@ const QmsMessenger = (() => {
       } finally { scanning = false; }
     }
 
+    restoreDraft();
     render();
     try {
       const stale = state.plans.filter(plan => plan.status === 'building');
@@ -1124,6 +1194,11 @@ const QmsMessenger = (() => {
 
     return {
       async clear() {
+        if (uiSaveTimer) {
+          clearTimeout(uiSaveTimer);
+          uiSaveTimer = null;
+          try { await persist(); } catch (_) {}
+        }
         closed = true;
         if (signal) signal.removeEventListener('abort', onAbort);
         selectedId = null;

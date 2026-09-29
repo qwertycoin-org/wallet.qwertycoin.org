@@ -1,5 +1,5 @@
 # Qwertycoin Web Wallet build manifest
-# Generated 2026-09-29T08:16:28Z from commit c9799b4
+# Generated 2026-09-29T08:21:08Z from commit 72a8d07
 #
 # Verify the live deployment matches a specific git tag with:
 #   git checkout v0.1.0
@@ -15,13 +15,13 @@ ca8e9997e76b5d9d1b019a373617bd2e5a0e4deb95133a9e3e97e89d52b1d356  assets/avatar.
 657572613c331f2952e28c061b674ea6a4df2ab1f425a475c81c1013a08a211a  assets/favicon-16x16.png
 b83c4b9a436236620b4107628799459f778c35b7aa45b1dd389c97b9649bb592  assets/favicon-192x192.png
 737de0b5724abedb7950fa40ad24938211f0d4b7835e3c74c072684554dd8c1f  assets/favicon-32x32.png
-7c200a2aefac959c0f29b227bdaaeb29424cf171686b883ef1b18f768524e1aa  assets/qms-messenger.css
+0b088064a0e5a847a1fe243c03cca5fb264ce258f0c0bf7eea1501e16dd66d8e  assets/qms-messenger.css
 449e9192a909de6b096b8949d43f1120092036a1fef2f9df9bdb785269461bb9  assets/qwertycoin-mark.svg
 2f2114c74813e11b739fb7d0293f0244db10d13a63cbdb4a21b4c7e9c2768681  assets/social-card.2f2114c74813.png
 2f2114c74813e11b739fb7d0293f0244db10d13a63cbdb4a21b4c7e9c2768681  assets/social-card.png
 6e761de434fb98032c3a3b562e04e7d1b2fbd7a5d392db15bfbab0f1854468aa  assets/social-card.svg
 a1a1345fdbb4d52f74fd5eacdc75443f7c391670b1eecc312b6ad7485f52d0c7  assets/wallet-ui.f152d12.css
-9f3195e3e6df06aa3992a9040f01e397cb02a2e3594cc7dd23c7d24401892858  dashboard.html
+dc419fdf1e86706dd465be28204317a83a89bd6b568e00c74cdb1f5cca94ddeb  dashboard.html
 49845fb6edd4109c5f9aa61feaf105f9125f5c10c00e7d1c6726b0c2f5594ec9  favicon.ico
 a81550eef33de480531b7220d41a0ddc46129b36c1b6d2875d170de441d5da66  favicon.svg
 e17cfd15fb96909d64095015f958207063a0c07191da3512df7d560a781aebdf  fonts/028edbf56089.woff2
@@ -66,7 +66,7 @@ d3e46c16c1385373afef97db2750f1edf87f33f12bbe710ec515bd5b12d737c0  js/nav-menu.f1
 a89e09d29278744721e647b205a9a85f6dd3622a1f0d2d4c3804333cf28e5061  js/polyseed.js
 aec4ee5dbcca8078bd6be5d5bcd3ff52e40a93471cec04bda748123507cb22fb  js/qms-kdf-worker.js
 02a7aefd8e5bbd95f7dc43687574d6f9144ccbdb9cff15d562e44391276411d9  js/qms-kdf.js
-6f852ebdad64487f3b871af4cbd9232751aab1a8fe134abe2bcf7b477ddc7459  js/qms-messenger.js
+8f278a7c20d76edf2911b1ef701f02ac12a488986df8f742c1517252c866ee85  js/qms-messenger.js
 20703fcd0471e9cc1d8fe06bb4550bca6f32ade3108d1878bbbf0faeafa481b8  js/qms-protocol.js
 b0292bafc47901789ecd5c21a3db0b32937b2994aef7d4d3dc997607409160c1  js/qms-store.js
 839e954daff7a6c601479b60403c5ddea4958412405a694a25cdfb18e6c89773  js/qr-scanner.js

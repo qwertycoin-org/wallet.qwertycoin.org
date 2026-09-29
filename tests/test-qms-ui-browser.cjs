@@ -73,6 +73,9 @@ const fixture = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" hre
       const contactIdentity = QmsProtocol.createIdentity();
       const contactInvitation = QmsProtocol.createInvitation(contactIdentity);
       const contactId = QmsProtocol.hex(QmsProtocol.fingerprint(contactIdentity.boxPublic, contactIdentity.signPublic));
+      const unreadIdentity = QmsProtocol.createIdentity();
+      const unreadInvitation = QmsProtocol.createInvitation(unreadIdentity);
+      const unreadId = QmsProtocol.hex(QmsProtocol.fingerprint(unreadIdentity.boxPublic, unreadIdentity.signPublic));
       const store = await QmsStore.open(wallet, key);
       store.state.identity = {
         boxPublic: QmsProtocol.hex(ownIdentity.boxPublic), boxSecret: QmsProtocol.hex(ownIdentity.boxSecret),
@@ -88,6 +91,15 @@ const fixture = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" hre
         verifiedAt: new Date().toISOString(),
         addedAt: new Date().toISOString()
       });
+      store.state.contacts.push({
+        id: unreadId,
+        fingerprint: unreadId,
+        name: 'Unread Contact',
+        invitationHex: QmsProtocol.hex(QmsProtocol.encodeInvitation(unreadInvitation)),
+        localInvitationHex: QmsProtocol.hex(QmsProtocol.encodeInvitation(QmsProtocol.createInvitation(ownIdentity))),
+        verifiedAt: new Date().toISOString(),
+        addedAt: new Date().toISOString()
+      });
       for (let index = 0; index < 250; index++) store.state.messages.push({
         id: String(index).padStart(64, '0'),
         contactId,
@@ -95,6 +107,10 @@ const fixture = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" hre
         text: `history message ${index}`,
         createdAt: new Date(1700000000000 + index * 1000).toISOString(),
         status: 'confirmed'
+      });
+      store.state.messages.push({
+        id: 'f'.repeat(64), contactId: unreadId, direction: 'in', text: 'unread filter probe',
+        createdAt: new Date(1700001000000).toISOString(), status: 'confirmed', readAt: null
       });
       await store.save();
       await store.close();
@@ -122,6 +138,20 @@ const fixture = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" hre
     assert.strictEqual(await page.locator('.qms-load-older').count(), 1);
     await page.locator('.qms-load-older').click();
     assert.strictEqual(await page.locator('.qms-message').count(), 200);
+
+    const unreadContact = page.getByRole('button', { name: /Unread Contact/ });
+    assert.strictEqual(await unreadContact.locator('.qms-unread').innerText(), '1');
+    assert.match(await unreadContact.locator('.qms-contact-preview').innerText(), /unread filter probe/);
+    await page.locator('#qms-contact-filter').fill('unread filter');
+    assert.strictEqual(await page.locator('#qms-contact-list .qms-contact').count(), 1);
+    await page.locator('#qms-contact-filter').fill('');
+    await page.locator('#qms-message-input').fill('draft for existing contact');
+    await unreadContact.click();
+    assert.strictEqual(await page.locator('#qms-message-input').inputValue(), '');
+    assert.strictEqual(await unreadContact.locator('.qms-unread').count(), 0);
+    await page.locator('#qms-message-input').fill('draft for unread contact');
+    await page.getByRole('button', { name: /Existing Contact/ }).click();
+    assert.strictEqual(await page.locator('#qms-message-input').inputValue(), 'draft for existing contact');
 
     await page.locator('#qms-manage-toggle').click();
     await page.locator('#qms-toggle-invitation-qr').click();
@@ -155,11 +185,29 @@ const fixture = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" hre
     assert.strictEqual(await page.locator('#qms-prepare').isEnabled(), true);
 
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator('#qms-mobile-chat-back').click();
+    assert.strictEqual(await page.locator('.qms-contacts').isVisible(), true);
+    assert.strictEqual(await page.locator('.qms-conversation').isVisible(), false);
+    await page.getByRole('button', { name: /Unread Contact/ }).click();
+    assert.strictEqual(await page.locator('.qms-contacts').isVisible(), false);
+    assert.strictEqual(await page.locator('.qms-conversation').isVisible(), true);
     const horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
     assert.strictEqual(horizontalOverflow, false);
     assert.deepStrictEqual(pageErrors, []);
     await page.evaluate(() => window.qmsController.clear());
-    console.log(JSON.stringify({ pagination: [100, 200], verificationGate: true, invitationQr: true, invitationFile: true, carrierPreview: 1, mobileWidth: 390, horizontalOverflow }));
+    const persistedUiState = await page.evaluate(async () => {
+      const store = await QmsStore.open(window.qmsTestWallet, window.qmsTestKey);
+      const result = {
+        drafts: Object.fromEntries(store.state.contacts.map(contact => [contact.name, contact.draft || ''])),
+        unreadReadAt: store.state.messages.find(message => message.id === 'f'.repeat(64)).readAt
+      };
+      await store.close();
+      return result;
+    });
+    assert.strictEqual(persistedUiState.drafts['Existing Contact'], 'draft for existing contact');
+    assert.strictEqual(persistedUiState.drafts['Unread Contact'], 'draft for unread contact');
+    assert.match(persistedUiState.unreadReadAt, /^\d{4}-\d{2}-\d{2}T/);
+    console.log(JSON.stringify({ pagination: [100, 200], drafts: true, unread: true, filter: true, mobileNavigation: true, verificationGate: true, invitationQr: true, invitationFile: true, carrierPreview: 1, mobileWidth: 390, horizontalOverflow }));
   } finally {
     await context.close();
     await browser.close();

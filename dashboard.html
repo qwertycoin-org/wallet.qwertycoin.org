@@ -260,9 +260,9 @@ footer p{font-size:.65rem;color:var(--text-dim)}
         <div id="qms-status" class="qms-status" aria-live="polite"></div>
 
         <div id="qms-chat-view" class="qms-chat-layout">
-          <aside class="qms-contacts"><div class="qms-contacts-title">Chats</div><div id="qms-contact-list"></div></aside>
+          <aside class="qms-contacts"><div class="qms-contacts-title"><span>Chats</span><input id="qms-contact-filter" type="search" maxlength="80" autocomplete="off" aria-label="Filter chats" placeholder="Filter chats"></div><div id="qms-contact-list"></div></aside>
           <div class="qms-conversation">
-            <div class="qms-conversation-head"><strong id="qms-chat-name">Select a contact</strong><span id="qms-chat-fingerprint"></span></div>
+            <div class="qms-conversation-head"><button class="qms-mobile-back" id="qms-mobile-chat-back" type="button" aria-label="Back to chat list">← Chats</button><strong id="qms-chat-name">Select a contact</strong><span id="qms-chat-fingerprint"></span></div>
             <div id="qms-message-list" class="qms-message-list" role="log" aria-live="polite"><div class="qms-empty">Import a personal invitation to begin.</div></div>
             <div class="qms-compose">
               <textarea id="qms-message-input" rows="3" maxlength="4096" aria-label="Message" placeholder="Write a message" disabled></textarea>
