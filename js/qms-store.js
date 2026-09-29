@@ -11,6 +11,10 @@ const QmsStore = (() => {
   const DATABASE_VERSION = 1;
   const OBJECT_STORE = 'records';
   const RECORD_SCHEMA = 3;
+  const BACKUP_VERSION = 1;
+  const BACKUP_MAX_BYTES = 16 * 1024 * 1024;
+  const BACKUP_OPSLIMIT = 3;
+  const BACKUP_MEMLIMIT = 64 * 1024 * 1024;
   const te = new TextEncoder();
   const td = new TextDecoder('utf-8', { fatal: true });
   const localLocks = new Set();
@@ -88,6 +92,68 @@ const QmsStore = (() => {
     } catch (_) {
       throw new Error(`Unable to decrypt this wallet's ${label}`);
     }
+  }
+  function hex(bytes) { return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join(''); }
+  async function backupIdentityId(state) {
+    if (!state.identity || !/^[0-9a-f]{64}$/i.test(state.identity.boxPublic || '')
+        || !/^[0-9a-f]{64}$/i.test(state.identity.signPublic || '')) {
+      throw new Error('Messenger backup identity is invalid');
+    }
+    const digest = new Uint8Array(await crypto.subtle.digest(
+      'SHA-256', te.encode(`${state.identity.boxPublic.toLowerCase()}:${state.identity.signPublic.toLowerCase()}`)));
+    return hex(digest);
+  }
+  function backupHeaderAad(envelope) {
+    return te.encode([
+      'QWC-QMS1-FAST-BACKUP', envelope.version, envelope.profile, envelope.network,
+      envelope.walletId, envelope.kdf.name, envelope.kdf.opslimit,
+      envelope.kdf.memlimit, envelope.kdf.salt
+    ].join('\u0000'));
+  }
+  function deriveBackupKey(password, kdf) {
+    if (typeof password !== 'string' || password.length < 12 || password.length > 1024) {
+      throw new Error('Messenger backup password must contain 12 to 1,024 characters');
+    }
+    const normalized = normalizeKdf(kdf);
+    if (!normalized || normalized.opslimit < 2 || normalized.memlimit < 32 * 1024 * 1024) {
+      throw new Error('Messenger backup KDF parameters are too weak');
+    }
+    return requireKey(sodiumApi().crypto_pwhash(
+      32,
+      password,
+      unb64(normalized.salt),
+      normalized.opslimit,
+      normalized.memlimit,
+      sodiumApi().crypto_pwhash_ALG_ARGON2ID13
+    ), 'Messenger backup key');
+  }
+  function validateBackupState(value) {
+    const state = cloneState(value);
+    if (!state.identity || !/^[0-9a-f]{64}$/i.test(state.identity.boxPublic || '')
+        || !/^[0-9a-f]{64}$/i.test(state.identity.boxSecret || '')
+        || !/^[0-9a-f]{64}$/i.test(state.identity.signPublic || '')
+        || !/^[0-9a-f]{128}$/i.test(state.identity.signSecret || '')
+        || typeof state.ownInvitation !== 'string' || state.ownInvitation.length > 2048
+        || state.contacts.length > 1000 || state.messages.length > 10000
+        || state.plans.length > 128 || state.reassembly.length > 64) {
+      throw new Error('Messenger backup exceeds supported identity or resource limits');
+    }
+    return state;
+  }
+  function lockImportedOutbox(state) {
+    const unsafe = new Set(['building', 'prepared', 'broadcasting', 'broadcast_unknown', 'recovery_required']);
+    for (const plan of state.plans) {
+      if (!unsafe.has(plan.status) && !(plan.txs || []).some(tx => unsafe.has(tx.status))) continue;
+      plan.status = 'recovery_required';
+      plan.recoveryError = 'Imported transaction journal requires wallet recovery before any relay or input release';
+      plan.importedRecovery = true;
+      for (const tx of plan.txs || []) {
+        if (!['broadcast', 'confirmed'].includes(tx.status)) tx.status = 'recovery_required';
+      }
+      const message = state.messages.find(item => item.id === plan.id && item.direction === 'out');
+      if (message) message.status = 'recovery_required';
+    }
+    return state;
   }
 
   function requestResult(request) {
@@ -461,7 +527,81 @@ const QmsStore = (() => {
       });
       return closePromise;
     }
-    return { get state() { ensureOpen(); return state; }, save, snapshot, commit, close, storageKey };
+    async function exportBackup(password) {
+      ensureOpen();
+      const exportedState = validateBackupState(state);
+      const salt = sodiumApi().randombytes_buf(16);
+      const nonce = sodiumApi().randombytes_buf(24);
+      const kdf = {
+        name: 'argon2id13',
+        opslimit: BACKUP_OPSLIMIT,
+        memlimit: BACKUP_MEMLIMIT,
+        salt: b64(salt)
+      };
+      const envelope = {
+        type: 'qwc-qms1-fast-backup',
+        version: BACKUP_VERSION,
+        profile: 'qms1-fast',
+        network,
+        walletId: storageKey.slice(PREFIX.length),
+        kdf,
+        nonce: b64(nonce)
+      };
+      const payload = {
+        version: BACKUP_VERSION,
+        exportedAt: new Date().toISOString(),
+        identityId: await backupIdentityId(exportedState),
+        state: exportedState
+      };
+      const plaintext = te.encode(JSON.stringify(payload));
+      if (plaintext.length > BACKUP_MAX_BYTES) throw new Error('Messenger backup exceeds the 16 MiB size limit');
+      const backupKey = deriveBackupKey(password, kdf);
+      try {
+        envelope.ciphertext = b64(encrypt(backupKey, nonce, plaintext, backupHeaderAad(envelope)));
+        return JSON.stringify(envelope);
+      } finally {
+        sodiumApi().memzero(plaintext);
+        sodiumApi().memzero(backupKey);
+      }
+    }
+    async function importBackup(serialized, password) {
+      ensureOpen();
+      if (typeof serialized !== 'string' || te.encode(serialized).length > BACKUP_MAX_BYTES) {
+        throw new Error('Messenger backup is empty or exceeds the 16 MiB size limit');
+      }
+      let envelope;
+      try { envelope = JSON.parse(serialized); }
+      catch (_) { throw new Error('Messenger backup is not valid JSON'); }
+      if (!envelope || envelope.type !== 'qwc-qms1-fast-backup'
+          || envelope.version !== BACKUP_VERSION || envelope.profile !== 'qms1-fast'
+          || envelope.network !== network || envelope.walletId !== storageKey.slice(PREFIX.length)
+          || typeof envelope.nonce !== 'string' || typeof envelope.ciphertext !== 'string') {
+        throw new Error('Messenger backup does not belong to this wallet and network');
+      }
+      const backupKey = deriveBackupKey(password, envelope.kdf);
+      let plaintext;
+      try {
+        plaintext = decrypt(
+          backupKey, unb64(envelope.nonce), unb64(envelope.ciphertext),
+          backupHeaderAad(envelope), 'Messenger backup');
+      } finally {
+        sodiumApi().memzero(backupKey);
+      }
+      let payload;
+      try { payload = JSON.parse(td.decode(plaintext)); }
+      catch (_) { throw new Error('Messenger backup payload is invalid'); }
+      finally { sodiumApi().memzero(plaintext); }
+      if (!payload || payload.version !== BACKUP_VERSION) throw new Error('Unsupported Messenger backup payload');
+      const candidate = lockImportedOutbox(validateBackupState(payload.state));
+      if (payload.identityId !== await backupIdentityId(candidate)) throw new Error('Messenger backup identity check failed');
+      const currentRevision = revision;
+      await commit(candidate, currentRevision);
+      return state;
+    }
+    return {
+      get state() { ensureOpen(); return state; },
+      save, snapshot, commit, exportBackup, importBackup, close, storageKey
+    };
   }
 
   const testing = {

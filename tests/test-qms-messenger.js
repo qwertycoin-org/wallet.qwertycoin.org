@@ -556,6 +556,46 @@ async function test(name, fn) {
     await reopened.close();
   });
 
+  await test('encrypted backup round-trip authenticates identity and locks imported outbox recovery', async () => {
+    const wallet = { address: 'QWC-encrypted-backup-test', network: 'mainnet', privateSpendKeyHex: '62'.repeat(32) };
+    const key = env.ctx.sodium.randombytes_buf(32);
+    const active = await store.open(wallet, key);
+    active.state.identity = {
+      boxPublic: qms.hex(alice.boxPublic), boxSecret: qms.hex(alice.boxSecret),
+      signPublic: qms.hex(alice.signPublic), signSecret: qms.hex(alice.signSecret)
+    };
+    active.state.ownInvitation = invitationHex(qms, aliceInvite);
+    active.state.contacts.push({ id: 'backup-contact', name: 'Backup Contact', invitationHex: invitationHex(qms, bobInvite) });
+    active.state.messages.push({ id: 'backup-message', contactId: 'backup-contact', direction: 'out', text: 'backup plaintext probe', status: 'prepared' });
+    active.state.plans.push({
+      id: 'backup-message', contactId: 'backup-contact', status: 'prepared',
+      txs: [{ hash: 'ab'.repeat(32), metadata: 'signed-metadata', status: 'prepared', keyImages: ['cd'.repeat(32)] }]
+    });
+    await active.save();
+    const backup = await active.exportBackup('independent backup password');
+    assert(!backup.includes('backup plaintext probe') && !backup.includes('signed-metadata'));
+
+    active.state.messages.push({ id: 'post-export-change', direction: 'in', text: 'must be replaced' });
+    await active.save();
+    const beforeWrongPassword = store.testing.dump(active.storageKey);
+    await assert.rejects(active.importBackup(backup, 'wrong backup password'), /Unable to decrypt/);
+    assert.strictEqual(store.testing.dump(active.storageKey), beforeWrongPassword, 'failed backup authentication must not alter storage');
+
+    const imported = await active.importBackup(backup, 'independent backup password');
+    assert.strictEqual(imported.messages.some(message => message.id === 'post-export-change'), false);
+    assert.strictEqual(imported.messages[0].text, 'backup plaintext probe');
+    assert.strictEqual(imported.messages[0].status, 'recovery_required');
+    assert.strictEqual(imported.plans[0].status, 'recovery_required');
+    assert.strictEqual(imported.plans[0].txs[0].status, 'recovery_required');
+    assert.strictEqual(imported.plans[0].importedRecovery, true);
+    await active.close();
+
+    const foreignWallet = { address: 'QWC-foreign-backup-target', network: 'mainnet', privateSpendKeyHex: '63'.repeat(32) };
+    const foreign = await store.open(foreignWallet, env.ctx.sodium.randombytes_buf(32));
+    await assert.rejects(foreign.importBackup(backup, 'independent backup password'), /does not belong/);
+    await foreign.close();
+  });
+
   await test('closing waits for accepted writes and never encrypts with destroyed keys', async () => {
     const wallet = { address: 'QWC-close-race-test', privateSpendKeyHex: '66'.repeat(32) };
     const key = env.ctx.sodium.randombytes_buf(32);
@@ -618,7 +658,8 @@ async function test(name, fn) {
     for (const value of [
       'id="wallet-tab-messenger" type="button" role="tab" aria-selected="false" hidden',
       'id="qms-section"', 'Manage contacts',
-      'Encrypt &amp; review', 'Send encrypted message', 'Copy complete invitation'
+      'Encrypt &amp; review', 'Send encrypted message', 'Copy complete invitation',
+      'id="qms-export-backup"', 'id="qms-import-backup"', 'Separate backup password'
     ]) assert(html.includes(value), `missing Messenger UI contract: ${value}`);
     assert(html.indexOf('vendor/libsodium/libsodium-sumo.js') < html.indexOf('js/qms-protocol.js'));
     assert(html.indexOf('js/qms-messenger.js') < html.indexOf('js/dashboard-page.js'));

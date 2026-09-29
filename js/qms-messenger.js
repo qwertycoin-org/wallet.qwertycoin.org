@@ -539,6 +539,59 @@ const QmsMessenger = (() => {
     });
     el('qms-manage-back').addEventListener('click', () => { el('qms-manage-view').hidden = true; el('qms-chat-view').hidden = false; render(); });
     el('qms-copy-invitation').addEventListener('click', async () => { await navigator.clipboard.writeText(state.ownInvitation); showStatus('Complete personal invitation copied.', 'ok'); });
+    el('qms-backup-file').addEventListener('change', event => {
+      const file = event.target.files && event.target.files[0];
+      el('qms-backup-file-name').textContent = file ? `${file.name} · ${file.size.toLocaleString()} bytes` : 'No backup file selected.';
+      el('qms-import-backup').disabled = !file || file.size > 16 * 1024 * 1024;
+      if (file && file.size > 16 * 1024 * 1024) showStatus('Messenger backup exceeds the 16 MiB import limit.', 'error');
+    });
+    el('qms-export-backup').addEventListener('click', () => operations.run('backup export', async () => {
+      const passwordInput = el('qms-backup-password');
+      const button = el('qms-export-backup');
+      button.disabled = true;
+      try {
+        const serialized = await store.exportBackup(passwordInput.value);
+        assertActive();
+        const blob = new Blob([serialized], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `qwertycoin-messenger-backup-${new Date().toISOString().slice(0, 10)}.json`;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+        showStatus('Encrypted Messenger backup exported. Store the file and its separate password privately.', 'ok');
+      } finally {
+        passwordInput.value = '';
+        button.disabled = false;
+      }
+    }).catch(showError));
+    el('qms-import-backup').addEventListener('click', () => operations.run('backup import', async () => {
+      const passwordInput = el('qms-backup-password');
+      const fileInput = el('qms-backup-file');
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) throw new Error('Choose an encrypted Messenger backup file');
+      if (file.size > 16 * 1024 * 1024) throw new Error('Messenger backup exceeds the 16 MiB import limit');
+      if (!confirm('Replace this browser’s Messenger identity, contacts and local history with the authenticated backup? Nothing will be sent automatically.')) return;
+      const button = el('qms-import-backup');
+      button.disabled = true;
+      try {
+        const imported = normalizeState(await store.importBackup(await file.text(), passwordInput.value));
+        assertActive();
+        try { sodium.memzero(identity.boxSecret); sodium.memzero(identity.signSecret); } catch (_) {}
+        state = imported;
+        identity = identityFromJson(state.identity);
+        selectedId = activePlan(state) ? activePlan(state).contactId : (state.contacts[0] ? state.contacts[0].id : null);
+        fileInput.value = '';
+        el('qms-backup-file-name').textContent = 'No backup file selected.';
+        render();
+        showStatus(activePlan(state)
+          ? 'Backup imported. The transaction journal is locked in recovery mode; review it before any wallet spending.'
+          : 'Encrypted Messenger backup imported.', activePlan(state) ? 'error' : 'ok');
+      } finally {
+        passwordInput.value = '';
+        button.disabled = !(fileInput.files && fileInput.files[0]);
+      }
+    }).catch(showError));
     el('qms-import-contact').addEventListener('click', async () => {
       try {
         const name = el('qms-contact-name').value.trim(), invitationHex = el('qms-contact-invitation').value.trim().toLowerCase();
