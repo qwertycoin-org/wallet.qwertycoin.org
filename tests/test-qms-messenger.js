@@ -45,6 +45,7 @@ function browserContext() {
     ArrayBuffer,
     setTimeout,
     clearTimeout,
+    QMS_TEST_MEMORY_STORAGE: true,
     navigator: {
       locks: {
         request: async (name, options, callback) => {
@@ -432,20 +433,20 @@ async function test(name, fn) {
     const first = await store.open(wallet, vault.qmsKey(), vault.qmsKdf());
     first.state.messages.push({ id: 'persisted', direction: 'out', text: 'survives reimport' });
     await first.save();
-    first.close();
+    await first.close();
 
     vault.clear();
     await vault.store(wallet, password);
     const reopened = await store.open(wallet, vault.qmsKey(), vault.qmsKdf());
     assert.strictEqual(reopened.state.messages.length, 1);
     assert.strictEqual(reopened.state.messages[0].id, 'persisted');
-    reopened.close();
+    await reopened.close();
 
-    const encryptedHistory = env.values.get(reopened.storageKey);
+    const encryptedHistory = store.testing.dump(reopened.storageKey);
     vault.clear();
     await vault.store(wallet, 'different password');
     await assert.rejects(store.open(wallet, vault.qmsKey(), vault.qmsKdf()), /Unable to decrypt/);
-    assert.strictEqual(env.values.get(reopened.storageKey), encryptedHistory, 'wrong password must not overwrite Messenger history');
+    assert.strictEqual(store.testing.dump(reopened.storageKey), encryptedHistory, 'wrong password must not overwrite Messenger history');
   });
 
   await test('an active legacy session migrates its ephemeral KDF metadata before reimport', async () => {
@@ -456,18 +457,54 @@ async function test(name, fn) {
     legacy.state.messages.push({ id: 'legacy', direction: 'out', text: 'migrate me' });
     await legacy.save();
     assert.strictEqual(JSON.parse(env.values.get(legacy.storageKey)).kdf, undefined);
-    legacy.close();
+    await legacy.close();
 
     const migrated = await store.open(wallet, vault.qmsKey(), vault.qmsKdf());
     await migrated.save();
     assert.strictEqual(JSON.parse(env.values.get(migrated.storageKey)).kdf.name, 'argon2id13');
-    migrated.close();
+    await migrated.close();
 
     vault.clear();
     await vault.store(wallet, password);
     const reopened = await store.open(wallet, vault.qmsKey(), vault.qmsKdf());
     assert.strictEqual(reopened.state.messages[0].id, 'legacy');
-    reopened.close();
+    await reopened.close();
+  });
+
+  await test('legacy envelope migration is atomic and retains the source after an interrupted commit', async () => {
+    const wallet = { address: 'QWC-v2-envelope-migration-test', privateSpendKeyHex: '5a'.repeat(32) };
+    const key = env.ctx.sodium.randombytes_buf(32);
+    const walletDigest = new Uint8Array(await webcrypto.subtle.digest('SHA-256', new TextEncoder().encode(wallet.address)));
+    const storageKey = `qwc-qms1-fast-store:${Array.from(walletDigest, byte => byte.toString(16).padStart(2, '0')).join('')}`;
+    const dataKey = env.ctx.sodium.randombytes_buf(32);
+    const wrapNonce = env.ctx.sodium.randombytes_buf(24);
+    const stateNonce = env.ctx.sodium.randombytes_buf(24);
+    const encode = value => env.ctx.sodium.to_base64(value, env.ctx.sodium.base64_variants.ORIGINAL);
+    const aad = purpose => new TextEncoder().encode(`QWC-QMS1-FAST-WEB-STORE\u0000${purpose}\u0000${storageKey}`);
+    const state = store.blank();
+    state.messages.push({ id: 'legacy-v2', direction: 'in', text: 'authenticated migration source' });
+    const plaintext = new TextEncoder().encode(JSON.stringify(state));
+    const legacyEnvelope = JSON.stringify({
+      version: 2,
+      profile: 'qms1-fast',
+      cipher: 'xchacha20poly1305-ietf',
+      wrapNonce: encode(wrapNonce),
+      wrappedKey: encode(env.ctx.sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(dataKey, aad('data-key'), null, wrapNonce, key)),
+      stateNonce: encode(stateNonce),
+      ciphertext: encode(env.ctx.sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(plaintext, aad('state'), null, stateNonce, dataKey))
+    });
+    env.values.set(storageKey, legacyEnvelope);
+
+    store.testing.failNextWrite(new Error('migration transaction aborted'));
+    await assert.rejects(store.open(wallet, key), /migration transaction aborted/);
+    assert.strictEqual(env.values.get(storageKey), legacyEnvelope, 'failed migration must preserve the authenticated v2 source');
+    assert.strictEqual(store.testing.dump(storageKey), '[]');
+
+    const migrated = await store.open(wallet, key);
+    assert.strictEqual(migrated.state.messages[0].id, 'legacy-v2');
+    assert.strictEqual(JSON.parse(env.values.get(storageKey)).version, 3);
+    assert(store.testing.dump(storageKey).includes('message'));
+    await migrated.close();
   });
 
   await test('password-bound QMS state is encrypted and serialized in save order', async () => {
@@ -479,13 +516,37 @@ async function test(name, fn) {
     first.state.messages.push({ id: 'two', text: 'latest snapshot' });
     const saveTwo = first.save();
     await Promise.all([saveOne, saveTwo]);
-    const envelope = env.values.get(first.storageKey);
-    assert(envelope && !envelope.includes('plaintext must not leak') && !envelope.includes('latest snapshot'));
+    const encryptedRecords = store.testing.dump(first.storageKey);
+    assert(encryptedRecords && !encryptedRecords.includes('plaintext must not leak') && !encryptedRecords.includes('latest snapshot'));
+    const locator = JSON.parse(env.values.get(first.storageKey));
+    assert.strictEqual(locator.backend, 'indexeddb');
     await first.close();
     const reopened = await store.open(wallet, key);
     assert.strictEqual(reopened.state.messages.length, 2);
     await reopened.close();
     await assert.rejects(store.open(wallet, env.ctx.sodium.randombytes_buf(32)), /Unable to decrypt/);
+  });
+
+  await test('authoritative encrypted records survive a blocked localStorage locator write', async () => {
+    const wallet = { address: 'QWC-blocked-local-storage-test', privateSpendKeyHex: '61'.repeat(32) };
+    const key = env.ctx.sodium.randombytes_buf(32);
+    const active = await store.open(wallet, key);
+    active.state.contacts.push({ id: 'contact-record', name: 'private contact name' });
+    active.state.messages.push({ id: 'message-record', text: 'private message text' });
+    active.state.plans.push({ id: 'plan-record', status: 'prepared' });
+    env.failNextLocalWrite(new Error('Web Storage access denied'));
+    await active.save();
+    const dump = store.testing.dump(active.storageKey);
+    assert(dump.includes('contact') && dump.includes('message') && dump.includes('plan'));
+    assert(!dump.includes('private contact name') && !dump.includes('private message text'));
+    assert.strictEqual(env.values.has(active.storageKey), false);
+    await active.close();
+
+    const reopened = await store.open(wallet, key);
+    assert.strictEqual(reopened.state.contacts[0].id, 'contact-record');
+    assert.strictEqual(reopened.state.messages[0].id, 'message-record');
+    assert.strictEqual(reopened.state.plans[0].id, 'plan-record');
+    await reopened.close();
   });
 
   await test('closing waits for accepted writes and never encrypts with destroyed keys', async () => {
@@ -525,7 +586,7 @@ async function test(name, fn) {
     await active.save();
     const snapshot = active.snapshot();
     snapshot.state.scan = { height: 20, blockHash: 'aa'.repeat(32), startHeight: 0, checkpoints: [] };
-    env.failNextLocalWrite(new Error('quota exceeded'));
+    store.testing.failNextWrite(new Error('quota exceeded'));
     await assert.rejects(active.commit(snapshot.state, snapshot.revision), /quota exceeded/);
     assert.strictEqual(active.state.scan.height, 0);
 

@@ -33,6 +33,9 @@ const WalletVault = (function () {
   const QMS_PWHASH_MEMLIMIT = 64 * 1024 * 1024;
   const QMS_PWHASH_BYTES = 32;
   const QMS_STORE_PREFIX = 'qwc-qms1-fast-store:';
+  const QMS_DATABASE_NAME = 'qwc-qms1-fast';
+  const QMS_DATABASE_VERSION = 1;
+  const QMS_OBJECT_STORE = 'records';
   let qmsUnlockKey = null;
   let qmsKdfMetadata = null;
 
@@ -108,11 +111,50 @@ const WalletVault = (function () {
     return QMS_STORE_PREFIX + Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('');
   }
 
+  async function indexedQmsKdf(storageKey) {
+    if (typeof indexedDB === 'undefined') return null;
+    return new Promise(resolve => {
+      let settled = false;
+      const finish = value => {
+        if (settled) return;
+        settled = true;
+        resolve(value || null);
+      };
+      let request;
+      try { request = indexedDB.open(QMS_DATABASE_NAME, QMS_DATABASE_VERSION); }
+      catch (_) { finish(null); return; }
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(QMS_OBJECT_STORE)) db.createObjectStore(QMS_OBJECT_STORE, { keyPath: 'key' });
+      };
+      request.onerror = () => finish(null);
+      request.onblocked = () => finish(null);
+      request.onsuccess = () => {
+        const db = request.result;
+        let tx;
+        try { tx = db.transaction(QMS_OBJECT_STORE, 'readonly'); }
+        catch (_) { db.close(); finish(null); return; }
+        const get = tx.objectStore(QMS_OBJECT_STORE).get(`${storageKey}\u0000meta`);
+        get.onsuccess = () => {
+          const row = get.result;
+          db.close();
+          finish(row && row.record && row.record.version === 3 && row.record.profile === 'qms1-fast'
+            ? validateQmsKdf(row.record.kdf) : null);
+        };
+        get.onerror = () => { db.close(); finish(null); };
+      };
+    });
+  }
+
   async function persistedQmsKdf(address) {
-    if (!address || typeof localStorage === 'undefined') return null;
+    if (!address) return null;
+    const storageKey = await qmsStorageKey(address);
+    const indexed = await indexedQmsKdf(storageKey);
+    if (indexed) return indexed;
+    if (typeof localStorage === 'undefined') return null;
     try {
-      const envelope = JSON.parse(localStorage.getItem(await qmsStorageKey(address)) || 'null');
-      return envelope && envelope.version === 2 && envelope.profile === 'qms1-fast'
+      const envelope = JSON.parse(localStorage.getItem(storageKey) || 'null');
+      return envelope && (envelope.version === 2 || envelope.version === 3) && envelope.profile === 'qms1-fast'
         ? validateQmsKdf(envelope.kdf)
         : null;
     } catch (_) {

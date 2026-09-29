@@ -7,9 +7,16 @@ const QmsStore = (() => {
 
   const PREFIX = 'qwc-qms1-fast-store:';
   const LOCK_PREFIX = 'qwc-qms1-fast-writer:';
+  const DATABASE_NAME = 'qwc-qms1-fast';
+  const DATABASE_VERSION = 1;
+  const OBJECT_STORE = 'records';
+  const RECORD_SCHEMA = 3;
   const te = new TextEncoder();
   const td = new TextDecoder('utf-8', { fatal: true });
   const localLocks = new Set();
+  const memoryRecords = new Map();
+  let nextMemoryWriteError = null;
+  let databasePromise = null;
 
   function sodiumApi() {
     if (typeof sodium === 'undefined') throw new Error('libsodium is not loaded');
@@ -19,6 +26,9 @@ const QmsStore = (() => {
   function unb64(value) { return sodiumApi().from_base64(String(value), sodiumApi().base64_variants.ORIGINAL); }
   function associatedData(storageKey, purpose) {
     return te.encode(`QWC-QMS1-FAST-WEB-STORE\u0000${purpose}\u0000${storageKey}`);
+  }
+  function recordAssociatedData(storageKey, network, type, id) {
+    return associatedData(storageKey, `record\u0000${RECORD_SCHEMA}\u0000${network}\u0000${type}\u0000${id}`);
   }
   async function walletId(address) {
     const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', te.encode(String(address))));
@@ -33,7 +43,7 @@ const QmsStore = (() => {
       messages: [],
       plans: [],
       reassembly: [],
-      scan: { height: 0, blockHash: '' }
+      scan: { height: 0, blockHash: '', startHeight: null, checkpoints: [] }
     };
   }
   function validateState(state) {
@@ -44,6 +54,7 @@ const QmsStore = (() => {
     }
     return state;
   }
+  function cloneState(state) { return JSON.parse(JSON.stringify(validateState(state))); }
   function requireKey(value, label) {
     const key = value instanceof Uint8Array ? new Uint8Array(value) : new Uint8Array(value || []);
     if (key.length !== 32) throw new Error(`${label} must be exactly 32 bytes`);
@@ -58,12 +69,7 @@ const QmsStore = (() => {
     let salt;
     try { salt = unb64(value.salt); } catch (_) { throw new Error('Invalid QMS1/Fast KDF salt'); }
     if (salt.length !== 16) throw new Error('Invalid QMS1/Fast KDF salt');
-    return {
-      name: 'argon2id13',
-      opslimit: value.opslimit,
-      memlimit: value.memlimit,
-      salt: value.salt
-    };
+    return { name: 'argon2id13', opslimit: value.opslimit, memlimit: value.memlimit, salt: value.salt };
   }
   function sameKdf(left, right) {
     return !!left === !!right && (!left || (left.name === right.name
@@ -83,6 +89,213 @@ const QmsStore = (() => {
     }
   }
 
+  function requestResult(request) {
+    return new Promise((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error || new Error('IndexedDB request failed'));
+    });
+  }
+  function openDatabase() {
+    if (databasePromise) return databasePromise;
+    if (typeof indexedDB === 'undefined') {
+      if (typeof QMS_TEST_MEMORY_STORAGE !== 'undefined' && QMS_TEST_MEMORY_STORAGE === true) return null;
+      throw new Error('Encrypted Messenger storage requires IndexedDB');
+    }
+    databasePromise = new Promise((resolve, reject) => {
+      const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(OBJECT_STORE)) db.createObjectStore(OBJECT_STORE, { keyPath: 'key' });
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error || new Error('Unable to open encrypted Messenger storage'));
+      request.onblocked = () => reject(new Error('Messenger storage upgrade is blocked by another tab'));
+    });
+    return databasePromise;
+  }
+  function recordPrefix(storageKey) { return `${storageKey}\u0000`; }
+  function idbRange(storageKey) {
+    const prefix = recordPrefix(storageKey);
+    return IDBKeyRange.bound(prefix, `${prefix}\uffff`);
+  }
+  async function loadRecords(storageKey) {
+    const db = openDatabase();
+    if (!db) {
+      const prefix = recordPrefix(storageKey);
+      return Array.from(memoryRecords.entries())
+        .filter(([key]) => key.startsWith(prefix))
+        .map(([, record]) => JSON.parse(JSON.stringify(record)));
+    }
+    const resolved = await db;
+    const tx = resolved.transaction(OBJECT_STORE, 'readonly');
+    const rows = await requestResult(tx.objectStore(OBJECT_STORE).getAll(idbRange(storageKey)));
+    return rows.map(row => row.record);
+  }
+  async function replaceRecords(storageKey, records) {
+    const db = openDatabase();
+    if (!db) {
+      if (nextMemoryWriteError) {
+        const error = nextMemoryWriteError;
+        nextMemoryWriteError = null;
+        throw error;
+      }
+      const replacement = new Map(memoryRecords);
+      const prefix = recordPrefix(storageKey);
+      for (const key of replacement.keys()) if (key.startsWith(prefix)) replacement.delete(key);
+      records.forEach(record => replacement.set(prefix + record.key, JSON.parse(JSON.stringify(record))));
+      memoryRecords.clear();
+      replacement.forEach((value, key) => memoryRecords.set(key, value));
+      return;
+    }
+    const resolved = await db;
+    await new Promise((resolve, reject) => {
+      const tx = resolved.transaction(OBJECT_STORE, 'readwrite');
+      const objectStore = tx.objectStore(OBJECT_STORE);
+      const cursor = objectStore.openCursor(idbRange(storageKey));
+      cursor.onerror = () => { try { tx.abort(); } catch (_) {} };
+      cursor.onsuccess = () => {
+        const current = cursor.result;
+        if (current) {
+          current.delete();
+          current.continue();
+          return;
+        }
+        const prefix = recordPrefix(storageKey);
+        records.forEach(record => objectStore.put({ key: prefix + record.key, record }));
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error || new Error('Unable to persist encrypted Messenger state'));
+      tx.onabort = () => reject(tx.error || new Error('Unable to persist encrypted Messenger state'));
+    });
+  }
+
+  function locator(kdf) {
+    const value = { version: RECORD_SCHEMA, profile: 'qms1-fast', backend: 'indexeddb' };
+    if (kdf) value.kdf = kdf;
+    return JSON.stringify(value);
+  }
+  function persistLocator(storageKey, kdf) {
+    try { localStorage.setItem(storageKey, locator(kdf)); } catch (_) {
+      // IndexedDB remains authoritative if Web Storage is unavailable.
+    }
+  }
+
+  function decodeLegacyEnvelope(storageKey, envelope, wrappingKey, suppliedKdf) {
+    if (envelope.version !== 2 || envelope.profile !== 'qms1-fast'
+        || envelope.cipher !== 'xchacha20poly1305-ietf') {
+      throw new Error('Unsupported QMS1/Fast store version');
+    }
+    const persistedKdf = normalizeKdf(envelope.kdf);
+    if (persistedKdf && !sameKdf(persistedKdf, suppliedKdf)) {
+      throw new Error('QMS1/Fast Session password metadata does not match this wallet store');
+    }
+    const dataKey = requireKey(decrypt(
+      wrappingKey, unb64(envelope.wrapNonce), unb64(envelope.wrappedKey),
+      associatedData(storageKey, 'data-key'), 'Messenger key'), 'QMS1/Fast data key');
+    const plaintext = decrypt(
+      dataKey, unb64(envelope.stateNonce), unb64(envelope.ciphertext),
+      associatedData(storageKey, 'state'), 'Messenger store');
+    try {
+      return { state: cloneState(JSON.parse(td.decode(plaintext))), dataKey, revision: 0 };
+    } catch (error) {
+      sodiumApi().memzero(dataKey);
+      throw error;
+    } finally {
+      sodiumApi().memzero(plaintext);
+    }
+  }
+
+  function encryptedRecord(storageKey, network, type, id, order, value, dataKey) {
+    const plaintext = te.encode(JSON.stringify(value));
+    const nonce = sodiumApi().randombytes_buf(24);
+    try {
+      return {
+        key: `${type}\u0000${id}`,
+        schema: RECORD_SCHEMA,
+        type,
+        id,
+        order,
+        nonce: b64(nonce),
+        ciphertext: b64(encrypt(dataKey, nonce, plaintext, recordAssociatedData(storageKey, network, type, id)))
+      };
+    } finally {
+      sodiumApi().memzero(plaintext);
+    }
+  }
+  function buildRecordSet(storageKey, network, snapshot, revision, wrappingKey, dataKey, kdf) {
+    const state = cloneState(snapshot);
+    const wrapNonce = sodiumApi().randombytes_buf(24);
+    const meta = {
+      key: 'meta',
+      version: RECORD_SCHEMA,
+      profile: 'qms1-fast',
+      network,
+      cipher: 'xchacha20poly1305-ietf',
+      revision,
+      wrapNonce: b64(wrapNonce),
+      wrappedKey: b64(encrypt(wrappingKey, wrapNonce, dataKey, associatedData(storageKey, `data-key\u0000${network}`)))
+    };
+    if (kdf) meta.kdf = kdf;
+    const records = [meta];
+    if (state.identity !== null) records.push(encryptedRecord(storageKey, network, 'identity', 'identity', 0, state.identity, dataKey));
+    if (state.ownInvitation !== null) records.push(encryptedRecord(storageKey, network, 'invitation', 'own', 0, state.ownInvitation, dataKey));
+    for (const [type, values] of [
+      ['contact', state.contacts], ['message', state.messages], ['plan', state.plans], ['reassembly', state.reassembly]
+    ]) values.forEach((value, index) => records.push(encryptedRecord(
+      storageKey, network, type, String(index).padStart(10, '0'), index, value, dataKey)));
+    records.push(encryptedRecord(storageKey, network, 'scan', 'scan', 0, state.scan, dataKey));
+    return records;
+  }
+  function decodeRecordSet(storageKey, network, records, wrappingKey, suppliedKdf) {
+    const metaRecords = records.filter(record => record && record.key === 'meta');
+    if (metaRecords.length !== 1) throw new Error('Invalid encrypted QMS1/Fast record metadata');
+    const meta = metaRecords[0];
+    if (meta.version !== RECORD_SCHEMA || meta.profile !== 'qms1-fast'
+        || meta.cipher !== 'xchacha20poly1305-ietf' || meta.network !== network
+        || !Number.isSafeInteger(meta.revision) || meta.revision < 0) {
+      throw new Error('Unsupported QMS1/Fast record store version');
+    }
+    const persistedKdf = normalizeKdf(meta.kdf);
+    if (persistedKdf && !sameKdf(persistedKdf, suppliedKdf)) {
+      throw new Error('QMS1/Fast Session password metadata does not match this wallet store');
+    }
+    const dataKey = requireKey(decrypt(
+      wrappingKey, unb64(meta.wrapNonce), unb64(meta.wrappedKey),
+      associatedData(storageKey, `data-key\u0000${network}`), 'Messenger key'), 'QMS1/Fast data key');
+    const state = blank();
+    const arrays = { contact: [], message: [], plan: [], reassembly: [] };
+    const seen = new Set();
+    try {
+      for (const record of records) {
+        if (record === meta) continue;
+        if (!record || record.schema !== RECORD_SCHEMA || typeof record.type !== 'string'
+            || typeof record.id !== 'string' || !Number.isSafeInteger(record.order) || record.order < 0) {
+          throw new Error('Invalid encrypted QMS1/Fast record');
+        }
+        const unique = `${record.type}\u0000${record.id}`;
+        if (seen.has(unique)) throw new Error('Duplicate encrypted QMS1/Fast record');
+        seen.add(unique);
+        const plaintext = decrypt(
+          dataKey, unb64(record.nonce), unb64(record.ciphertext),
+          recordAssociatedData(storageKey, network, record.type, record.id), 'Messenger record');
+        let value;
+        try { value = JSON.parse(td.decode(plaintext)); } finally { sodiumApi().memzero(plaintext); }
+        if (record.type === 'identity' && record.id === 'identity') state.identity = value;
+        else if (record.type === 'invitation' && record.id === 'own') state.ownInvitation = value;
+        else if (record.type === 'scan' && record.id === 'scan') state.scan = value;
+        else if (arrays[record.type]) arrays[record.type].push({ order: record.order, value });
+        else throw new Error('Unsupported encrypted QMS1/Fast record type');
+      }
+      for (const [type, property] of [['contact', 'contacts'], ['message', 'messages'], ['plan', 'plans'], ['reassembly', 'reassembly']]) {
+        state[property] = arrays[type].sort((left, right) => left.order - right.order).map(entry => entry.value);
+      }
+      return { state: cloneState(state), dataKey, revision: meta.revision };
+    } catch (error) {
+      sodiumApi().memzero(dataKey);
+      throw error;
+    }
+  }
+
   async function acquireWriterLock(storageKey) {
     const lockName = LOCK_PREFIX + storageKey.slice(PREFIX.length);
     if (typeof navigator !== 'undefined') {
@@ -96,17 +309,11 @@ const QmsStore = (() => {
         lockName,
         { mode: 'exclusive', ifAvailable: true },
         lock => {
-          if (!lock) {
-            settleAcquired(false);
-            return undefined;
-          }
+          if (!lock) { settleAcquired(false); return undefined; }
           settleAcquired(true);
           return new Promise(resolve => { releaseLock = resolve; });
         }
-      ).catch(error => {
-        settleAcquired(error);
-        throw error;
-      });
+      ).catch(error => { settleAcquired(error); throw error; });
       const acquisition = await acquired;
       if (acquisition instanceof Error) throw acquisition;
       if (!acquisition) {
@@ -115,27 +322,15 @@ const QmsStore = (() => {
       }
       let released = false;
       return {
-        release() {
-          if (released) return;
-          released = true;
-          releaseLock();
-        },
+        release() { if (!released) { released = true; releaseLock(); } },
         done: request.catch(() => {})
       };
     }
-
-    // Node-based regression tests do not expose navigator.locks. Keep the same
-    // single-writer invariant within that realm without pretending that this
-    // fallback provides browser cross-tab coordination.
     if (localLocks.has(lockName)) throw new Error('Messenger is already open for this wallet in another tab');
     localLocks.add(lockName);
     let released = false;
     return {
-      release() {
-        if (released) return;
-        released = true;
-        localLocks.delete(lockName);
-      },
+      release() { if (!released) { released = true; localLocks.delete(lockName); } },
       done: Promise.resolve()
     };
   }
@@ -147,48 +342,34 @@ const QmsStore = (() => {
     }
     let wrappingKey = requireKey(unlockKey, 'QMS1/Fast session key');
     const kdf = normalizeKdf(kdfMetadata);
+    const network = String(wallet.network || 'mainnet');
+    if (!/^[a-z0-9_-]{1,32}$/i.test(network)) throw new Error('Invalid QMS1/Fast wallet network');
     const storageKey = PREFIX + await walletId(wallet.address);
     const writerLock = await acquireWriterLock(storageKey);
-    let envelope = null;
     let dataKey;
     let state = blank();
+    let revision = 0;
     try {
-      try {
-        envelope = JSON.parse(localStorage.getItem(storageKey) || 'null');
-      } catch (_) {
-        throw new Error('Invalid QMS1/Fast store envelope');
-      }
-
-      if (envelope) {
-        if (envelope.version !== 2 || envelope.profile !== 'qms1-fast'
-            || envelope.cipher !== 'xchacha20poly1305-ietf') {
-          throw new Error('Unsupported QMS1/Fast store version');
-        }
-        const persistedKdf = normalizeKdf(envelope.kdf);
-        if (persistedKdf && !sameKdf(persistedKdf, kdf)) {
-          throw new Error('QMS1/Fast Session password metadata does not match this wallet store');
-        }
-        dataKey = requireKey(decrypt(
-          wrappingKey,
-          unb64(envelope.wrapNonce),
-          unb64(envelope.wrappedKey),
-          associatedData(storageKey, 'data-key'),
-          'Messenger key'
-        ), 'QMS1/Fast data key');
-        const plaintext = decrypt(
-          dataKey,
-          unb64(envelope.stateNonce),
-          unb64(envelope.ciphertext),
-          associatedData(storageKey, 'state'),
-          'Messenger store'
-        );
-        try {
-          state = validateState(JSON.parse(td.decode(plaintext)));
-        } finally {
-          sodiumApi().memzero(plaintext);
-        }
+      const records = await loadRecords(storageKey);
+      if (records.length) {
+        ({ state, dataKey, revision } = decodeRecordSet(storageKey, network, records, wrappingKey, kdf));
       } else {
-        dataKey = sodiumApi().randombytes_buf(32);
+        let envelope = null;
+        try { envelope = JSON.parse(localStorage.getItem(storageKey) || 'null'); }
+        catch (_) { throw new Error('Invalid QMS1/Fast store envelope'); }
+        if (envelope && envelope.version === 2) {
+          ({ state, dataKey, revision } = decodeLegacyEnvelope(storageKey, envelope, wrappingKey, kdf));
+          const migratedRecords = buildRecordSet(storageKey, network, state, revision + 1, wrappingKey, dataKey, kdf);
+          await replaceRecords(storageKey, migratedRecords);
+          revision += 1;
+          persistLocator(storageKey, kdf);
+        } else if (envelope && envelope.version === RECORD_SCHEMA) {
+          throw new Error('Encrypted Messenger records are missing from IndexedDB');
+        } else if (envelope) {
+          throw new Error('Unsupported QMS1/Fast store version');
+        } else {
+          dataKey = sodiumApi().randombytes_buf(32);
+        }
       }
     } catch (error) {
       sodiumApi().memzero(wrappingKey);
@@ -198,63 +379,40 @@ const QmsStore = (() => {
     }
 
     let saveQueue = Promise.resolve();
-    let revision = 0;
     let closed = false;
     let closePromise = null;
-    function ensureOpen() {
-      if (closed) throw new Error('QMS1/Fast store is closed');
-    }
-    function buildEnvelope(snapshot) {
-      const plaintext = te.encode(JSON.stringify(validateState(snapshot)));
-      const wrapNonce = sodiumApi().randombytes_buf(24);
-      const stateNonce = sodiumApi().randombytes_buf(24);
-      try {
-        const envelope = {
-          version: 2,
-          profile: 'qms1-fast',
-          cipher: 'xchacha20poly1305-ietf',
-          wrapNonce: b64(wrapNonce),
-          wrappedKey: b64(encrypt(
-            wrappingKey, wrapNonce, dataKey,
-            associatedData(storageKey, 'data-key'))),
-          stateNonce: b64(stateNonce),
-          ciphertext: b64(encrypt(
-            dataKey, stateNonce, plaintext,
-            associatedData(storageKey, 'state')))
-        };
-        if (kdf) envelope.kdf = kdf;
-        return JSON.stringify(envelope);
-      } finally {
-        sodiumApi().memzero(plaintext);
-      }
+    function ensureOpen() { if (closed) throw new Error('QMS1/Fast store is closed'); }
+    function prepare(snapshot, nextRevision) {
+      return buildRecordSet(storageKey, network, snapshot, nextRevision, wrappingKey, dataKey, kdf);
     }
     function save() {
       ensureOpen();
-      const snapshot = JSON.parse(JSON.stringify(state));
-      // Encryption is completed while the store is open. The queued operation
-      // performs only the ordered storage write and never touches key material.
-      const serializedEnvelope = buildEnvelope(snapshot);
-      const pending = saveQueue.then(() => {
-        localStorage.setItem(storageKey, serializedEnvelope);
+      const candidate = cloneState(state);
+      const records = prepare(candidate, 0);
+      const pending = saveQueue.then(async () => {
+        records[0].revision = revision + 1;
+        await replaceRecords(storageKey, records);
         revision += 1;
+        persistLocator(storageKey, kdf);
       });
       saveQueue = pending.catch(() => {});
       return pending;
     }
     function snapshot() {
       ensureOpen();
-      return { revision, state: JSON.parse(JSON.stringify(state)) };
+      return { revision, state: cloneState(state) };
     }
     function commit(nextState, expectedRevision) {
       ensureOpen();
       if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) throw new Error('Invalid QMS1/Fast store revision');
-      const candidate = JSON.parse(JSON.stringify(validateState(nextState)));
-      const serializedEnvelope = buildEnvelope(candidate);
-      const pending = saveQueue.then(() => {
+      const candidate = cloneState(nextState);
+      const records = prepare(candidate, expectedRevision + 1);
+      const pending = saveQueue.then(async () => {
         if (revision !== expectedRevision) throw new Error('QMS1/Fast store changed while the scan batch was in progress');
-        localStorage.setItem(storageKey, serializedEnvelope);
+        await replaceRecords(storageKey, records);
         state = candidate;
         revision += 1;
+        persistLocator(storageKey, kdf);
         return state;
       });
       saveQueue = pending.catch(() => {});
@@ -270,11 +428,19 @@ const QmsStore = (() => {
       });
       return closePromise;
     }
-
     return { get state() { ensureOpen(); return state; }, save, snapshot, commit, close, storageKey };
   }
 
-  return { open, blank, validateState };
+  const testing = {
+    failNextWrite(error) { nextMemoryWriteError = error; },
+    dump(storageKey) {
+      const prefix = recordPrefix(storageKey);
+      return JSON.stringify(Array.from(memoryRecords.entries()).filter(([key]) => key.startsWith(prefix)));
+    },
+    clear() { memoryRecords.clear(); nextMemoryWriteError = null; }
+  };
+
+  return { open, blank, validateState, testing };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = QmsStore;
