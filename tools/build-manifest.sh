@@ -33,6 +33,7 @@ INCLUDED_PATTERNS=(
   "js/mymonero-core/README.md"
   "vendor/qwertycoin-ts/*.js"
   "vendor/qwertycoin-ts/*.txt"
+  "vendor/libsodium/*"
   "assets/*.svg"
   "assets/*.png"
   "assets/*.css"

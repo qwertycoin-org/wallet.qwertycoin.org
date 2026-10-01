@@ -3,8 +3,9 @@
 
 const QwcWalletEngine = (() => {
   const MAINNET = 0;
-  const WORKER_PATH = "/vendor/qwertycoin-ts/monero.worker.js?v=828b99dd8b93be10";
+  const WORKER_PATH = "/vendor/qwertycoin-ts/monero.worker.js?v=6e067bb0fd551614";
   const REQUEST_TIMEOUT_MS = 180000;
+  const DAEMON_CHUNK_BYTES = 3000000;
   let worker;
   let sequence = 0;
   const callbacks = new Map();
@@ -29,7 +30,7 @@ const QwcWalletEngine = (() => {
       clearTimeout(callback.timeout);
 
       if (payload && payload.error) {
-        callback.reject(new Error(payload.error.message || "QWC wallet worker error"));
+        callback.reject(new Error(`${callback.method}: ${payload.error.message || "QWC wallet worker error"}`));
         return;
       }
       callback.resolve(payload ? payload.result : undefined);
@@ -53,7 +54,7 @@ const QwcWalletEngine = (() => {
         reject(new Error(`QWC wallet worker timed out while running ${method}`));
       }, REQUEST_TIMEOUT_MS);
 
-      callbacks.set(callbackId, { resolve, reject, timeout });
+      callbacks.set(callbackId, { resolve, reject, timeout, method });
       try {
         getWorker().postMessage([objectId, method, callbackId].concat(args || []));
       } catch (error) {
@@ -89,6 +90,53 @@ const QwcWalletEngine = (() => {
     return { uri: getDefaultDaemonUri() };
   }
 
+  function attachBlockHeaderHashes(blocks, headers, start, end) {
+    if (!Array.isArray(blocks) || !Array.isArray(headers)) {
+      throw new Error("QWC daemon returned an invalid Messenger block range");
+    }
+
+    const headersByHeight = new Map();
+    for (const header of headers) {
+      const height = Number(header && header.height);
+      const hash = header && header.hash;
+      const prevHash = header && header.prevHash;
+      if (!Number.isSafeInteger(height) || height < start || height > end
+          || typeof hash !== "string" || !/^[0-9a-f]{64}$/i.test(hash)
+          || typeof prevHash !== "string" || !/^[0-9a-f]{64}$/i.test(prevHash)
+          || headersByHeight.has(height)) {
+        throw new Error("QWC daemon returned invalid Messenger block headers");
+      }
+      headersByHeight.set(height, Object.assign({}, header, {
+        hash: hash.toLowerCase(),
+        prevHash: prevHash.toLowerCase()
+      }));
+    }
+
+    return blocks.map(block => {
+      const height = Number(block && block.height);
+      const header = headersByHeight.get(height);
+      if (!Number.isSafeInteger(height) || !header) {
+        throw new Error("QWC daemon returned a Messenger block without its canonical header");
+      }
+      const blockPrevHash = block && block.prevHash;
+      if (typeof blockPrevHash !== "string" || !/^[0-9a-f]{64}$/i.test(blockPrevHash)
+          || blockPrevHash.toLowerCase() !== header.prevHash) {
+        throw new Error("QWC daemon returned mismatched Messenger block header data");
+      }
+      for (const field of ["timestamp", "majorVersion", "minorVersion", "nonce"]) {
+        if (block[field] !== undefined && header[field] !== undefined
+            && Number(block[field]) !== Number(header[field])) {
+          throw new Error("QWC daemon returned mismatched Messenger block header data");
+        }
+      }
+      if (typeof block.hash === "string" && block.hash.length
+          && block.hash.toLowerCase() !== header.hash) {
+        throw new Error("QWC daemon returned mismatched Messenger block and header hashes");
+      }
+      return Object.assign({}, block, { hash: header.hash });
+    });
+  }
+
   async function createWallet(config, method, canSign = true) {
     const walletId = newId("wallet");
     await invoke(walletId, method, [config]);
@@ -109,6 +157,8 @@ const QwcWalletEngine = (() => {
       getUnlockedBalance: () => invoke(walletId, "getUnlockedBalance", []),
       getTxs: () => invoke(walletId, "getTxs", [{ txs: [{}] }]),
       getOutputs: () => invoke(walletId, "getOutputs", [{ txs: [{}] }]),
+      freezeOutput: keyImage => invoke(walletId, "freezeOutput", [keyImage]),
+      thawOutput: keyImage => invoke(walletId, "thawOutput", [keyImage]),
       createTx: config => invoke(walletId, "createTxs", [normalizeTxConfig(config)]),
       describeTxSet: txSet => invoke(walletId, "describeTxSet", [txSet]),
       relayTxs: txMetadatas => invoke(walletId, "relayTxs", [txMetadatas]),
@@ -129,6 +179,23 @@ const QwcWalletEngine = (() => {
 
   return {
     MAINNET,
+    createDaemonScanner: async () => {
+      const daemonId = newId("daemon");
+      await invoke(daemonId, "connectDaemonRpc", [{
+        server: getDefaultServerConfig(),
+        proxyToWorker: false
+      }]);
+      return {
+        getHeight: () => invoke(daemonId, "daemonGetHeight", []),
+        getBlocksByRange: async (start, end) => {
+          const [blocks, headers] = await Promise.all([
+            invoke(daemonId, "daemonGetBlocksByRangeChunked", [start, end, DAEMON_CHUNK_BYTES]),
+            invoke(daemonId, "daemonGetBlockHeadersByRange", [start, end])
+          ]);
+          return attachBlockHeaderHashes(blocks, headers, start, end);
+        }
+      };
+    },
     createFromKeys: config => {
       const keyConfig = {
         networkType: MAINNET,

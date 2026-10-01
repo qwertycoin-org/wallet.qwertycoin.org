@@ -3,6 +3,10 @@
 const { parentPort, workerData } = require('worker_threads');
 
 global.self = globalThis;
+if (workerData.browserLike) {
+  global.importScripts = function () {};
+  global.location = new URL(workerData.origin);
+}
 global.postMessage = function (data) {
   parentPort.postMessage(data);
 };

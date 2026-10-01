@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 const DEFAULT_NODES = [
-  "https://explorer.qwertycoin.org/qwc-rpc"
+  "https://explorer.qwertycoin.org/api/v1/wallet-rpc"
 ];
 
 const JSON_RPC_METHODS = new Set([
@@ -23,7 +23,7 @@ const JSON_RPC_METHODS = new Set([
 const ROOT_RPC_PATHS = new Set([
   "/json_rpc",
   "/getblocks.bin",
-  "/getblocks_by_height.bin",
+  "/get_blocks_by_height.bin",
   "/gethashes.bin",
   "/get_o_indexes.bin",
   "/get_output_distribution.bin",
@@ -98,6 +98,12 @@ export function isAllowedRootRpcPath(path) {
   return ROOT_RPC_PATHS.has(path);
 }
 
+function upstreamPath(path) {
+  // The explorer wallet gateway still exposes Core's historical alias while
+  // qwertycoin-ts correctly requests the canonical route.
+  return path === "/get_blocks_by_height.bin" ? "/getblocks_by_height.bin" : path;
+}
+
 export async function proxyQwcRpc(context, path) {
   const { request } = context;
   if (request.method === "OPTIONS") {
@@ -135,7 +141,7 @@ export async function proxyQwcRpc(context, path) {
 
   for (const node of DEFAULT_NODES) {
     try {
-      const upstream = await fetch(node + path, {
+      const upstream = await fetch(node + upstreamPath(path), {
         method: "POST",
         headers: { "Content-Type": requestContentType },
         body: path.endsWith(".bin") ? new Uint8Array(body) : body,

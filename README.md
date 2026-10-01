@@ -22,6 +22,7 @@ Browser
 ├── Qwertycoin key derivation and address generation
 ├── qwertycoin-ts WebAssembly scanner
 ├── local spend-key message signing and signature verification
+├── QMS1 encrypted Messenger compatible with the desktop wallet
 ├── local transaction construction and signing
 ├── encrypted in-tab WalletVault session
 └── local QR generation and scanning
@@ -33,7 +34,7 @@ Cloudflare Pages
 └── abuse controls for transaction submission
 
 Qwertycoin infrastructure
-└── qwertycoind restricted RPC (ports 8198/8199)
+└── Production Explorer's restricted, allowlisted wallet RPC gateway
 ```
 
 The seed, private spend key and private view key remain in the browser. The RPC
@@ -54,6 +55,22 @@ Pool operators integrating payout-threshold authorization must use the strict
 challenge format and server-side replay controls described in
 [`docs/message-signing.md`](docs/message-signing.md).
 
+## Messenger
+
+The **Messenger** tab implements the QMS1/Fast Profile shared with the desktop
+GUI wallet. The tab is not exposed unless the wallet was opened with a
+non-empty Session password. Contacts exchange their complete 428-character personal
+invitation confidentially, verify the shorter fingerprint separately, then use
+**Encrypt & review** before explicitly broadcasting the carrier transactions.
+Received messages appear after every carrier is confirmed and scanned.
+
+Messages are end-to-end encrypted, authenticated and stored locally in
+password-wrapped XChaCha20-Poly1305 IndexedDB records. A short message normally
+fits one carrier transaction. Blockchain timing, transaction hashes,
+fees and carrier activity remain public metadata. QMS1 has no forward secrecy,
+ratchet recovery or post-quantum protection. See
+[`docs/qms-messenger.md`](docs/qms-messenger.md) before testing it with funds.
+
 ## Self-hosting
 
 The maintained guide is available at [wallet.qwertycoin.org/self-host](https://wallet.qwertycoin.org/self-host) and in [`self-host.html`](self-host.html).
@@ -65,6 +82,12 @@ python3 -m http.server 8000
 ```
 
 For full wallet operation, configure the Pages functions or an equivalent same-origin gateway against a restricted `qwertycoind` RPC endpoint. Do not expose unrestricted administrative RPC publicly.
+
+The QMS feature preview uses the Production Explorer's restricted wallet
+gateway after its synchronization, carrier and receive paths were proved on
+the isolated Integration Explorer. This is not the generic Explorer HTML/API
+endpoint: only the wallet-required RPC path and method allowlists are
+forwarded.
 
 ## Verification
 
@@ -92,6 +115,8 @@ Upstream copyright, license texts and notices are preserved in:
 - [`fonts/LICENSES.md`](fonts/LICENSES.md)
 - [`js/mymonero-core/LICENSE.txt`](js/mymonero-core/LICENSE.txt)
 - [`vendor/qwertycoin-ts/monero.worker.js.LICENSE.txt`](vendor/qwertycoin-ts/monero.worker.js.LICENSE.txt)
+- [`vendor/libsodium/LICENSE.libsodium-wrappers-sumo`](vendor/libsodium/LICENSE.libsodium-wrappers-sumo)
+- [`vendor/libsodium/BUILDINFO.txt`](vendor/libsodium/BUILDINFO.txt)
 - SPDX headers in source files
 
 Do not remove or rewrite third-party attribution when modifying the wallet.

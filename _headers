@@ -16,8 +16,9 @@
   # (MyMoneroCoreCpp_WASM.js) uses new Function() internally for error type
   # registration. This is an Emscripten limitation — the WASM binary itself
   # only needs 'wasm-unsafe-eval', but the JS bootstrap won't load without
-  # 'unsafe-eval'. All scripts still must come from 'self', so eval() of
-  # attacker-controlled strings is not possible.
+  # 'unsafe-eval'. Restricting script URLs to 'self' narrows exposure, but
+  # 'unsafe-eval' still materially weakens CSP and does not make injected
+  # strings safe. Remove it when the pinned Emscripten glue permits that.
   #
   # We still allow 'unsafe-inline' for STYLES because the codebase has many
   # inline style="..." attributes (which would be a much larger refactor)
@@ -58,6 +59,9 @@
   Cache-Control: public, max-age=0, must-revalidate
 
 /vendor/qwertycoin-ts/*
+  Cache-Control: public, max-age=0, must-revalidate
+
+/vendor/libsodium/*
   Cache-Control: public, max-age=0, must-revalidate
 
 /assets/*

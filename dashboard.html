@@ -193,6 +193,7 @@ footer p{font-size:.65rem;color:var(--text-dim)}
 }
 </style>
 <link rel="stylesheet" href="/assets/wallet-ui.f152d12.css">
+<link rel="stylesheet" href="/assets/qms-messenger.css">
 </head>
 <body class="wallet-app wallet-dashboard">
 
@@ -244,6 +245,47 @@ footer p{font-size:.65rem;color:var(--text-dim)}
           <span class="copy-toast" id="addr-toast">Copied!</span>
         </div>
       </div>
+
+      <div class="wallet-tabs fade-in" id="wallet-tabs" role="tablist" aria-label="Wallet sections">
+        <button class="wallet-tab active" id="wallet-tab-overview" type="button" role="tab" aria-selected="true">Wallet</button>
+        <button class="wallet-tab" id="wallet-tab-messenger" type="button" role="tab" aria-selected="false" hidden>Messenger</button>
+      </div>
+
+      <section id="qms-section" class="qms-shell" role="tabpanel" aria-labelledby="wallet-tab-messenger" hidden>
+        <header class="qms-heading">
+          <div><span class="qms-kicker">QMS1 · Fast Profile · Experimental</span><h1>Messenger</h1></div>
+          <button class="action-btn" id="qms-manage-toggle" type="button">Manage contacts</button>
+        </header>
+        <p class="qms-security-note">Compact authenticated end-to-end encryption with libsodium sealed boxes and Ed25519 signatures. A short message normally needs one carrier transaction. QMS1/Fast has no forward secrecy or post-quantum protection. Messenger requires a non-empty Session password; messages use normal QWC transaction fees and appear after their carrier transactions are confirmed.</p>
+        <div id="qms-status" class="qms-status" aria-live="polite"></div>
+
+        <div id="qms-chat-view" class="qms-chat-layout">
+          <aside class="qms-contacts"><div class="qms-contacts-title"><span>Chats</span><input id="qms-contact-filter" type="search" maxlength="80" autocomplete="off" aria-label="Filter chats" placeholder="Filter chats"></div><div id="qms-contact-list"></div></aside>
+          <div class="qms-conversation">
+            <div class="qms-conversation-head"><button class="qms-mobile-back" id="qms-mobile-chat-back" type="button" aria-label="Back to chat list">← Chats</button><strong id="qms-chat-name">Select a contact</strong><span id="qms-chat-fingerprint"></span></div>
+            <div id="qms-message-list" class="qms-message-list" role="log" aria-live="polite"><div class="qms-empty">Import a personal invitation to begin.</div></div>
+            <div class="qms-compose">
+              <textarea id="qms-message-input" rows="3" maxlength="4096" aria-label="Message" placeholder="Write a message" disabled></textarea>
+              <div class="qms-compose-meta"><span id="qms-byte-count">0 / 4,096 UTF-8 bytes</span><button class="action-btn primary" id="qms-prepare" type="button" disabled>Encrypt &amp; review</button></div>
+            </div>
+            <div id="qms-review" class="qms-review" hidden>
+              <div><strong id="qms-review-count">0 transactions</strong><span id="qms-review-fee">Fee —</span></div>
+              <p id="qms-review-note">Review the complete carrier batch. Nothing is broadcast until you select Send encrypted message.</p>
+              <div><button class="action-btn primary" id="qms-send" type="button">Send encrypted message</button><button class="action-btn" id="qms-cancel" type="button">Cancel &amp; delete draft</button></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="qms-manage-view" class="qms-manage" hidden>
+          <button class="qms-back" id="qms-manage-back" type="button">← Back to chats</button>
+          <div class="qms-manage-grid">
+            <div class="key-card"><div class="key-label">Bootstrap / legacy invitation</div><p>Use this complete invitation only to establish a contact, and send it confidentially. After import, each contact receives a dedicated invitation below. The fingerprint must be compared through an independent trusted channel; a valid self-signature alone does not prove a person’s identity.</p><textarea id="qms-own-invitation" rows="7" aria-label="Complete personal invitation" readonly spellcheck="false"></textarea><div class="qms-invitation-actions"><button class="action-btn" id="qms-copy-invitation" type="button">Copy bootstrap invitation</button><button class="action-btn" id="qms-export-invitation" type="button">Export invitation file</button><button class="action-btn" id="qms-toggle-invitation-qr" type="button" aria-expanded="false">Show local QR</button></div><div id="qms-own-invitation-qr" class="qms-invitation-qr" hidden></div><div id="qms-own-fingerprint" class="qms-fingerprint"></div></div>
+            <div class="key-card"><div class="key-label">Import contact invitation</div><input id="qms-contact-name" type="text" maxlength="80" aria-label="Contact name" placeholder="Contact name"><textarea id="qms-contact-invitation" rows="7" aria-label="Complete contact invitation" autocomplete="off" spellcheck="false" placeholder="Complete 428-character invitation hex"></textarea><div class="qms-invitation-actions"><label class="action-btn" for="qms-contact-invitation-file">Choose invitation file</label><input id="qms-contact-invitation-file" type="file" accept="application/json,.json" hidden><button class="action-btn primary" id="qms-import-contact" type="button">Import invitation</button></div><p>Import and identity verification are separate. Sending remains blocked until you explicitly mark the complete fingerprint as verified.</p></div>
+            <div class="key-card qms-backup-card"><div class="key-label">Encrypted Messenger backup</div><p>Your wallet seed does not restore the separate Messenger identity, contacts or chat history. Export an encrypted backup and store it privately. Open transaction journals are always imported in locked recovery mode and are never sent automatically.</p><input id="qms-backup-password" type="password" minlength="12" maxlength="1024" autocomplete="new-password" aria-label="Messenger backup password" placeholder="Separate backup password (12+ characters)"><div class="qms-backup-actions"><button class="action-btn" id="qms-export-backup" type="button">Export encrypted backup</button><label class="action-btn" for="qms-backup-file">Choose backup file</label><input id="qms-backup-file" type="file" accept="application/json,.json" hidden><button class="action-btn primary" id="qms-import-backup" type="button" disabled>Import selected backup</button></div><p id="qms-backup-file-name" aria-live="polite">No backup file selected.</p><div class="key-label qms-password-heading">Change Session password</div><p>This atomically re-encrypts the wallet Session and rewraps the Messenger data key. The existing Messenger backup password is independent.</p><div class="qms-password-grid"><input id="qms-current-session-password" type="password" maxlength="1024" autocomplete="current-password" aria-label="Current Session password" placeholder="Current Session password"><input id="qms-new-session-password" type="password" minlength="12" maxlength="1024" autocomplete="new-password" aria-label="New Session password" placeholder="New Session password (12+ characters)"><button class="action-btn" id="qms-change-session-password" type="button">Change Session password</button></div></div>
+          </div>
+          <div class="key-card"><div class="key-label">Contacts</div><div id="qms-manage-list"></div></div>
+        </div>
+      </section>
 
       <!-- Balance -->
       <div class="balance-section fade-in">
@@ -630,6 +672,12 @@ footer p{font-size:.65rem;color:var(--text-dim)}
 <script src="js/monero-rpc.js"></script>
 <script src="js/qwc-wallet-engine.js"></script>
 <script src="js/message-signing.js"></script>
+<script src="vendor/libsodium/libsodium-sumo.js"></script>
+<script src="vendor/libsodium/libsodium-wrappers.js"></script>
+<script src="js/qms-kdf.js"></script>
+<script src="js/qms-protocol.js"></script>
+<script src="js/qms-store.js"></script>
+<script src="js/qms-messenger.js"></script>
 
 <script src="js/dashboard-page.js"></script>
 </body>

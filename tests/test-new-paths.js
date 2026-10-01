@@ -314,11 +314,26 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
 
   await test('QWC proxy uses the configured mainnet RPC and Turnstile site key', () => {
     const proxy = fs.readFileSync(path.join(__dirname, '../functions/api/proxy.js'), 'utf8');
+    const pathProxy = fs.readFileSync(path.join(__dirname, '../functions/_qwcRpcProxy.js'), 'utf8');
+    const blockScanRoute = fs.readFileSync(path.join(__dirname, '../functions/get_blocks_by_height.bin.js'), 'utf8');
     const lws = fs.readFileSync(path.join(__dirname, '../js/lws-client.js'), 'utf8');
 
-    assert(proxy.includes('https://explorer.qwertycoin.org/qwc-rpc'), 'QWC RPC endpoint missing');
+    assert(proxy.includes('https://explorer.qwertycoin.org/api/v1/wallet-rpc'),
+      'production QWC RPC endpoint missing');
+    assert(pathProxy.includes('https://explorer.qwertycoin.org/api/v1/wallet-rpc'),
+      'path-based production QWC RPC endpoint missing');
+    assert(!proxy.includes('https://integration-explorer.qwertycoin.org'),
+      'integration QWC RPC endpoint must not be used by the production candidate');
+    assert(!pathProxy.includes('https://integration-explorer.qwertycoin.org'),
+      'path-based integration QWC RPC endpoint must not be used by the production candidate');
+    assert(pathProxy.includes('"/get_blocks_by_height.bin"'),
+      'canonical block scan RPC path is not allowed');
+    assert(pathProxy.includes('path === "/get_blocks_by_height.bin" ? "/getblocks_by_height.bin" : path'),
+      'canonical block scan RPC path is not adapted to the explorer gateway alias');
     assert(proxy.includes('/get_outs'), 'get outs RPC path missing');
     assert(proxy.includes('/get_output_distribution.bin'), 'output distribution RPC path missing');
+    assert(blockScanRoute.includes('proxyQwcRpc(context, "/get_blocks_by_height.bin")'),
+      'canonical block scan RPC route missing');
     assert(proxy.includes('/send_raw_transaction'), 'send RPC path missing');
     assert(proxy.includes('get_output_histogram'), 'output histogram RPC missing');
     assert(!proxy.includes('xmr-node.cakewallet.com'), 'legacy Monero public node should not be used');
@@ -331,23 +346,23 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
 
     assert(buildInfo.includes('genesis_hash=4f95857586e2c66063c277370eda99cd75897d773af09f0c3cd1e22f7e87db39'),
       'Reset-1 mainnet genesis is missing from bundled worker provenance');
-    assert(buildInfo.includes('core_revision=9953ea40a92a71fbfccc57ffe38e868ddfa9e00a'),
-      'merged Reset-1 core revision is missing from bundled worker provenance');
-    assert(buildInfo.includes('qwertycoin_cpp_revision=16cb5e2e2784c187e48556845e2325992d67d0d6'),
-      'qwertycoin-cpp Reset-1 binding is missing');
-    assert(buildInfo.includes('qwertycoin_ts_revision=40ef3d3a4c9c1642f81aabdf1d10cb9205e3b01e'),
-      'qwertycoin-ts Reset-1 binding is missing');
+    assert(buildInfo.includes('core_revision=890e295f02ca1e6e989221ccf97c2ec24fbec52c'),
+      'QMS-enabled Reset-1 core revision is missing from bundled worker provenance');
+    assert(buildInfo.includes('qwertycoin_cpp_revision=d4a8cc78ac80e96a2e362ac0ad2630bf99a0759c'),
+      'qwertycoin-cpp custom-extra source binding is missing');
+    assert(buildInfo.includes('qwertycoin_ts_revision=42050b20f13089251d1aa7d117a1eea515da0444'),
+      'qwertycoin-ts custom-extra source binding is missing');
     assert(buildInfo.includes('unbound_1_22_0_source_sha256=c5dd1bdef5d5685b2cedb749158dd152c52d44f65529a34ac15cd88d4b1b3d43'),
       'verified Unbound source provenance is missing');
     assert(buildInfo.includes('translation_files_sha256=320ecf8874eaad13b97c2d98f5f6bdde5fa3e37fbfac21a78ea4184a63b57dcb'),
       'generated translation header provenance is missing');
-    assert(buildInfo.includes('monero_js_sha256=a25353b9d9af55f626e72b682e55bca723237814685a2c9b127197ae63d25d91'),
+    assert(buildInfo.includes('monero_js_sha256=65b20e67c11d6b42ce3c3431dd40fa3d966540b23cdcc931930a05761a8a9e26'),
       'monero.js artifact hash is missing');
-    assert(buildInfo.includes('monero_worker_js_sha256=828b99dd8b93be1057e0faeecb86cf2eb618255addd291dbc900f73aafb3d3cf'),
+    assert(buildInfo.includes('monero_worker_js_sha256=6e067bb0fd55161486dfe3ccd2b395eaf111da1a0bc5e735fdf1dd037d6fe379'),
       'worker artifact hash is missing');
     assert(!buildInfo.includes('=pending'), 'WASM provenance contains unresolved hashes');
-    assert(engine.includes('monero.worker.js?v=828b99dd8b93be10'),
-      'wallet worker cache key is not Reset-1-specific');
+    assert(engine.includes('monero.worker.js?v=6e067bb0fd551614'),
+      'wallet worker cache key is not bound to the reviewed artifact');
   });
 
   await test('Dashboard QWC history sums wallet transfers and miner outputs', () => {

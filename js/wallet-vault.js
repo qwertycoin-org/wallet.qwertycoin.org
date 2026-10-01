@@ -29,6 +29,15 @@ const WalletVault = (function () {
 
   const STORAGE_KEY = 'monero-web-wallet';
   const PBKDF2_ITERATIONS = 250000;
+  const QMS_PWHASH_OPSLIMIT = 2;
+  const QMS_PWHASH_MEMLIMIT = 64 * 1024 * 1024;
+  const QMS_PWHASH_BYTES = 32;
+  const QMS_STORE_PREFIX = 'qwc-qms1-fast-store:';
+  const QMS_DATABASE_NAME = 'qwc-qms1-fast';
+  const QMS_DATABASE_VERSION = 1;
+  const QMS_OBJECT_STORE = 'records';
+  let qmsUnlockKey = null;
+  let qmsKdfMetadata = null;
 
   function b64(bytes) {
     let s = '';
@@ -56,11 +65,112 @@ const WalletVault = (function () {
     );
   }
 
+  async function deriveQmsUnlockKey(password, salt, opslimit, memlimit) {
+    if (typeof sodium === 'undefined' || typeof QmsKdf === 'undefined') throw new Error('QMS1 password protection is unavailable');
+    await sodium.ready;
+    const key = await QmsKdf.derive(String(password), salt, opslimit, memlimit, QMS_PWHASH_BYTES);
+    if (!(key instanceof Uint8Array) || key.length !== QMS_PWHASH_BYTES) throw new Error('QMS1 Argon2id key derivation failed');
+    return key;
+  }
+
+  function replaceQmsUnlockKey(value) {
+    if (qmsUnlockKey && typeof sodium !== 'undefined' && sodium.memzero) sodium.memzero(qmsUnlockKey);
+    qmsUnlockKey = value ? new Uint8Array(value) : null;
+  }
+
+  function validateQmsKdf(value) {
+    if (!value || value.name !== 'argon2id13'
+        || !Number.isInteger(value.opslimit) || value.opslimit < 1 || value.opslimit > 4
+        || !Number.isInteger(value.memlimit) || value.memlimit < 8 * 1024 * 1024 || value.memlimit > 128 * 1024 * 1024
+        || typeof value.salt !== 'string') return null;
+    let salt;
+    try { salt = unb64(value.salt); } catch (_) { return null; }
+    if (salt.length !== 16) return null;
+    return {
+      name: 'argon2id13',
+      opslimit: value.opslimit,
+      memlimit: value.memlimit,
+      salt: value.salt
+    };
+  }
+
+  function replaceQmsKdfMetadata(value) {
+    qmsKdfMetadata = validateQmsKdf(value);
+  }
+
+  async function qmsStorageKey(address) {
+    const bytes = new TextEncoder().encode(String(address || ''));
+    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+    return QMS_STORE_PREFIX + Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('');
+  }
+
+  async function indexedQmsKdf(storageKey) {
+    if (typeof indexedDB === 'undefined') return null;
+    return new Promise(resolve => {
+      let settled = false;
+      const finish = value => {
+        if (settled) return;
+        settled = true;
+        resolve(value || null);
+      };
+      let request;
+      try { request = indexedDB.open(QMS_DATABASE_NAME, QMS_DATABASE_VERSION); }
+      catch (_) { finish(null); return; }
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(QMS_OBJECT_STORE)) db.createObjectStore(QMS_OBJECT_STORE, { keyPath: 'key' });
+      };
+      request.onerror = () => finish(null);
+      request.onblocked = () => finish(null);
+      request.onsuccess = () => {
+        const db = request.result;
+        let tx;
+        try { tx = db.transaction(QMS_OBJECT_STORE, 'readonly'); }
+        catch (_) { db.close(); finish(null); return; }
+        const get = tx.objectStore(QMS_OBJECT_STORE).get(`${storageKey}\u0000meta`);
+        get.onsuccess = () => {
+          const row = get.result;
+          db.close();
+          finish(row && row.record && row.record.version === 3 && row.record.profile === 'qms1-fast'
+            ? validateQmsKdf(row.record.kdf) : null);
+        };
+        get.onerror = () => { db.close(); finish(null); };
+      };
+    });
+  }
+
+  async function persistedQmsKdf(address) {
+    if (!address) return null;
+    const storageKey = await qmsStorageKey(address);
+    let localEnvelope = null;
+    if (typeof localStorage !== 'undefined') {
+      try { localEnvelope = JSON.parse(localStorage.getItem(storageKey) || 'null'); } catch (_) {}
+    }
+    // A version-3 locator is updated synchronously during an atomic password
+    // change and therefore wins over an older staged IndexedDB wrap.
+    if (localEnvelope && localEnvelope.version === 3 && localEnvelope.profile === 'qms1-fast') {
+      const located = validateQmsKdf(localEnvelope.kdf);
+      if (located) return located;
+    }
+    const indexed = await indexedQmsKdf(storageKey);
+    if (indexed) return indexed;
+    if (typeof localStorage === 'undefined') return null;
+    try {
+      return localEnvelope && localEnvelope.version === 2 && localEnvelope.profile === 'qms1-fast'
+        ? validateQmsKdf(localEnvelope.kdf)
+        : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /**
    * Store wallet keys. If password is empty/falsy the keys are stored
    * in plaintext (encrypted:false). Otherwise they are AES-GCM encrypted.
    */
   async function store(keys, password) {
+    replaceQmsUnlockKey(null);
+    replaceQmsKdfMetadata(null);
     // If this is a freshly-created wallet, set the sessionStorage flag
     // here so it's impossible to miss regardless of which UI button
     // triggers the store.
@@ -75,6 +185,13 @@ const WalletVault = (function () {
       return;
     }
     const salt = crypto.getRandomValues(new Uint8Array(16));
+    const persistedKdf = (typeof sodium !== 'undefined') ? await persistedQmsKdf(keys && keys.address) : null;
+    const qmsKdf = (typeof sodium !== 'undefined') ? (persistedKdf || {
+      name: 'argon2id13',
+      opslimit: QMS_PWHASH_OPSLIMIT,
+      memlimit: QMS_PWHASH_MEMLIMIT,
+      salt: b64(crypto.getRandomValues(new Uint8Array(16)))
+    }) : null;
     const iv   = crypto.getRandomValues(new Uint8Array(12));
     const key  = await deriveKey(password, salt, PBKDF2_ITERATIONS);
     const ct   = new Uint8Array(await crypto.subtle.encrypt(
@@ -82,14 +199,21 @@ const WalletVault = (function () {
       key,
       new TextEncoder().encode(JSON.stringify(keys))
     ));
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
+    const qmsKey = qmsKdf
+      ? await deriveQmsUnlockKey(password, unb64(qmsKdf.salt), qmsKdf.opslimit, qmsKdf.memlimit)
+      : null;
+    replaceQmsUnlockKey(qmsKey);
+    replaceQmsKdfMetadata(qmsKdf);
+    const envelope = {
       encrypted:  true,
       version:    1,
       iterations: PBKDF2_ITERATIONS,
       salt:       b64(salt),
       iv:         b64(iv),
       ciphertext: b64(ct)
-    }));
+    };
+    if (qmsKdf) envelope.qmsKdf = qmsKdf;
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(envelope));
   }
 
   function readBlob() {
@@ -116,6 +240,8 @@ const WalletVault = (function () {
    * Throws on wrong password / corrupted ciphertext.
    */
   async function unlock(password) {
+    replaceQmsUnlockKey(null);
+    replaceQmsKdfMetadata(null);
     const b = readBlob();
     if (!b || !b.encrypted) throw new Error('No encrypted vault to unlock');
     const salt       = unb64(b.salt);
@@ -129,14 +255,101 @@ const WalletVault = (function () {
     } catch (e) {
       throw new Error('Wrong password');
     }
+    const qmsKdf = validateQmsKdf(b.qmsKdf);
+    if (!qmsKdf) {
+      replaceQmsUnlockKey(null);
+      replaceQmsKdfMetadata(null);
+    } else {
+      replaceQmsUnlockKey(await deriveQmsUnlockKey(password, unb64(qmsKdf.salt), qmsKdf.opslimit, qmsKdf.memlimit));
+      replaceQmsKdfMetadata(qmsKdf);
+    }
     return JSON.parse(new TextDecoder().decode(plain));
   }
 
+  async function preparePasswordChange(currentPassword, newPassword) {
+    const b = readBlob();
+    if (!b || !b.encrypted) throw new Error('An encrypted wallet Session is required to change its password');
+    if (typeof newPassword !== 'string' || newPassword.length < 12 || newPassword.length > 1024) {
+      throw new Error('New Session password must contain 12 to 1,024 characters');
+    }
+    const currentKey = await deriveKey(
+      currentPassword,
+      unb64(b.salt),
+      (typeof b.iterations === 'number') ? b.iterations : PBKDF2_ITERATIONS
+    );
+    let plain;
+    try {
+      plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(b.iv) }, currentKey, unb64(b.ciphertext));
+    } catch (_) {
+      throw new Error('Current Session password is wrong');
+    }
+    let keys;
+    try { keys = JSON.parse(new TextDecoder().decode(plain)); }
+    catch (_) { throw new Error('Encrypted wallet Session is invalid'); }
+    finally { new Uint8Array(plain).fill(0); }
+
+    const qmsKdf = {
+      name: 'argon2id13',
+      opslimit: QMS_PWHASH_OPSLIMIT,
+      memlimit: QMS_PWHASH_MEMLIMIT,
+      salt: b64(crypto.getRandomValues(new Uint8Array(16)))
+    };
+    const qmsKey = await deriveQmsUnlockKey(
+      newPassword, unb64(qmsKdf.salt), qmsKdf.opslimit, qmsKdf.memlimit);
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const nextVaultKey = await deriveKey(newPassword, salt, PBKDF2_ITERATIONS);
+    const ciphertext = new Uint8Array(await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv }, nextVaultKey, new TextEncoder().encode(JSON.stringify(keys))));
+    const envelope = JSON.stringify({
+      encrypted: true,
+      version: 1,
+      iterations: PBKDF2_ITERATIONS,
+      salt: b64(salt),
+      iv: b64(iv),
+      ciphertext: b64(ciphertext),
+      qmsKdf
+    });
+    let disposed = false;
+    let committed = false;
+    return {
+      qmsKey: new Uint8Array(qmsKey),
+      qmsKdf: Object.assign({}, qmsKdf),
+      commit() {
+        if (disposed) throw new Error('Password change preparation was discarded');
+        if (committed) return;
+        sessionStorage.setItem(STORAGE_KEY, envelope);
+        replaceQmsUnlockKey(qmsKey);
+        replaceQmsKdfMetadata(qmsKdf);
+        committed = true;
+      },
+      dispose() {
+        if (disposed) return;
+        disposed = true;
+        if (typeof sodium !== 'undefined' && sodium.memzero) sodium.memzero(qmsKey);
+      }
+    };
+  }
+
+  function qmsKey() {
+    return qmsUnlockKey ? new Uint8Array(qmsUnlockKey) : null;
+  }
+
+  function hasQmsKey() {
+    return !!(qmsUnlockKey && qmsUnlockKey.length === QMS_PWHASH_BYTES);
+  }
+
+  function qmsKdf() {
+    return qmsKdfMetadata ? Object.assign({}, qmsKdfMetadata) : null;
+  }
+
   function clear() {
+    replaceQmsUnlockKey(null);
+    replaceQmsKdfMetadata(null);
     sessionStorage.removeItem(STORAGE_KEY);
   }
 
-  return { store, hasBlob, isLocked, readPlain, unlock, clear };
+  return { store, hasBlob, isLocked, readPlain, unlock, preparePasswordChange, qmsKey, qmsKdf, hasQmsKey, clear };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = WalletVault;

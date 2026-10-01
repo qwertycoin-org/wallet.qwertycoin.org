@@ -12,6 +12,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   let scanningActive = false; // true while LWS is still scanning the chain
   let qwcUsdPrice = 0;       // cached QWC/USD rate, disabled until a source is configured
   let clearMessageSigningState = function () {};
+  let qmsController = null;
+  let qmsSpendBlocked = false;
+  let qmsSessionGeneration = 0;
+  let qmsMountAbort = null;
+
+  async function closeQmsSession() {
+    qmsSessionGeneration += 1;
+    if (qmsMountAbort) qmsMountAbort.abort();
+    qmsMountAbort = null;
+    const controller = qmsController;
+    qmsController = null;
+    if (controller) await controller.clear();
+  }
+
+  function setQmsSpendBlocked(blocked) {
+    qmsSpendBlocked = !!blocked;
+    const button = document.getElementById('btn-send');
+    if (button) button.title = qmsSpendBlocked ? 'Resolve the prepared Messenger transaction first' : '';
+  }
 
   const overlay     = document.getElementById('unlock-overlay');
   const overlayMsg  = document.getElementById('unlock-msg');
@@ -32,7 +51,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     overlayPw.value = '';
   }
 
-  overlayForget.addEventListener('click', () => {
+  overlayForget.addEventListener('click', async () => {
+    await closeQmsSession();
     clearMessageSigningState();
     WalletVault.clear();
     walletKeys = null;
@@ -95,12 +115,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   function resetIdleIfScanning() {
     if (scanningActive) resetIdleTimer();
   }
-  function autoLock() {
+  async function autoLock() {
     // Drop the in-memory keys and reload the page. For an encrypted vault
     // the ciphertext persists in sessionStorage across the reload, so the
     // user can re-enter their password without re-deriving from a seed.
     // For a plaintext vault we wipe and bounce to verify.
     clearMessageSigningState();
+    await closeQmsSession();
     walletKeys = null;
     if (WalletVault.isLocked()) {
       window.location.reload();
@@ -1692,6 +1713,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       alert('Watch-only wallets cannot send — the spend key is required.');
       return;
     }
+    if (qmsSpendBlocked) {
+      alert('Resolve the prepared or uncertain Messenger transaction before creating another wallet spend.');
+      return;
+    }
     sendResetForm();
     document.getElementById('send-modal').classList.add('show');
     setSendAvailableDisplay(qwcLastAvailableDisplay);
@@ -1766,6 +1791,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     sendReviewBtn.disabled = true;
     sendReviewBtn.textContent = 'Reviewing…';
     try {
+      if (qmsSpendBlocked) throw new Error('Resolve the prepared Messenger transaction before creating another wallet spend');
       const toAddress = (sendToEl.value || '').trim();
       const xmrAmount = (sendAmountEl.value || '').trim();
       const paymentId = (document.getElementById('send-pid').value || '').trim();
@@ -1828,6 +1854,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     sendShowStep('result');
     sendShowResultState('pending');
     try {
+      if (qmsSpendBlocked) throw new Error('Resolve the prepared Messenger transaction before broadcasting another wallet spend');
       const toAddress = (sendToEl.value || '').trim();
       const xmrAmount = (sendAmountEl.value || '').trim();
       const paymentId = (document.getElementById('send-pid').value || '').trim();
@@ -1907,14 +1934,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // ─── Disconnect ───
-  document.getElementById('btn-disconnect').addEventListener('click', () => {
+  document.getElementById('btn-disconnect').addEventListener('click', async () => {
+    await closeQmsSession();
     clearMessageSigningState();
     WalletVault.clear();
     MoneroRPC.disconnect();
     window.location.href = '/';
   });
 
-  window.addEventListener('pagehide', clearMessageSigningState);
+  window.addEventListener('pagehide', () => {
+    clearMessageSigningState();
+    closeQmsSession().catch(() => {});
+  });
 
   // ─── Custom node settings ───
   const customNodeInput = document.getElementById('custom-node');
@@ -1994,12 +2025,76 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // ─── Auto-refresh height every 30s ───
+  const qmsTab = document.getElementById('wallet-tab-messenger');
+  const qmsUnsupportedSeedFormat = !!walletKeys.seedFormat && walletKeys.seedFormat !== 'standard';
+  const qmsPasswordProtected = typeof WalletVault !== 'undefined' && WalletVault.hasQmsKey && WalletVault.hasQmsKey();
+  if ((isWatchOnly || qmsUnsupportedSeedFormat || !qmsPasswordProtected) && qmsTab) {
+    qmsTab.hidden = true;
+    qmsTab.disabled = true;
+    qmsTab.setAttribute('aria-disabled', 'true');
+    qmsTab.title = !qmsPasswordProtected
+      ? 'Messenger requires a password-protected wallet session'
+      : qmsUnsupportedSeedFormat
+      ? 'Messenger currently requires a standard 25-word QWC wallet'
+      : 'Messenger requires an unlocked full wallet';
+    const status = document.getElementById('qms-status');
+    if (status) status.textContent = !qmsPasswordProtected
+      ? 'Messenger is unavailable without a Session password.'
+      : qmsUnsupportedSeedFormat
+      ? 'Messenger is unavailable for this seed format in the current browser wallet.'
+      : 'Messenger is unavailable for watch-only wallets.';
+  }
+  if (typeof QmsMessenger !== 'undefined' && !qmsController && !isWatchOnly && !qmsUnsupportedSeedFormat && qmsPasswordProtected) {
+    qmsTab.hidden = false;
+    qmsTab.disabled = false;
+    qmsTab.removeAttribute('aria-disabled');
+    qmsTab.title = '';
+    const mountGeneration = ++qmsSessionGeneration;
+    const mountAbort = new AbortController();
+    qmsMountAbort = mountAbort;
+    setQmsSpendBlocked(true);
+    QmsMessenger.mount({
+      signal: mountAbort.signal,
+      getWalletKeys: () => walletKeys,
+      getQmsKey: () => WalletVault.qmsKey(),
+      getQmsKdf: () => WalletVault.qmsKdf(),
+      preparePasswordChange: (currentPassword, newPassword) => WalletVault.preparePasswordChange(currentPassword, newPassword),
+      getWallet: getQwcWallet,
+      getRestoreHeight: getQwcRestoreHeight,
+      createScanner: () => QwcWalletEngine.createDaemonScanner(),
+      setWalletSpendBlocked: setQmsSpendBlocked
+    }).then(async controller => {
+      if (mountGeneration !== qmsSessionGeneration || mountAbort.signal.aborted) {
+        await controller.clear();
+        return;
+      }
+      qmsMountAbort = null;
+      qmsController = controller;
+    }).catch(error => {
+      if (mountAbort.signal.aborted || error.name === 'AbortError') return;
+      const status = document.getElementById('qms-status');
+      if (status) { status.textContent = error.message || String(error); status.className = 'qms-status error'; }
+    });
+  }
+
   setInterval(async () => {
     try {
       const height = await MoneroRPC.getHeight();
       document.getElementById('net-height').textContent = height.toLocaleString();
       connInfo.innerHTML = `<span>${MoneroRPC.getConnectionState().node}</span> · <span class="conn-height">${height.toLocaleString()}</span>`;
     } catch(e) {}
+    if (qmsController) {
+      try { await qmsController.scan(); }
+      catch (error) {
+        const status = document.getElementById('qms-status');
+        if (status) { status.textContent = error.message || String(error); status.className = 'qms-status error'; }
+      }
+    }
   }, 30000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && qmsController && qmsController.resumeScan) {
+      qmsController.resumeScan().catch(() => {});
+    }
+  });
   } // end populateWallet
 });

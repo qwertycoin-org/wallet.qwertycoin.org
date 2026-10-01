@@ -6,7 +6,12 @@
   "license": "MIT",
   "scripts": {
     "build": "bash tools/build-manifest.sh --write",
-    "test": "node tests/test-new-paths.js && node tests/test-wallet-ui.js && node tests/test-message-signing.js && node tests/test-message-signing-worker.js && node tests/test-pool-challenge-e2e.js && bash tools/build-manifest.sh --check"
+    "test": "node tests/test-new-paths.js && node tests/test-wallet-ui.js && node tests/test-message-signing.js && node tests/test-message-signing-worker.js && node tests/test-pool-challenge-e2e.js && node tests/test-qms-messenger.js && bash tools/build-manifest.sh --check",
+    "test:browser-qms-store": "node tests/test-qms-store-browser.cjs",
+    "test:browser-qms-ui": "node tests/test-qms-ui-browser.cjs",
+    "test:benchmark-qms-ui": "node tests/benchmark-qms-ui-browser.cjs",
+    "test:interop-qms-core": "node tests/test-qms-core-interop.js",
+    "test:integration-sync": "node tests/test-wallet-sync-worker.js"
   },
   "engines": {
     "node": ">=20"
