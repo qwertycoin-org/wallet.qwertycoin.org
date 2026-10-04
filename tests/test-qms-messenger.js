@@ -823,6 +823,9 @@ async function test(name, fn) {
     assert(dashboardScript.includes('WalletVault.hasQmsKey()'));
     assert(dashboardScript.includes('getQmsKdf: () => WalletVault.qmsKdf()'));
     assert(dashboardScript.includes('setWalletSpendBlocked: setQmsSpendBlocked'));
+    assert(dashboardScript.includes('Messenger could not start:'));
+    assert(dashboardScript.includes('qmsLaunchRetry.addEventListener'));
+    assert(messengerScript.includes('Sending is locked: open Manage contacts'));
     assert(dashboardScript.includes('qmsTab.hidden = true'));
     assert(dashboardScript.indexOf('qmsPasswordProtected') < dashboardScript.indexOf('QmsMessenger.mount'));
     assert(worker.includes('extraHex'));

@@ -733,7 +733,17 @@ const QmsMessenger = (() => {
       const carriers = size ? Math.ceil((size + 272) / 600) : 0;
       el('qms-byte-count').textContent = `${size.toLocaleString()} / 4,096 UTF-8 bytes · ${carriers} carrier transaction${carriers === 1 ? '' : 's'} · fees calculated during preparation`;
       el('qms-message-input').disabled = recovering || !item || !!lockedPlan;
-      el('qms-prepare').disabled = recovering || !item || !item.verifiedAt || !!lockedPlan || !size || size > QmsProtocol.C.MAX_TEXT_BYTES;
+      let requirement = '';
+      if (recovering) requirement = 'Restoring Messenger state…';
+      else if (!item) requirement = 'Select or import a contact before composing a message.';
+      else if (!item.verifiedAt) requirement = 'Sending is locked: open Manage contacts, compare the complete fingerprint through a trusted channel, then mark this contact as verified.';
+      else if (lockedPlan) requirement = 'Send or cancel the existing prepared message before creating another one.';
+      else if (size > QmsProtocol.C.MAX_TEXT_BYTES) requirement = 'Message exceeds the 4,096-byte limit.';
+      const requirementNode = el('qms-compose-requirement');
+      requirementNode.textContent = requirement;
+      const prepare = el('qms-prepare');
+      prepare.disabled = recovering || !item || !item.verifiedAt || !!lockedPlan || !size || size > QmsProtocol.C.MAX_TEXT_BYTES;
+      prepare.title = requirement;
     }
 
     function renderMessages() {

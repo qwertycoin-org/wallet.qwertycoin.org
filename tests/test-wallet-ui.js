@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('assert');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
@@ -19,6 +20,11 @@ function test(name, fn) {
 
 function linked(html, value) {
   assert(html.includes(value), `missing ${value}`);
+}
+
+function versioned(file) {
+  const digest = crypto.createHash('sha256').update(fs.readFileSync(path.join(root, file))).digest('hex').slice(0, 16);
+  return `${file}?v=${digest}`;
 }
 
 console.log('\n  Qwertycoin Web Wallet — presentation contract\n');
@@ -201,10 +207,32 @@ test('functional wallet anchors remain present', () => {
     'send-step-result', 'message-signing-modal', 'message-signing-input',
     'message-verify-address', 'message-verify-signature', 'pool-challenge-input',
     'pool-challenge-confirm', 'pool-challenge-signature', 'wallet-tab-messenger',
+    'qms-launch-status', 'qms-launch-message', 'qms-launch-retry',
     'qms-section', 'qms-contact-list', 'qms-message-list', 'qms-message-input',
-    'qms-prepare', 'qms-send', 'qms-cancel', 'qms-manage-view',
+    'qms-compose-requirement', 'qms-prepare', 'qms-send', 'qms-cancel', 'qms-manage-view',
     'unlock-overlay', 'btn-export', 'btn-disconnect',
   ]) linked(dashboard, `id="${id}"`);
+
+  const dashboardController = read('js/dashboard-page.js');
+  linked(dashboardController, 'Messenger could not start:');
+  linked(dashboardController, 'qmsOpenRequested');
+  linked(dashboardController, 'qmsLaunchRetry.addEventListener');
+  linked(dashboardController, 'setQmsSpendBlocked(false)');
+});
+
+test('critical Messenger assets use content-derived cache keys', () => {
+  const dashboard = read('dashboard.html');
+  const verify = read('verify.html');
+  for (const file of [
+    'assets/qms-messenger.css', 'js/wallet-vault.js', 'js/qwc-wallet-engine.js',
+    'vendor/libsodium/libsodium-sumo.js', 'vendor/libsodium/libsodium-wrappers.js',
+    'js/qms-kdf.js', 'js/qms-protocol.js', 'js/qms-store.js',
+    'js/qms-messenger.js', 'js/dashboard-page.js',
+  ]) linked(dashboard, versioned(file));
+  for (const file of [
+    'vendor/libsodium/libsodium-sumo.js', 'vendor/libsodium/libsodium-wrappers.js',
+    'js/qms-kdf.js', 'js/wallet-vault.js',
+  ]) linked(verify, versioned(file));
 });
 
 

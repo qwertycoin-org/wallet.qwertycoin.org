@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let qmsSpendBlocked = false;
   let qmsSessionGeneration = 0;
   let qmsMountAbort = null;
+  let qmsOpenRequested = false;
 
   async function closeQmsSession() {
     qmsSessionGeneration += 1;
@@ -2026,8 +2027,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ─── Auto-refresh height every 30s ───
   const qmsTab = document.getElementById('wallet-tab-messenger');
+  const qmsLaunchStatus = document.getElementById('qms-launch-status');
+  const qmsLaunchMessage = document.getElementById('qms-launch-message');
+  const qmsLaunchRetry = document.getElementById('qms-launch-retry');
   const qmsUnsupportedSeedFormat = !!walletKeys.seedFormat && walletKeys.seedFormat !== 'standard';
   const qmsPasswordProtected = typeof WalletVault !== 'undefined' && WalletVault.hasQmsKey && WalletVault.hasQmsKey();
+
+  function setQmsLaunchStatus(message, type, retryable) {
+    if (!qmsLaunchStatus || !qmsLaunchMessage || !qmsLaunchRetry) return;
+    qmsLaunchMessage.textContent = message || '';
+    qmsLaunchStatus.className = 'qms-launch-status' + (type ? ' ' + type : '');
+    qmsLaunchStatus.hidden = !message;
+    qmsLaunchRetry.hidden = !retryable;
+  }
+
   if ((isWatchOnly || qmsUnsupportedSeedFormat || !qmsPasswordProtected) && qmsTab) {
     qmsTab.hidden = true;
     qmsTab.disabled = true;
@@ -2044,37 +2057,73 @@ document.addEventListener('DOMContentLoaded', async () => {
       ? 'Messenger is unavailable for this seed format in the current browser wallet.'
       : 'Messenger is unavailable for watch-only wallets.';
   }
-  if (typeof QmsMessenger !== 'undefined' && !qmsController && !isWatchOnly && !qmsUnsupportedSeedFormat && qmsPasswordProtected) {
-    qmsTab.hidden = false;
-    qmsTab.disabled = false;
-    qmsTab.removeAttribute('aria-disabled');
-    qmsTab.title = '';
+
+  async function mountQms() {
+    if (qmsController || qmsMountAbort || isWatchOnly || qmsUnsupportedSeedFormat || !qmsPasswordProtected) return;
+    if (typeof QmsMessenger === 'undefined') {
+      setQmsLaunchStatus('Messenger code did not load. Reload this page to refresh the wallet assets.', 'error', true);
+      return;
+    }
+    setQmsLaunchStatus('Starting encrypted Messenger storage…', '', false);
+    qmsTab.title = 'Messenger is starting';
     const mountGeneration = ++qmsSessionGeneration;
     const mountAbort = new AbortController();
     qmsMountAbort = mountAbort;
     setQmsSpendBlocked(true);
-    QmsMessenger.mount({
-      signal: mountAbort.signal,
-      getWalletKeys: () => walletKeys,
-      getQmsKey: () => WalletVault.qmsKey(),
-      getQmsKdf: () => WalletVault.qmsKdf(),
-      preparePasswordChange: (currentPassword, newPassword) => WalletVault.preparePasswordChange(currentPassword, newPassword),
-      getWallet: getQwcWallet,
-      getRestoreHeight: getQwcRestoreHeight,
-      createScanner: () => QwcWalletEngine.createDaemonScanner(),
-      setWalletSpendBlocked: setQmsSpendBlocked
-    }).then(async controller => {
+    try {
+      const controller = await QmsMessenger.mount({
+        signal: mountAbort.signal,
+        getWalletKeys: () => walletKeys,
+        getQmsKey: () => WalletVault.qmsKey(),
+        getQmsKdf: () => WalletVault.qmsKdf(),
+        preparePasswordChange: (currentPassword, newPassword) => WalletVault.preparePasswordChange(currentPassword, newPassword),
+        getWallet: getQwcWallet,
+        getRestoreHeight: getQwcRestoreHeight,
+        createScanner: () => QwcWalletEngine.createDaemonScanner(),
+        setWalletSpendBlocked: setQmsSpendBlocked
+      });
       if (mountGeneration !== qmsSessionGeneration || mountAbort.signal.aborted) {
         await controller.clear();
         return;
       }
       qmsMountAbort = null;
       qmsController = controller;
-    }).catch(error => {
-      if (mountAbort.signal.aborted || error.name === 'AbortError') return;
+      qmsTab.title = '';
+      setQmsLaunchStatus('', '', false);
+      if (qmsOpenRequested) {
+        qmsOpenRequested = false;
+        qmsTab.click();
+      }
+    } catch (error) {
+      if (mountAbort.signal.aborted || (error && error.name === 'AbortError')) return;
+      qmsMountAbort = null;
+      setQmsSpendBlocked(false);
+      const message = error && error.message ? error.message : String(error);
+      qmsTab.title = message;
+      setQmsLaunchStatus(`Messenger could not start: ${message}`, 'error', true);
       const status = document.getElementById('qms-status');
-      if (status) { status.textContent = error.message || String(error); status.className = 'qms-status error'; }
+      if (status) { status.textContent = message; status.className = 'qms-status error'; }
+    }
+  }
+
+  if (!isWatchOnly && !qmsUnsupportedSeedFormat && qmsPasswordProtected) {
+    qmsTab.hidden = false;
+    qmsTab.disabled = false;
+    qmsTab.removeAttribute('aria-disabled');
+    qmsTab.addEventListener('click', () => {
+      if (qmsController) return;
+      qmsOpenRequested = true;
+      if (qmsMountAbort) {
+        setQmsLaunchStatus('Messenger is still starting. This tab will open automatically when encrypted storage is ready.', '', false);
+      } else {
+        mountQms();
+      }
     });
+    qmsLaunchRetry.addEventListener('click', () => {
+      qmsOpenRequested = true;
+      mountQms();
+    });
+    mountQms();
   }
 
   setInterval(async () => {

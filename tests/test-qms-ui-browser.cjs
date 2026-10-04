@@ -179,6 +179,8 @@ const fixture = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" hre
     await page.locator('#qms-manage-back').click();
     await page.locator('#qms-message-input').fill('Hello');
     assert.strictEqual(await page.locator('#qms-prepare').isDisabled(), true);
+    assert.match(await page.locator('#qms-compose-requirement').innerText(), /Sending is locked: open Manage contacts/);
+    assert.match(await page.locator('#qms-prepare').getAttribute('title'), /mark this contact as verified/);
     assert.match(await page.locator('#qms-byte-count').innerText(), /5 \/ 4,096 UTF-8 bytes · 1 carrier transaction/);
 
     await page.locator('#qms-manage-toggle').click();
@@ -188,6 +190,7 @@ const fixture = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" hre
     await page.locator('#qms-manage-back').click();
     await page.locator('#qms-message-input').fill('Hello');
     assert.strictEqual(await page.locator('#qms-prepare').isEnabled(), true);
+    assert.strictEqual(await page.locator('#qms-compose-requirement').innerText(), '');
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.locator('#qms-mobile-chat-back').click();
