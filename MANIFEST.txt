@@ -1,5 +1,5 @@
 # Qwertycoin Web Wallet build manifest
-# Generated 2026-10-04T16:12:08Z from commit f332c8e
+# Generated 2026-10-04T16:16:18Z from commit 145e282
 #
 # Verify the live deployment matches a specific git tag with:
 #   git checkout v0.1.0
@@ -22,7 +22,7 @@ ff61a1bf01b9e542dc5cf710a9704c401caded527824f7468ad7018b34bd4fbc  assets/qms-mes
 2f2114c74813e11b739fb7d0293f0244db10d13a63cbdb4a21b4c7e9c2768681  assets/social-card.png
 6e761de434fb98032c3a3b562e04e7d1b2fbd7a5d392db15bfbab0f1854468aa  assets/social-card.svg
 d2fe472d440c6774db73975b6248c005bb6be67ad4fc0e5f63eaaf8101a19413  assets/wallet-ui.d2fe472d.css
-b4d438798ae550d0ebc581fd8f05404f8c1becfb5245644ed10c206ec3b91a68  dashboard.html
+3fabc013833e811a4176b62ac22ff06d20d166c5dc0bb328cd424b130a4b9b56  dashboard.html
 49845fb6edd4109c5f9aa61feaf105f9125f5c10c00e7d1c6726b0c2f5594ec9  favicon.ico
 a81550eef33de480531b7220d41a0ddc46129b36c1b6d2875d170de441d5da66  favicon.svg
 e17cfd15fb96909d64095015f958207063a0c07191da3512df7d560a781aebdf  fonts/028edbf56089.woff2
@@ -54,7 +54,7 @@ fa0e95628ad33c2f58410ccf0ff5e4b1eb0e8514f4c3e3247484e07ebdcea7b6  js/qms-messeng
 b0292bafc47901789ecd5c21a3db0b32937b2994aef7d4d3dc997607409160c1  js/qms-store.js
 839e954daff7a6c601479b60403c5ddea4958412405a694a25cdfb18e6c89773  js/qr-scanner.js
 5f5e2c80f5ba8b2b68d771fc44da7b5fd4a3e256526f78f985644f99e0df84c4  js/qrcodegen.js
-75891cee30037d41cb606b0dd2881143584ee7ef78bf95134d208506a167aeea  js/qwc-wallet-engine.js
+13f5988f58be9b587643628e3879e6a92e9745f668713001be39553bd2668418  js/qwc-wallet-engine.js
 393da85e2dc5e0ff7078a3fd594067dade492fe26f1903dcfb417f2e820a2bd3  js/qwertycoin-core-loader.js
 8fa509a28d35b4ab1077ebf9b52f8e9e51af594577deeef3e536639aa2d82b4f  js/qwertycoin-ed25519.js
 47ac834b57a510fdad1e99b1ce59b5fd42a502f16249f4f3c5df47c322848382  js/qwertycoin-english-wordlist.js

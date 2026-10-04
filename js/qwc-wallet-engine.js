@@ -190,6 +190,10 @@ const QwcWalletEngine = (() => {
   }
 
   function normalizeMempoolHashes(hashes) {
+    if (typeof hashes === "string") {
+      if (hashes.length % 32 !== 0) throw new Error("QWC daemon returned a truncated transaction-pool hash blob");
+      hashes = Array.from({ length: hashes.length / 32 }, (_, index) => hashes.slice(index * 32, (index + 1) * 32));
+    }
     if (!Array.isArray(hashes)) throw new Error("QWC daemon returned an invalid transaction-pool hash list");
     const unique = new Set();
     for (const hash of hashes) {

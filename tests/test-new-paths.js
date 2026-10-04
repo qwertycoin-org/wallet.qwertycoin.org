@@ -382,13 +382,13 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
     const originalLocation = global.location;
     const hashBytes = Uint8Array.from({ length: 32 }, (_, index) => index);
     const escapeMap = new Map([[8, 'b'], [9, 't'], [10, 'n'], [11, 'v'], [12, 'f'], [13, 'r']]);
-    const prefix = Buffer.from('{"status":"OK","tx_hashes":["', 'ascii');
+    const prefix = Buffer.from('{"status":"OK","tx_hashes":"', 'ascii');
     const encoded = [];
     for (const byte of hashBytes) {
       if (escapeMap.has(byte)) encoded.push(0x5c, escapeMap.get(byte).charCodeAt(0));
       else encoded.push(byte);
     }
-    const suffix = Buffer.from('"]}', 'ascii');
+    const suffix = Buffer.from('"}', 'ascii');
     try {
       global.location = { hostname: 'localhost', origin: 'https://wallet.example' };
       global.Worker = class {
