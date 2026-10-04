@@ -6,7 +6,7 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
-const sharedCss = '/assets/wallet-ui.f91ea05.css';
+const sharedCss = '/assets/wallet-ui.50dd4ba.css';
 const sharedNavigation = '/js/nav-menu.f152d12.js';
 const socialCard = '/assets/social-card.2f2114c74813.png';
 let passed = 0;
@@ -29,6 +29,7 @@ const appPages = {
   'privacy.html': 'wallet-app wallet-article',
   'self-host.html': 'wallet-app wallet-article',
 };
+const chromePages = [...Object.keys(appPages), '404.html'];
 
 test('all active pages load the shared visual system after legacy inline styles', () => {
   for (const [file, bodyClass] of Object.entries(appPages)) {
@@ -40,25 +41,34 @@ test('all active pages load the shared visual system after legacy inline styles'
   }
 });
 
-test('unknown page routes fall back to the canonical wallet entry without masking missing assets or APIs', () => {
+test('the retired landing page is absent and unknown routes keep a branded 404 response', () => {
   const notFound = read('404.html');
   const middleware = read('functions/_middleware.js');
+  const redirects = read('_redirects');
   const css = read(sharedCss.slice(1));
 
+  assert(!fs.existsSync(path.join(root, 'index.html')), 'retired landing page is still shipped');
+  assert(!fs.existsSync(path.join(root, 'js/index-page.js')), 'retired landing script is still shipped');
+  assert(!fs.existsSync(path.join(root, 'assets/classic/logo.png')), 'retired landing logo is still shipped');
   linked(notFound, '<meta name="robots" content="noindex, nofollow">');
-  linked(notFound, '<meta http-equiv="refresh" content="0; url=/verify">');
+  assert(!notFound.includes('http-equiv="refresh"'), '404 page must not redirect');
+  linked(notFound, '<body class="wallet-app wallet-error">');
+  linked(notFound, '<div class="error-code" aria-hidden="true">404</div>');
+  linked(notFound, '<h1 id="error-title">Page not found</h1>');
   linked(notFound, 'href="/verify"');
   linked(notFound, `href="${sharedCss}"`);
-  linked(middleware, "response.status === 404 && isPageRoute");
-  linked(middleware, "!path.startsWith('/api/')");
-  linked(middleware, "!/\\.[a-z0-9]+$/i.test(path)");
-  linked(middleware, "Response.redirect(new URL('/verify', url), 302)");
+  linked(middleware, 'response.status === 404');
+  linked(middleware, "r.headers.set('X-Robots-Tag', 'noindex, nofollow')");
+  assert(!middleware.includes('Response.redirect'), 'middleware must not redirect 404 responses');
+  linked(redirects, '/index.html      /verify        301');
+  linked(redirects, '/               /verify        302');
   linked(css, '.wallet-verify .card');
   linked(css, 'max-width: 980px');
+  linked(css, '.wallet-error .error-card');
 });
 
 test('all active pages use the approved local Qwertycoin mark and brand lockup', () => {
-  for (const file of Object.keys(appPages)) {
+  for (const file of chromePages) {
     const html = read(file);
     linked(html, 'src="/assets/qwertycoin-mark.svg"');
     linked(html, '<strong>QWERTYCOIN</strong><span>WEB WALLET</span>');
@@ -70,7 +80,7 @@ test('all active pages share the responsive Qwertycoin product navigation', () =
   const css = read(sharedCss.slice(1));
   const navigation = read(sharedNavigation.slice(1));
 
-  for (const file of Object.keys(appPages)) {
+  for (const file of chromePages) {
     const html = read(file);
     for (const value of [
       'class="site-header"',
@@ -115,7 +125,7 @@ test('favicon matrix is complete and consistently linked', () => {
     const stat = fs.statSync(path.join(root, file));
     assert(stat.size > 100, `${file}: unexpectedly small`);
   }
-  for (const file of [...Object.keys(appPages), 'index.html']) {
+  for (const file of chromePages) {
     const html = read(file);
     linked(html, 'href="/favicon.svg"');
     linked(html, 'href="/assets/favicon-32x32.png"');
@@ -131,7 +141,7 @@ test('all public entry points advertise the versioned Qwertycoin social card', (
   assert.strictEqual(card.readUInt32BE(16), 1200, 'social card width');
   assert.strictEqual(card.readUInt32BE(20), 630, 'social card height');
 
-  for (const file of ['index.html', ...Object.keys(appPages)]) {
+  for (const file of Object.keys(appPages)) {
     const html = read(file);
     linked(html, `<meta property="og:image" content="https://wallet.qwertycoin.org${socialCard}">`);
     linked(html, `<meta property="og:image:secure_url" content="https://wallet.qwertycoin.org${socialCard}">`);
@@ -251,7 +261,7 @@ test('message signing reuses the vendored qwertycoin-ts wallet contract locally'
 });
 
 test('unsupported swap integration is absent from the shipped wallet', () => {
-  for (const file of [...Object.keys(appPages), 'index.html']) {
+  for (const file of chromePages) {
     const html = read(file);
     assert(!/swap crypto/i.test(html), `${file}: unsupported swap navigation remains`);
     assert(!html.includes('swap-popup'), `${file}: unsupported swap widget remains`);
@@ -271,6 +281,9 @@ test('asset build, manifest and cache policy cover the new local presentation fi
   linked(headers, '/assets/*');
   linked(headers, '/js/*');
   linked(manifest, '  js/message-signing.js');
+  linked(manifest, '  404.html');
+  assert(!manifest.includes('  index.html'), 'retired landing page remains in the manifest');
+  assert(!manifest.includes('  js/index-page.js'), 'retired landing script remains in the manifest');
 });
 
 test('self-host guide is Qwertycoin-specific and describes the current RPC architecture', () => {
@@ -311,6 +324,7 @@ test('seed import exposes only the canonical 25-word Qwertycoin format', () => {
   linked(controller, 'const QWC_SECS_PER_BLOCK = 120');
   linked(controller, 'const QWC_RESTORE_SAFETY_BLOCKS = QWC_BLOCKS_PER_DAY');
   linked(controller, "method: 'get_info'");
+  linked(controller, '(optional · this tab only; closing it forgets the wallet)');
   linked(controller, 'estimateQwcRestoreHeight(tipHeight, ageDays)');
   linked(controller, 'setSelectedWalletAge(btn)');
   linked(controller, "setSelectedWalletAge(height === 0 ? genesisButton : null)");
@@ -329,7 +343,6 @@ test('seed import exposes only the canonical 25-word Qwertycoin format', () => {
 
 test('public pages and payment QR use Qwertycoin-facing names and endpoints', () => {
   const publicFiles = [
-    'index.html',
     '404.html',
     'verify.html',
     'dashboard.html',

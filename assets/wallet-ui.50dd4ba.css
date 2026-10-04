@@ -1,4 +1,4 @@
-/* Qwertycoin Web Wallet visual system (asset revision f91ea05).
+/* Qwertycoin Web Wallet visual system (asset revision 50dd4ba).
    Presentation only: functional state classes and inline display controls remain
    owned by the existing wallet scripts. */
 
@@ -83,6 +83,10 @@ body.wallet-app::after,
 
 .wallet-article .container {
   max-width: 880px;
+}
+
+.wallet-error .container {
+  max-width: 980px;
 }
 
 /* Shared Qwertycoin product header. Keep these dimensions aligned with
@@ -911,6 +915,72 @@ body.wallet-app::after,
 
 .wallet-article :not(pre) > code {
   overflow-wrap: anywhere;
+}
+
+/* Not found */
+.wallet-error,
+.wallet-error .page {
+  min-height: 100dvh;
+}
+
+.wallet-error .page {
+  display: flex;
+  flex-direction: column;
+}
+
+.wallet-error .error-main {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 64px 0 88px;
+}
+
+.wallet-error .error-card {
+  padding: clamp(28px, 6vw, 64px);
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-panel);
+  text-align: center;
+}
+
+.wallet-error .error-code {
+  margin-bottom: 12px;
+  color: var(--xmr);
+  font-family: var(--font-display);
+  font-size: clamp(4rem, 14vw, 8rem);
+  font-weight: 900;
+  letter-spacing: -0.06em;
+  line-height: 0.9;
+}
+
+.wallet-error h1 {
+  margin-bottom: 14px;
+  font-size: clamp(2rem, 6vw, 3.2rem);
+  letter-spacing: -0.035em;
+  line-height: 1.04;
+}
+
+.wallet-error .error-card p {
+  max-width: 620px;
+  margin: 0 auto 28px;
+  color: var(--text-dim);
+  font-size: 1.02rem;
+}
+
+.wallet-error .error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+
+.wallet-error .error-actions .action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 11px 18px;
+  text-decoration: none;
 }
 
 .wallet-article .step-num {

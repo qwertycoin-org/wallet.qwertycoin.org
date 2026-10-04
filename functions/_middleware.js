@@ -9,8 +9,7 @@
 // hard-reload before they see the fix.
 //
 // What this does:
-//   • For missing extensionless page routes → redirect to /verify
-//     (missing assets and API routes remain real 404 responses)
+//   • For 404 responses → preserve the status and prevent indexing
 //   • For HTML, JS, JSON, MANIFEST.txt, /api/* → max-age=0, must-revalidate
 //     (browser asks Cloudflare on every reload; Cloudflare returns 304 via
 //      ETag if unchanged — cheap)
@@ -27,17 +26,14 @@ export async function onRequest (context) {
   const url = new URL(context.request.url);
   const path = url.pathname;
 
-  // A top-level 404.html disables Cloudflare Pages' implicit SPA fallback,
-  // which otherwise serves the legacy index.html with status 200 for typos
-  // such as /ver. Send browser-like page routes to the canonical wallet entry
-  // while preserving real 404s for missing assets and API endpoints.
-  const isPageRoute =
-    (context.request.method === 'GET' || context.request.method === 'HEAD') &&
-    !path.startsWith('/api/') &&
-    !/\.[a-z0-9]+$/i.test(path);
-
-  if (response.status === 404 && isPageRoute) {
-    return Response.redirect(new URL('/verify', url), 302);
+  // A top-level 404.html disables Cloudflare Pages' implicit SPA fallback.
+  // Preserve the 404 status for unknown pages, assets and API routes; only
+  // the explicit / and /index.html rules in _redirects enter the wallet.
+  if (response.status === 404) {
+    const r = new Response(response.body, response);
+    r.headers.set('Cache-Control', 'public, max-age=0, must-revalidate');
+    r.headers.set('X-Robots-Tag', 'noindex, nofollow');
+    return r;
   }
 
   // Long cache for content-addressed fonts (filename hash → URL changes

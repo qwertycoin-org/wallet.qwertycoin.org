@@ -14,11 +14,13 @@ async function run(path, { method = 'GET', status = 404 } = {}) {
 }
 
 const typo = await run('/ver');
-assert.equal(typo.status, 302);
-assert.equal(typo.headers.get('location'), 'https://wallet.qwertycoin.org/verify');
+assert.equal(typo.status, 404);
+assert.equal(typo.headers.get('location'), null);
+assert.equal(typo.headers.get('x-robots-tag'), 'noindex, nofollow');
+assert.equal(typo.headers.get('cache-control'), 'public, max-age=0, must-revalidate');
 
 const nestedTypo = await run('/missing/page', { method: 'HEAD' });
-assert.equal(nestedTypo.status, 302);
+assert.equal(nestedTypo.status, 404);
 
 for (const [path, options] of [
   ['/api/missing', {}],
@@ -36,4 +38,4 @@ assert.equal(wallet.headers.get('cache-control'), 'public, max-age=0, must-reval
 const font = await run('/fonts/example.woff2', { status: 200 });
 assert.equal(font.headers.get('cache-control'), 'public, max-age=31536000, immutable');
 
-console.log('  ok   middleware route fallback and cache policy');
+console.log('  ok   middleware 404 preservation and cache policy');
