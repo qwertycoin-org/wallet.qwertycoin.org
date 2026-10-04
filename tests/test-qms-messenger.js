@@ -572,6 +572,42 @@ async function test(name, fn) {
     assert.strictEqual(store.testing.dump(reopened.storageKey), encryptedHistory, 'wrong password must not overwrite Messenger history');
   });
 
+  await test('a confirmed local reset removes only the selected wallet Messenger store', async () => {
+    const firstWallet = { address: 'QWC-reset-first', network: 'mainnet', privateSpendKeyHex: '45'.repeat(32) };
+    const secondWallet = { address: 'QWC-reset-second', network: 'mainnet', privateSpendKeyHex: '46'.repeat(32) };
+
+    await vault.store(firstWallet, 'first local Session password');
+    const first = await store.open(firstWallet, vault.qmsKey(), vault.qmsKdf());
+    first.state.messages.push({ id: 'first-history', direction: 'out', text: 'erase only this wallet' });
+    await first.save();
+    const firstStorageKey = first.storageKey;
+    await first.close();
+
+    await vault.store(secondWallet, 'second local Session password');
+    const second = await store.open(secondWallet, vault.qmsKey(), vault.qmsKdf());
+    second.state.messages.push({ id: 'second-history', direction: 'out', text: 'preserve this wallet' });
+    await second.save();
+    await second.close();
+
+    await vault.store(firstWallet, 'replacement local Session password');
+    let unlockError;
+    try { await store.open(firstWallet, vault.qmsKey(), vault.qmsKdf()); }
+    catch (error) { unlockError = error; }
+    assert.strictEqual(store.isLocalUnlockError(unlockError), true);
+
+    await store.reset(firstWallet);
+    assert.strictEqual(env.values.has(firstStorageKey), false, 'wallet-specific locator must be removed');
+    const reset = await store.open(firstWallet, vault.qmsKey(), vault.qmsKdf());
+    assert.strictEqual(reset.state.messages.length, 0);
+    await reset.save();
+    await reset.close();
+
+    await vault.store(secondWallet, 'second local Session password');
+    const preserved = await store.open(secondWallet, vault.qmsKey(), vault.qmsKdf());
+    assert.strictEqual(preserved.state.messages[0].id, 'second-history');
+    await preserved.close();
+  });
+
   await test('an active legacy session migrates its ephemeral KDF metadata before reimport', async () => {
     const wallet = { address: 'QWC-legacy-reimport-test', privateSpendKeyHex: '55'.repeat(32) };
     const password = 'legacy migration password';
@@ -832,7 +868,8 @@ async function test(name, fn) {
       'id="qms-export-backup"', 'id="qms-import-backup"', 'Separate backup password',
       'id="qms-export-invitation"', 'id="qms-toggle-invitation-qr"', 'id="qms-contact-invitation-file"',
       'id="qms-contact-filter"', 'id="qms-mobile-chat-back"',
-      'id="qms-change-session-password"', 'New Session password (12+ characters)'
+      'id="qms-change-session-password"', 'New Session password (12+ characters)',
+      'id="qms-launch-reset"', 'Reset local Messenger data'
     ]) assert(html.includes(value), `missing Messenger UI contract: ${value}`);
     assert(html.indexOf('vendor/libsodium/libsodium-sumo.js') < html.indexOf('js/qms-protocol.js'));
     assert(html.indexOf('js/qms-messenger.js') < html.indexOf('js/dashboard-page.js'));
@@ -856,6 +893,9 @@ async function test(name, fn) {
     assert(dashboardScript.includes('setWalletSpendBlocked: setQmsSpendBlocked'));
     assert(dashboardScript.includes('Messenger could not start:'));
     assert(dashboardScript.includes('qmsLaunchRetry.addEventListener'));
+    assert(dashboardScript.includes('qmsLaunchReset.addEventListener'));
+    assert(dashboardScript.includes('QmsStore.isLocalUnlockError(error)'));
+    assert(dashboardScript.includes('QmsStore.reset(walletKeys)'));
     assert(messengerScript.includes('Sending is locked: open Manage contacts'));
     assert(dashboardScript.includes('qmsTab.hidden = true'));
     assert(dashboardScript.indexOf('qmsPasswordProtected') < dashboardScript.indexOf('QmsMessenger.mount'));

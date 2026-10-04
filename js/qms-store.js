@@ -86,12 +86,20 @@ const QmsStore = (() => {
     return sodiumApi().crypto_aead_xchacha20poly1305_ietf_encrypt(
       plaintext, additionalData, null, nonce, key);
   }
+  function qmsError(message, code) {
+    const error = new Error(message);
+    error.code = code;
+    return error;
+  }
   function decrypt(key, nonce, ciphertext, additionalData, label) {
     try {
       return sodiumApi().crypto_aead_xchacha20poly1305_ietf_decrypt(
         null, ciphertext, additionalData, nonce, key);
     } catch (_) {
-      throw new Error(`Unable to decrypt this wallet's ${label}`);
+      throw qmsError(
+        `Unable to decrypt this wallet's ${label}`,
+        label === 'Messenger key' ? 'QMS_STORE_UNLOCK_FAILED' : 'QMS_STORE_DECRYPT_FAILED'
+      );
     }
   }
   function hex(bytes) { return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join(''); }
@@ -270,7 +278,10 @@ const QmsStore = (() => {
     }
     const persistedKdf = normalizeKdf(envelope.kdf);
     if (persistedKdf && !sameKdf(persistedKdf, suppliedKdf)) {
-      throw new Error('QMS1/Fast Session password metadata does not match this wallet store');
+      throw qmsError(
+        'QMS1/Fast Session password metadata does not match this wallet store',
+        'QMS_STORE_KDF_MISMATCH'
+      );
     }
     const dataKey = requireKey(decrypt(
       wrappingKey, unb64(envelope.wrapNonce), unb64(envelope.wrappedKey),
@@ -352,7 +363,10 @@ const QmsStore = (() => {
     const pendingKdf = meta.pendingWrap ? normalizeKdf(meta.pendingWrap.kdf) : null;
     const usePending = !!(meta.pendingWrap && sameKdf(pendingKdf, suppliedKdf));
     if (!usePending && persistedKdf && !sameKdf(persistedKdf, suppliedKdf)) {
-      throw new Error('QMS1/Fast Session password metadata does not match this wallet store');
+      throw qmsError(
+        'QMS1/Fast Session password metadata does not match this wallet store',
+        'QMS_STORE_KDF_MISMATCH'
+      );
     }
     const wrap = usePending ? meta.pendingWrap : meta;
     const dataKey = requireKey(decrypt(
@@ -431,6 +445,24 @@ const QmsStore = (() => {
       release() { if (!released) { released = true; localLocks.delete(lockName); } },
       done: Promise.resolve()
     };
+  }
+
+  async function reset(wallet) {
+    if (!wallet || !wallet.address) throw new Error('A wallet address is required to reset Messenger data');
+    const storageKey = PREFIX + await walletId(wallet.address);
+    const writerLock = await acquireWriterLock(storageKey);
+    try {
+      await replaceRecords(storageKey, []);
+      try { localStorage.removeItem(storageKey); } catch (_) {}
+    } finally {
+      writerLock.release();
+    }
+    return storageKey;
+  }
+
+  function isLocalUnlockError(error) {
+    return !!(error && (error.code === 'QMS_STORE_UNLOCK_FAILED'
+      || error.code === 'QMS_STORE_KDF_MISMATCH'));
   }
 
   async function open(wallet, unlockKey, kdfMetadata) {
@@ -681,7 +713,7 @@ const QmsStore = (() => {
     clear() { memoryRecords.clear(); nextMemoryWriteError = null; lastMemoryWriteCount = 0; }
   };
 
-  return { open, blank, validateState, testing };
+  return { open, reset, isLocalUnlockError, blank, validateState, testing };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = QmsStore;

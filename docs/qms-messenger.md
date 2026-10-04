@@ -172,6 +172,17 @@ the new password; failure before commit leaves the old password functional.
 Copying one backup into multiple simultaneously active browsers is not
 multi-device synchronization.
 
+Messenger IndexedDB is local to one browser profile and is not synchronized by
+importing the wallet seed in another browser. To move the same Messenger
+identity, contacts and history from Firefox to Chrome (or between devices),
+export the encrypted Messenger backup in the source browser and import it in
+the destination browser. If a browser already contains an older store for the
+same wallet address and the current Session password cannot unwrap it, the
+dashboard offers an explicitly confirmed, wallet-specific local reset. That
+reset removes only that browser's Messenger identity, contacts, messages and
+drafts; it does not remove wallet keys or affect QWC funds. Do not reset before
+exporting or locating a required Messenger backup.
+
 ## Network and browser boundaries
 
 Normal web operation uses HTTPS through Cloudflare Pages and the Production

@@ -207,7 +207,7 @@ test('functional wallet anchors remain present', () => {
     'send-step-result', 'message-signing-modal', 'message-signing-input',
     'message-verify-address', 'message-verify-signature', 'pool-challenge-input',
     'pool-challenge-confirm', 'pool-challenge-signature', 'wallet-tab-messenger',
-    'qms-launch-status', 'qms-launch-message', 'qms-launch-retry',
+    'qms-launch-status', 'qms-launch-message', 'qms-launch-retry', 'qms-launch-reset',
     'qms-section', 'qms-contact-list', 'qms-message-list', 'qms-message-input',
     'qms-compose-requirement', 'qms-prepare', 'qms-send', 'qms-cancel', 'qms-manage-view',
     'unlock-overlay', 'btn-export', 'btn-disconnect',
@@ -217,6 +217,9 @@ test('functional wallet anchors remain present', () => {
   linked(dashboardController, 'Messenger could not start:');
   linked(dashboardController, 'qmsOpenRequested');
   linked(dashboardController, 'qmsLaunchRetry.addEventListener');
+  linked(dashboardController, 'qmsLaunchReset.addEventListener');
+  linked(dashboardController, 'QmsStore.reset(walletKeys)');
+  linked(dashboardController, 'Wallet keys and QWC funds are not affected');
   linked(dashboardController, 'setQmsSpendBlocked(false)');
 });
 

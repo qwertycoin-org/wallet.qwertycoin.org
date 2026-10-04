@@ -146,12 +146,20 @@ const contentTypes = {
       await changedPasswordStore.close();
       const wrongPasswordError = await QmsStore.open(wallet, new Uint8Array(32))
         .then(() => '', error => error.message);
+      await QmsStore.reset(wallet);
+      const locatorRemovedByReset = localStorage.getItem(storageKey) === null;
+      const resetStore = await QmsStore.open(wallet, WalletVault.qmsKey(), WalletVault.qmsKdf());
+      const resetMessageCount = resetStore.state.messages.length;
+      await resetStore.save();
+      await resetStore.close();
       if (observer) observer.disconnect();
       return {
         contactId,
         messageId,
         duplicateError,
         wrongPasswordError,
+        locatorRemovedByReset,
+        resetMessageCount,
         locator,
         indexedKdfRecovered,
         passwordChangeCleanupPending: changeResult.cleanupPending,
@@ -167,6 +175,8 @@ const contentTypes = {
     assert.strictEqual(result.messageId, 'browser-message');
     assert.match(result.duplicateError, /already open/);
     assert.match(result.wrongPasswordError, /Unable to decrypt|metadata does not match/);
+    assert.strictEqual(result.locatorRemovedByReset, true);
+    assert.strictEqual(result.resetMessageCount, 0);
     assert.strictEqual(result.locator.version, 3);
     assert.strictEqual(result.locator.profile, 'qms1-fast');
     assert.strictEqual(result.locator.backend, 'indexeddb');

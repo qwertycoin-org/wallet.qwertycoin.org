@@ -2044,15 +2044,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   const qmsLaunchStatus = document.getElementById('qms-launch-status');
   const qmsLaunchMessage = document.getElementById('qms-launch-message');
   const qmsLaunchRetry = document.getElementById('qms-launch-retry');
+  const qmsLaunchReset = document.getElementById('qms-launch-reset');
   const qmsUnsupportedSeedFormat = !!walletKeys.seedFormat && walletKeys.seedFormat !== 'standard';
   const qmsPasswordProtected = typeof WalletVault !== 'undefined' && WalletVault.hasQmsKey && WalletVault.hasQmsKey();
 
-  function setQmsLaunchStatus(message, type, retryable) {
-    if (!qmsLaunchStatus || !qmsLaunchMessage || !qmsLaunchRetry) return;
+  function setQmsLaunchStatus(message, type, retryable, resettable = false) {
+    if (!qmsLaunchStatus || !qmsLaunchMessage || !qmsLaunchRetry || !qmsLaunchReset) return;
     qmsLaunchMessage.textContent = message || '';
     qmsLaunchStatus.className = 'qms-launch-status' + (type ? ' ' + type : '');
     qmsLaunchStatus.hidden = !message;
     qmsLaunchRetry.hidden = !retryable;
+    qmsLaunchReset.hidden = !resettable;
   }
 
   if ((isWatchOnly || qmsUnsupportedSeedFormat || !qmsPasswordProtected) && qmsTab) {
@@ -2114,7 +2116,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       setQmsSpendBlocked(false);
       const message = error && error.message ? error.message : String(error);
       qmsTab.title = message;
-      setQmsLaunchStatus(`Messenger could not start: ${message}`, 'error', true);
+      const localUnlockError = typeof QmsStore !== 'undefined'
+        && typeof QmsStore.isLocalUnlockError === 'function'
+        && QmsStore.isLocalUnlockError(error);
+      setQmsLaunchStatus(localUnlockError
+        ? 'This browser already has encrypted Messenger data for this wallet, but the current Session password cannot unlock it. Re-import the wallet with the Session password previously used in this browser, or reset only this browser’s local Messenger data. To move identity and history from Firefox, export an encrypted Messenger backup there and import it here.'
+        : `Messenger could not start: ${message}`, 'error', !localUnlockError, localUnlockError);
       const status = document.getElementById('qms-status');
       if (status) { status.textContent = message; status.className = 'qms-status error'; }
     }
@@ -2136,6 +2143,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     qmsLaunchRetry.addEventListener('click', () => {
       qmsOpenRequested = true;
       mountQms();
+    });
+    qmsLaunchReset.addEventListener('click', async () => {
+      const confirmed = window.confirm(
+        'Reset local Messenger data for this wallet in this browser?\n\n'
+        + 'This permanently removes the local Messenger identity, contacts, messages and drafts. '
+        + 'Wallet keys and QWC funds are not affected. Cancel if you need to export or restore an encrypted Messenger backup.'
+      );
+      if (!confirmed) return;
+      qmsLaunchReset.disabled = true;
+      qmsLaunchRetry.disabled = true;
+      try {
+        await QmsStore.reset(walletKeys);
+        setQmsLaunchStatus('Local Messenger data reset. Creating a new Messenger identity…', '', false, false);
+        qmsOpenRequested = true;
+        await mountQms();
+      } catch (error) {
+        const message = error && error.message ? error.message : String(error);
+        setQmsLaunchStatus(`Messenger data could not be reset: ${message}`, 'error', true, true);
+      } finally {
+        qmsLaunchReset.disabled = false;
+        qmsLaunchRetry.disabled = false;
+      }
     });
     mountQms();
   }
