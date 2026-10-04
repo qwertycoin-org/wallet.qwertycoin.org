@@ -1,5 +1,5 @@
 # Qwertycoin Web Wallet build manifest
-# Generated 2026-10-04T10:16:36Z from commit ea6bb64
+# Generated 2026-10-04T11:35:57Z from commit 2034d40
 #
 # Verify the live deployment matches a specific git tag with:
 #   git checkout v0.1.0
@@ -16,13 +16,13 @@ ca8e9997e76b5d9d1b019a373617bd2e5a0e4deb95133a9e3e97e89d52b1d356  assets/avatar.
 657572613c331f2952e28c061b674ea6a4df2ab1f425a475c81c1013a08a211a  assets/favicon-16x16.png
 b83c4b9a436236620b4107628799459f778c35b7aa45b1dd389c97b9649bb592  assets/favicon-192x192.png
 737de0b5724abedb7950fa40ad24938211f0d4b7835e3c74c072684554dd8c1f  assets/favicon-32x32.png
-9b292d52a263bda08b7e4021381e89762048cb7137b87380eb697d25df8fbd20  assets/qms-messenger.css
+3118eab58bf4cb8b85eb49ce75efcd3ada3a2a48294da11dc6f2f425d7e3fa4f  assets/qms-messenger.css
 449e9192a909de6b096b8949d43f1120092036a1fef2f9df9bdb785269461bb9  assets/qwertycoin-mark.svg
 2f2114c74813e11b739fb7d0293f0244db10d13a63cbdb4a21b4c7e9c2768681  assets/social-card.2f2114c74813.png
 2f2114c74813e11b739fb7d0293f0244db10d13a63cbdb4a21b4c7e9c2768681  assets/social-card.png
 6e761de434fb98032c3a3b562e04e7d1b2fbd7a5d392db15bfbab0f1854468aa  assets/social-card.svg
 d5c5382f4d81a4206f4a42c3b4797a502270a8cce84640975a297c97b6096f1d  assets/wallet-ui.50dd4ba.css
-079e6d9cf1125b16745fbebc56b650cc6c117f4fca44709f64cad65a4a605b4b  dashboard.html
+8de3b7e60adcc66136bcce992cc3da47eba3b642fa57038248daecc781286dbe  dashboard.html
 49845fb6edd4109c5f9aa61feaf105f9125f5c10c00e7d1c6726b0c2f5594ec9  favicon.ico
 a81550eef33de480531b7220d41a0ddc46129b36c1b6d2875d170de441d5da66  favicon.svg
 e17cfd15fb96909d64095015f958207063a0c07191da3512df7d560a781aebdf  fonts/028edbf56089.woff2

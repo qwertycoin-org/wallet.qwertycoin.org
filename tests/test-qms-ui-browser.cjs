@@ -141,6 +141,39 @@ const fixture = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" hre
     await page.locator('#wallet-tab-messenger').click();
     assert.strictEqual(await page.locator('.qms-message').count(), 100);
     assert.strictEqual(await page.locator('.qms-load-older').count(), 1);
+    const contrast = await page.evaluate(() => {
+      function channels(cssColor) {
+        const values = cssColor.match(/[\d.]+/g).map(Number);
+        return values.slice(0, 3).map(value => value / 255);
+      }
+      function luminance(cssColor) {
+        return channels(cssColor)
+          .map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4)
+          .reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index], 0);
+      }
+      function ratio(foreground, background) {
+        const values = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+        return (values[0] + 0.05) / (values[1] + 0.05);
+      }
+      function sample(selector) {
+        const node = document.querySelector(selector);
+        const bubble = node.closest('.qms-bubble');
+        const color = getComputedStyle(node).color;
+        const background = getComputedStyle(bubble).backgroundColor;
+        return { color, background, ratio: ratio(color, background) };
+      }
+      return {
+        canvas: getComputedStyle(document.querySelector('#qms-message-list')).backgroundColor,
+        incoming: sample('.qms-message.them .qms-bubble'),
+        incomingMeta: sample('.qms-message.them .qms-bubble-meta'),
+        outgoing: sample('.qms-message.me .qms-bubble'),
+        outgoingMeta: sample('.qms-message.me .qms-bubble-meta')
+      };
+    });
+    assert.strictEqual(contrast.canvas, 'rgb(255, 255, 255)');
+    for (const key of ['incoming', 'incomingMeta', 'outgoing', 'outgoingMeta']) {
+      assert(contrast[key].ratio >= 4.5, `${key} contrast ${contrast[key].ratio.toFixed(2)} is below WCAG AA`);
+    }
     await page.locator('.qms-load-older').click();
     assert.strictEqual(await page.locator('.qms-message').count(), 200);
 
@@ -215,7 +248,7 @@ const fixture = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" hre
     assert.strictEqual(persistedUiState.drafts['Existing Contact'], 'draft for existing contact');
     assert.strictEqual(persistedUiState.drafts['Unread Contact'], 'draft for unread contact');
     assert.match(persistedUiState.unreadReadAt, /^\d{4}-\d{2}-\d{2}T/);
-    console.log(JSON.stringify({ browser: browserName, pagination: [100, 200], drafts: true, unread: true, filter: true, mobileNavigation: true, verificationGate: true, invitationQr: true, invitationFile: true, carrierPreview: 1, mobileWidth: 390, horizontalOverflow }));
+    console.log(JSON.stringify({ browser: browserName, pagination: [100, 200], drafts: true, unread: true, filter: true, contrast, mobileNavigation: true, verificationGate: true, invitationQr: true, invitationFile: true, carrierPreview: 1, mobileWidth: 390, horizontalOverflow }));
   } finally {
     if (context) await context.close();
     if (browser) await browser.close();
