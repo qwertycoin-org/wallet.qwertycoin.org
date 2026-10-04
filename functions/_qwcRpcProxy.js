@@ -141,6 +141,7 @@ export async function proxyQwcRpc(context, path) {
   const requestContentType = isJson
     ? request.headers.get("content-type") || "application/json"
     : "application/octet-stream";
+  const clientIp = request.headers.get("CF-Connecting-IP") || "unknown";
 
   for (const node of DEFAULT_NODES) {
     try {
@@ -150,7 +151,8 @@ export async function proxyQwcRpc(context, path) {
         // proxy. The browser never receives or calls this upstream directly.
         headers: {
           "Content-Type": requestContentType,
-          "Origin": OFFICIAL_WALLET_ORIGIN
+          "Origin": OFFICIAL_WALLET_ORIGIN,
+          "X-QWC-Client-IP": clientIp
         },
         body: path.endsWith(".bin") ? new Uint8Array(body) : body,
         signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)

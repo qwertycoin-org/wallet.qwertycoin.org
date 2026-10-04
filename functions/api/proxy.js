@@ -146,6 +146,7 @@ export async function onRequestPost(context) {
   const requestContentType = isJson
     ? request.headers.get("content-type") || "application/json"
     : "application/octet-stream";
+  const clientIp = request.headers.get("CF-Connecting-IP") || "unknown";
 
   let lastError = "No upstream nodes configured";
   for (const node of QWC_NODES) {
@@ -156,7 +157,8 @@ export async function onRequestPost(context) {
         // proxy. The browser never receives or calls this upstream directly.
         headers: {
           "Content-Type": requestContentType,
-          "Origin": OFFICIAL_WALLET_ORIGIN
+          "Origin": OFFICIAL_WALLET_ORIGIN,
+          "X-QWC-Client-IP": clientIp
         },
         body: path.endsWith(".bin") ? new Uint8Array(body) : body,
         signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)

@@ -332,6 +332,10 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
       'production proxy must identify the official wallet origin to the dedicated gateway');
     assert(pathProxy.includes('"Origin": OFFICIAL_WALLET_ORIGIN'),
       'path-based proxy must identify the official wallet origin to the dedicated gateway');
+    assert(proxy.includes('"X-QWC-Client-IP": clientIp'),
+      'production proxy must forward Cloudflare client identity for per-client limits');
+    assert(pathProxy.includes('"X-QWC-Client-IP": clientIp'),
+      'path-based proxy must forward Cloudflare client identity for per-client limits');
     assert(rpcClient.includes("name: 'wallet-rpc.qwertycoin.org'"),
       'wallet UI does not identify the active production gateway');
     assert(dashboard.includes('<span class="label">Gateway</span>'),
