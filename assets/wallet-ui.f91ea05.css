@@ -1,4 +1,4 @@
-/* Qwertycoin Web Wallet visual system (asset revision f152d12).
+/* Qwertycoin Web Wallet visual system (asset revision f91ea05).
    Presentation only: functional state classes and inline display controls remain
    owned by the existing wallet scripts. */
 
@@ -279,7 +279,7 @@ body.wallet-app::after,
 }
 
 .wallet-verify .card {
-  max-width: 760px;
+  max-width: 980px;
   margin-inline: auto;
   padding: 28px;
   border: 2px solid var(--border);

@@ -6,7 +6,7 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
-const sharedCss = '/assets/wallet-ui.f152d12.css';
+const sharedCss = '/assets/wallet-ui.f91ea05.css';
 const sharedNavigation = '/js/nav-menu.f152d12.js';
 const socialCard = '/assets/social-card.2f2114c74813.png';
 let passed = 0;
@@ -38,6 +38,23 @@ test('all active pages load the shared visual system after legacy inline styles'
     assert(html.lastIndexOf(sharedCss) > html.lastIndexOf('</style>'), `${file}: common CSS must follow legacy CSS`);
     assert(!html.includes('href="/assets/wallet-ui.css"'), `${file}: unversioned shared CSS can serve a stale header`);
   }
+});
+
+test('unknown page routes fall back to the canonical wallet entry without masking missing assets or APIs', () => {
+  const notFound = read('404.html');
+  const middleware = read('functions/_middleware.js');
+  const css = read(sharedCss.slice(1));
+
+  linked(notFound, '<meta name="robots" content="noindex, nofollow">');
+  linked(notFound, '<meta http-equiv="refresh" content="0; url=/verify">');
+  linked(notFound, 'href="/verify"');
+  linked(notFound, `href="${sharedCss}"`);
+  linked(middleware, "response.status === 404 && isPageRoute");
+  linked(middleware, "!path.startsWith('/api/')");
+  linked(middleware, "!/\\.[a-z0-9]+$/i.test(path)");
+  linked(middleware, "Response.redirect(new URL('/verify', url), 302)");
+  linked(css, '.wallet-verify .card');
+  linked(css, 'max-width: 980px');
 });
 
 test('all active pages use the approved local Qwertycoin mark and brand lockup', () => {
@@ -313,6 +330,7 @@ test('seed import exposes only the canonical 25-word Qwertycoin format', () => {
 test('public pages and payment QR use Qwertycoin-facing names and endpoints', () => {
   const publicFiles = [
     'index.html',
+    '404.html',
     'verify.html',
     'dashboard.html',
     'privacy.html',

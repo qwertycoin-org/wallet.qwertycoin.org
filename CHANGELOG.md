@@ -15,6 +15,11 @@ and uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   signing.
 
 ### Fixed
+- Redirected unknown page routes such as `/ver` to `/verify` instead of
+  exposing the retired landing page through Cloudflare Pages' SPA fallback,
+  while keeping missing assets and API routes as real 404 responses.
+- Widened the desktop wallet-access panel to the established 980 px
+  Qwertycoin content width.
 - Versioned the shared wallet-header CSS and navigation script URLs so mobile
   browsers cannot combine newly deployed header markup with stale pre-header
   assets and expose the accessibility label instead of the burger control.
