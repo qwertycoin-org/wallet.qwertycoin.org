@@ -95,8 +95,8 @@ wallet spending. Imported backups always place open journals in
 
 ## Receiving and chain consistency
 
-The scanner reads public confirmed blocks through the same-origin, restricted
-Production Explorer gateway. It does not send wallet addresses, view keys,
+The scanner reads public confirmed blocks through the same-origin proxy to the
+dedicated restricted `wallet-rpc.qwertycoin.org` gateway. It does not send wallet addresses, view keys,
 contacts or discovery secrets to the gateway. Binary block ranges are joined
 by height with canonical headers, then checked for height, hash and continuous
 `prevHash → hash` linkage within and across every 20-block batch.
@@ -116,10 +116,22 @@ rescan anchor. Importing a contact retries the queue and activates that rescan.
 This block-distance rule is independent of how long the wallet was offline,
 because historical blocks are processed in ascending order.
 
-Polling never overlaps, uses a 20-second request timeout and backs off from 30
-seconds to at most five minutes after failures. Browser background throttling
-means this is not guaranteed background or instant delivery. Confirmation time
-remains the fundamental latency floor.
+While the Messenger tab is visible, a separate bounded poll reads at most 2,048
+public mempool hashes and fetches only new candidate transactions in batches of
+128. A placeholder is shown only after all fragments are present, the recipient
+discovery MAC is valid, the sender matches a known contact and the sender
+signature verifies. The placeholder contains no message text, is never written
+to the encrypted chat store and does not advance the confirmed scan cursor. It
+disappears if its carriers leave the pool and is replaced atomically by the
+normal message after block confirmation. Partial or unknown-sender carriers do
+not identify a contact in the UI.
+
+Confirmed-block polling never overlaps, uses a 20-second request timeout and
+backs off from 30 seconds to at most five minutes after failures. Mempool polling
+runs every five seconds only while the Messenger tab is visible. Browser
+background throttling means this is not guaranteed background or instant
+delivery. Confirmation remains required before plaintext display and durable
+chat state.
 
 ## Encrypted local persistence
 

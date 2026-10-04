@@ -121,6 +121,22 @@ const fixture = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" hre
       await store.close();
       const importedIdentity = QmsProtocol.createIdentity();
       const importedInvitation = QmsProtocol.createInvitation(importedIdentity);
+      const mempoolSecret = 'pending plaintext must never enter the UI';
+      const mempoolMessageId = QmsProtocol.random(16);
+      const mempoolFragments = QmsProtocol.fragmentCiphertext(
+        ownInvitation,
+        mempoolMessageId,
+        QmsProtocol.sealText(contactIdentity, ownInvitation, mempoolMessageId, mempoolSecret)
+      );
+      window.qmsMempoolSecret = mempoolSecret;
+      window.qmsMempoolTransactions = mempoolFragments.map((fragment, index) => ({
+        hash: (index + 17).toString(16).padStart(64, '0'),
+        extra: Array.from(QmsProtocol.carrierExtra(fragment)),
+        receivedTimestamp: 1700002000 + index
+      }));
+      window.qmsMempoolFixture = structuredClone(window.qmsMempoolTransactions);
+      window.qmsMempoolHashes = window.qmsMempoolTransactions.map(transaction => transaction.hash);
+      window.qmsConfirmedBlocks = [];
       window.qmsTestKey = key;
       window.qmsTestWallet = wallet;
       window.qmsImportedInvitation = QmsProtocol.hex(QmsProtocol.encodeInvitation(importedInvitation));
@@ -131,7 +147,12 @@ const fixture = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" hre
         getQmsKdf: () => null,
         getRestoreHeight: () => 0,
         getWallet: async () => ({ reconnectDaemon: async () => {}, sync: async () => {} }),
-        createScanner: async () => ({ getHeight: async () => 0, getBlocksByRange: async () => [] }),
+        createScanner: async () => ({
+          getHeight: async () => window.qmsConfirmedBlocks.length,
+          getBlocksByRange: async (start, end) => window.qmsConfirmedBlocks.slice(start, end + 1),
+          getTxPoolHashes: async () => window.qmsMempoolHashes.slice(),
+          getMempoolTransactions: async hashes => window.qmsMempoolTransactions.filter(transaction => hashes.includes(transaction.hash))
+        }),
         setWalletSpendBlocked: () => {},
         preparePasswordChange: async () => { throw new Error('not used in UI regression'); }
       });
@@ -139,6 +160,15 @@ const fixture = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" hre
     });
 
     await page.locator('#wallet-tab-messenger').click();
+    await page.evaluate(() => window.qmsController.scanMempool());
+    assert.strictEqual(await page.locator('.qms-message-pending').count(), 1);
+    assert.strictEqual(await page.locator('.qms-message-pending .qms-pending-notice').innerText(), 'Encrypted message awaiting confirmation');
+    assert.strictEqual(await page.locator('.qms-message-pending .qms-message-status').innerText(), 'Mempool · 0 confirmations');
+    assert.strictEqual((await page.locator('body').innerText()).includes(await page.evaluate(() => window.qmsMempoolSecret)), false);
+    assert.strictEqual(await page.getByRole('button', { name: /Existing Contact/ }).locator('.qms-unread').count(), 0);
+    await page.evaluate(() => { window.qmsMempoolHashes = []; window.qmsMempoolTransactions = []; });
+    await page.evaluate(() => window.qmsController.scanMempool());
+    assert.strictEqual(await page.locator('.qms-message-pending').count(), 0);
     assert.strictEqual(await page.locator('.qms-message').count(), 100);
     assert.strictEqual(await page.locator('.qms-load-older').count(), 1);
     const contrast = await page.evaluate(() => {
@@ -229,6 +259,32 @@ const fixture = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" hre
     assert.strictEqual(await page.locator('#qms-prepare').isEnabled(), true);
     assert.strictEqual(await page.locator('#qms-compose-requirement').innerText(), '');
 
+    await page.getByRole('button', { name: /Existing Contact/ }).click();
+    await page.evaluate(() => {
+      window.qmsMempoolTransactions = structuredClone(window.qmsMempoolFixture);
+      window.qmsMempoolHashes = window.qmsMempoolTransactions.map(transaction => transaction.hash);
+    });
+    await page.evaluate(() => window.qmsController.scanMempool());
+    assert.strictEqual(await page.locator('.qms-message-pending').count(), 1);
+    assert.strictEqual((await page.locator('body').innerText()).includes(await page.evaluate(() => window.qmsMempoolSecret)), false);
+    await page.evaluate(() => {
+      window.qmsConfirmedBlocks = [{
+        height: 0,
+        hash: 'a'.repeat(64),
+        prevHash: '0'.repeat(64),
+        timestamp: 1700002010,
+        txs: structuredClone(window.qmsMempoolFixture)
+      }];
+      window.qmsMempoolHashes = [];
+      window.qmsMempoolTransactions = [];
+    });
+    await page.evaluate(async () => {
+      await window.qmsController.scanMempool();
+      await window.qmsController.resumeScan();
+    });
+    assert.strictEqual(await page.locator('.qms-message-pending').count(), 0);
+    assert.strictEqual(await page.locator('.qms-bubble').getByText('pending plaintext must never enter the UI', { exact: true }).count(), 1);
+
     await page.setViewportSize({ width: 390, height: 844 });
     await page.locator('#qms-mobile-chat-back').click();
     assert.strictEqual(await page.locator('.qms-contacts').isVisible(), true);
@@ -252,7 +308,7 @@ const fixture = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" hre
     assert.strictEqual(persistedUiState.drafts['Existing Contact'], 'draft for existing contact');
     assert.strictEqual(persistedUiState.drafts['Unread Contact'], 'draft for unread contact');
     assert.match(persistedUiState.unreadReadAt, /^\d{4}-\d{2}-\d{2}T/);
-    console.log(JSON.stringify({ browser: browserName, pagination: [100, 200], drafts: true, unread: true, filter: true, contrast, mobileNavigation: true, verificationGate: true, invitationQr: true, invitationFile: true, carrierPreview: 1, mobileWidth: 390, horizontalOverflow }));
+    console.log(JSON.stringify({ browser: browserName, pagination: [100, 200], drafts: true, unread: true, filter: true, contrast, mobileNavigation: true, verificationGate: true, invitationQr: true, invitationFile: true, carrierPreview: 1, mempoolPlaceholder: true, mempoolDrop: true, mempoolConfirmation: true, mobileWidth: 390, horizontalOverflow }));
   } finally {
     if (context) await context.close();
     if (browser) await browser.close();

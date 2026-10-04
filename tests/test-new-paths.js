@@ -329,6 +329,7 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
     const blockScanRoute = fs.readFileSync(path.join(__dirname, '../functions/get_blocks_by_height.bin.js'), 'utf8');
     const lws = fs.readFileSync(path.join(__dirname, '../js/lws-client.js'), 'utf8');
     const rpcClient = fs.readFileSync(path.join(__dirname, '../js/qwertycoin-rpc.js'), 'utf8');
+    const walletEngine = fs.readFileSync(path.join(__dirname, '../js/qwc-wallet-engine.js'), 'utf8');
     const dashboard = fs.readFileSync(path.join(__dirname, '../dashboard.html'), 'utf8');
 
     assert(proxy.includes('https://wallet-rpc.qwertycoin.org/api/v1/wallet-rpc'),
@@ -347,6 +348,12 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
       'production proxy must forward Cloudflare client identity for per-client limits');
     assert(pathProxy.includes('"X-QWC-Client-IP": clientIp'),
       'path-based proxy must forward Cloudflare client identity for per-client limits');
+    assert(proxy.includes('"/get_transaction_pool_hashes.bin"') && pathProxy.includes('"/get_transaction_pool_hashes.bin"'),
+      'Messenger transaction-pool hash route must remain explicitly allowlisted');
+    assert(walletEngine.includes('postDaemonPath("/get_transaction_pool_hashes.bin"'),
+      'Messenger scanner must use the restricted JSON-over-HTTP transaction-pool route');
+    assert(walletEngine.includes('postDaemonPath("/get_transactions"'),
+      'Messenger scanner must load only explicitly requested transaction-pool carriers');
     assert(rpcClient.includes("name: 'wallet-rpc.qwertycoin.org'"),
       'wallet UI does not identify the active production gateway');
     assert(dashboard.includes('<span class="label">Gateway</span>'),

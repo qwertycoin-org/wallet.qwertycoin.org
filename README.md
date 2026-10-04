@@ -67,7 +67,10 @@ GUI wallet. The tab is not exposed unless the wallet was opened with a
 non-empty Session password. Contacts exchange their complete 428-character personal
 invitation confidentially, verify the shorter fingerprint separately, then use
 **Encrypt & review** before explicitly broadcasting the carrier transactions.
-Received messages appear after every carrier is confirmed and scanned.
+Once every carrier is visible in the mempool and the sender authentication is
+valid, the matching chat shows only an ephemeral **awaiting confirmation**
+placeholder. The message text appears only after every carrier is confirmed and
+scanned from a block.
 
 Messages are end-to-end encrypted, authenticated and stored locally in
 password-wrapped XChaCha20-Poly1305 IndexedDB records. A short message normally
@@ -88,11 +91,10 @@ python3 -m http.server 8000
 
 For full wallet operation, configure the Pages functions or an equivalent same-origin gateway against a restricted `qwertycoind` RPC endpoint. Do not expose unrestricted administrative RPC publicly.
 
-The QMS feature preview uses the Production Explorer's restricted wallet
-gateway after its synchronization, carrier and receive paths were proved on
-the isolated Integration Explorer. This is not the generic Explorer HTML/API
-endpoint: only the wallet-required RPC path and method allowlists are
-forwarded.
+The QMS feature preview uses the dedicated restricted gateway at
+`wallet-rpc.qwertycoin.org`; the Explorer is not in the wallet's critical path.
+Only wallet-required RPC paths and methods are forwarded through the
+same-origin Pages proxy.
 
 ## Verification
 

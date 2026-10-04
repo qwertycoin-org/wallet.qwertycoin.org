@@ -25,6 +25,9 @@ const QmsMessenger = (() => {
   const MAX_CONTACTS = 1000;
   const MAX_PLANS = 128;
   const MESSAGE_PAGE_SIZE = 100;
+  const MAX_MEMPOOL_HASHES = 2048;
+  const MEMPOOL_FETCH_BATCH = 128;
+  const MEMPOOL_POLL_MS = 5000;
 
   function nowIso() { return new Date().toISOString(); }
   function messengerError(code, message) { const error = new Error(message); error.code = code; return error; }
@@ -293,6 +296,73 @@ const QmsMessenger = (() => {
       state.reassembly = state.reassembly.filter(item => item !== partial);
     }
     return message;
+  }
+
+  function pendingInboxFromTransactions(state, identity, ownInvitation, transactions) {
+    if (!Array.isArray(transactions) || transactions.length > MAX_MEMPOOL_HASHES) return [];
+    const candidate = {
+      contacts: state.contacts || [],
+      messages: [], plans: [], reassembly: [], unmatched: [],
+      scan: { height: 0, blockHash: '', startHeight: 0, checkpoints: [] }
+    };
+    const pending = [];
+    for (const tx of transactions) {
+      if (!tx || typeof tx.hash !== 'string' || !/^[0-9a-f]{64}$/i.test(tx.hash)) continue;
+      let extra;
+      try {
+        extra = Array.isArray(tx.extra) ? new Uint8Array(tx.extra) : QmsProtocol.unhex(tx.extraHex);
+      } catch (_) { continue; }
+      let segments;
+      try { segments = QmsProtocol.extractSegmentsFromExtra(extra); } catch (_) { continue; }
+      if (!segments.length) continue;
+      let fragment;
+      try { fragment = QmsProtocol.decodeSegments(segments); } catch (_) { continue; }
+      const recipientInvitation = invitationCandidates(candidate, ownInvitation)
+        .find(invitation => QmsProtocol.verifyFragment(invitation, fragment));
+      if (!recipientInvitation) continue;
+      let partial;
+      try {
+        partial = addFragmentRecord(candidate, fragment, {
+          txHash: tx.hash.toLowerCase(),
+          blockHeight: 0,
+          blockHash: '',
+          createdAt: Number(tx.receivedTimestamp) > 0
+            ? new Date(Number(tx.receivedTimestamp) * 1000).toISOString()
+            : nowIso()
+        }, recipientInvitation);
+      } catch (_) { continue; }
+      if (Object.keys(partial.fragments).length !== partial.count) continue;
+      try {
+        const records = Array.from({ length: partial.count }, (_, index) => partial.fragments[String(index)]);
+        if (records.some(record => !record)) continue;
+        const fragments = records.map(record => QmsProtocol.decodeFragment(QmsProtocol.unhex(record.encoded)));
+        const ciphertext = QmsProtocol.reassemble(fragments);
+        const envelope = QmsProtocol.openTextEnvelope(identity, recipientInvitation, fragments[0].messageId, ciphertext);
+        const senderId = QmsProtocol.hex(envelope.senderFingerprint);
+        const senderContact = candidate.contacts.find(contact => {
+          if (contact.archivedAt) return false;
+          if (contact.fingerprint === senderId || contact.id === senderId) return true;
+          try {
+            const invitation = invitationFromHex(contact.invitationHex);
+            return QmsProtocol.hex(QmsProtocol.fingerprint(invitation.boxPublic, invitation.signPublic)) === senderId;
+          } catch (_) { return false; }
+        });
+        if (!senderContact) continue;
+        QmsProtocol.authenticateTextEnvelopeMetadata(envelope, invitationFromHex(senderContact.invitationHex));
+        const txHashes = Array.from(new Set(records.map(record => record.txHash).filter(Boolean)));
+        const newest = records.slice().sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt))).pop();
+        pending.push({
+          id: partial.messageId,
+          contactId: senderContact.id,
+          createdAt: newest && newest.createdAt ? newest.createdAt : nowIso(),
+          txHashes
+        });
+        candidate.reassembly = candidate.reassembly.filter(item => item !== partial);
+      } catch (_) {
+        candidate.reassembly = candidate.reassembly.filter(item => item !== partial);
+      }
+    }
+    return pending.slice(0, MAX_REASSEMBLIES);
   }
 
   function retryCompleteReassemblies(state, identity, ownInvitation) {
@@ -588,6 +658,10 @@ const QmsMessenger = (() => {
     let scannerPromise = null;
     let scanFailures = 0;
     let nextScanAt = 0;
+    let mempoolScanning = false;
+    let mempoolTimer = null;
+    const mempoolTransactions = new Map();
+    let pendingInbox = [];
     const messageLimits = new Map();
     let renderedMessageKey = '';
     let renderedContactId = null;
@@ -624,6 +698,10 @@ const QmsMessenger = (() => {
       return wallet;
     }
     function contact() { return state.contacts.find(item => item.id === selectedId && !item.archivedAt) || null; }
+    function pendingForContact(contactId) {
+      const confirmed = new Set(state.messages.filter(message => message.direction === 'in').map(message => message.id));
+      return pendingInbox.filter(message => message.contactId === contactId && !confirmed.has(message.id));
+    }
     function preparedForSelected() { return state.plans.find(plan => plan.contactId === selectedId && ACTIVE_PLAN_STATUSES.has(plan.status) && plan.status !== 'building') || null; }
     function formatDate(value) { try { return new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)); } catch (_) { return value; } }
     function messageByteCount() { return new TextEncoder().encode(el('qms-message-input').value).length; }
@@ -679,10 +757,19 @@ const QmsMessenger = (() => {
       overviewNodes.forEach(node => { node.hidden = messenger ? true : originalHidden.get(node); });
       overviewTab.classList.toggle('active', !messenger); messengerTab.classList.toggle('active', messenger);
       overviewTab.setAttribute('aria-selected', String(!messenger)); messengerTab.setAttribute('aria-selected', String(messenger));
-      if (messenger && !recovering) { render(); scan().catch(showError); }
+      if (messenger && !recovering) {
+        render(); scan().catch(showError); scheduleMempoolScan(0);
+      } else {
+        stopMempoolScan();
+      }
     }
     overviewTab.addEventListener('click', () => setTab('overview'));
     messengerTab.addEventListener('click', () => setTab('messenger'));
+    function onVisibilityChange() {
+      if (document.visibilityState === 'hidden') stopMempoolScan();
+      else if (!section.hidden && !recovering) scheduleMempoolScan(0);
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     function renderContacts() {
       const list = el('qms-contact-list'); list.replaceChildren();
@@ -694,6 +781,12 @@ const QmsMessenger = (() => {
         if (!summary.latest || summary.latest.createdAt.localeCompare(message.createdAt) < 0) summary.latest = message;
         if (message.direction === 'in' && !message.readAt) summary.unread += 1;
         if (query && !summary.matches && String(message.text || '').toLocaleLowerCase().includes(query)) summary.matches = true;
+      }
+      for (const message of pendingInbox) {
+        if (state.messages.some(confirmed => confirmed.direction === 'in' && confirmed.id === message.id)) continue;
+        let summary = summaries.get(message.contactId);
+        if (!summary) { summary = { latest: null, unread: 0, matches: false, pending: null }; summaries.set(message.contactId, summary); }
+        if (!summary.pending || summary.pending.createdAt.localeCompare(message.createdAt) < 0) summary.pending = message;
       }
       const activeContacts = state.contacts.filter(item => {
         if (item.archivedAt) return false;
@@ -712,7 +805,11 @@ const QmsMessenger = (() => {
         const unreadCount = summary.unread;
         if (unreadCount) { const unread = document.createElement('span'); unread.className = 'qms-unread'; unread.textContent = unreadCount > 99 ? '99+' : String(unreadCount); title.appendChild(unread); }
         const latest = summary.latest;
-        const preview = document.createElement('span'); preview.className = 'qms-contact-preview'; preview.textContent = latest ? `${latest.direction === 'out' ? 'You: ' : ''}${latest.text}` : `${short(item.fingerprint)} · ${item.verifiedAt ? 'verified' : 'unverified'}`;
+        const pending = summary.pending;
+        const preview = document.createElement('span'); preview.className = 'qms-contact-preview';
+        preview.textContent = pending && (!latest || latest.createdAt.localeCompare(pending.createdAt) < 0)
+          ? 'Encrypted message awaiting confirmation…'
+          : latest ? `${latest.direction === 'out' ? 'You: ' : ''}${latest.text}` : `${short(item.fingerprint)} · ${item.verifiedAt ? 'verified' : 'unverified'}`;
         button.append(title, preview);
         button.addEventListener('click', () => {
           if (selectedId === item.id && mobileConversationOpen) return;
@@ -749,10 +846,14 @@ const QmsMessenger = (() => {
     function renderMessages() {
       const item = contact();
       const messages = state.messages.filter(message => message.contactId === selectedId).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      const pending = pendingForContact(selectedId).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
       el('qms-chat-name').textContent = item ? item.name : 'Select a contact'; el('qms-chat-fingerprint').textContent = item ? item.fingerprint : '';
       const limit = messageLimits.get(selectedId) || MESSAGE_PAGE_SIZE;
       const visible = messages.slice(-limit);
-      const messageKey = JSON.stringify(visible.map(message => [message.id, message.status, message.createdAt, message.text]));
+      const messageKey = JSON.stringify({
+        messages: visible.map(message => [message.id, message.status, message.createdAt, message.text]),
+        pending: pending.map(message => [message.id, message.createdAt, message.txHashes])
+      });
       const list = el('qms-message-list');
       if (renderedContactId !== selectedId || renderedMessageKey !== messageKey) {
         const sameContact = renderedContactId === selectedId;
@@ -760,7 +861,7 @@ const QmsMessenger = (() => {
         const previousHeight = list.scrollHeight;
         const previousTop = list.scrollTop;
         list.replaceChildren();
-        if (!messages.length) list.appendChild(emptyNotice(item ? 'No messages in this chat yet.' : 'Import a personal invitation to begin.'));
+        if (!messages.length && !pending.length) list.appendChild(emptyNotice(item ? 'No messages in this chat yet.' : 'Import a personal invitation to begin.'));
         if (visible.length < messages.length) {
           const loadOlder = document.createElement('button');
           loadOlder.type = 'button';
@@ -784,6 +885,18 @@ const QmsMessenger = (() => {
           status.className = 'qms-message-status' + (['broadcast_unknown', 'recovery_required'].includes(message.status) ? ' error' : '');
           status.textContent = statusLabel(message.status);
           meta.append(who, when, status); bubble.appendChild(meta); row.appendChild(bubble); list.appendChild(row);
+        }
+        for (const message of pending) {
+          const row = document.createElement('div'); row.className = 'qms-message them qms-message-pending';
+          const bubble = document.createElement('div'); bubble.className = 'qms-bubble';
+          bubble.setAttribute('aria-label', 'Encrypted message awaiting confirmation');
+          const mosaic = document.createElement('div'); mosaic.className = 'qms-pending-mosaic'; mosaic.setAttribute('aria-hidden', 'true');
+          for (let index = 0; index < 7; index++) mosaic.appendChild(document.createElement('span'));
+          const notice = document.createElement('div'); notice.className = 'qms-pending-notice'; notice.textContent = 'Encrypted message awaiting confirmation';
+          const meta = document.createElement('div'); meta.className = 'qms-bubble-meta';
+          const who = document.createElement('span'); who.textContent = item ? item.name : 'Contact';
+          const status = document.createElement('span'); status.className = 'qms-message-status pending'; status.textContent = 'Mempool · 0 confirmations';
+          meta.append(who, status); bubble.append(mosaic, notice, meta); row.appendChild(bubble); list.appendChild(row);
         }
         if (nearBottom) list.scrollTop = list.scrollHeight;
         else list.scrollTop = previousTop + Math.max(0, list.scrollHeight - previousHeight);
@@ -1126,14 +1239,62 @@ const QmsMessenger = (() => {
     async function getScanner() {
       assertActive();
       if (!scannerPromise) {
-        scannerPromise = withTimeout(options.createScanner(), 'Messenger scanner startup').then(scanner => ({
-          getHeight: () => withTimeout(scanner.getHeight(), 'Messenger height request'),
-          getBlocksByRange: (start, end) => withTimeout(scanner.getBlocksByRange(start, end), `Messenger block request ${start}-${end}`)
-        })).catch(error => { scannerPromise = null; throw error; });
+        scannerPromise = withTimeout(options.createScanner(), 'Messenger scanner startup').then(scanner => {
+          const wrapped = {
+            getHeight: () => withTimeout(scanner.getHeight(), 'Messenger height request'),
+            getBlocksByRange: (start, end) => withTimeout(scanner.getBlocksByRange(start, end), `Messenger block request ${start}-${end}`)
+          };
+          if (typeof scanner.getTxPoolHashes === 'function' && typeof scanner.getMempoolTransactions === 'function') {
+            wrapped.getTxPoolHashes = () => withTimeout(scanner.getTxPoolHashes(), 'Messenger mempool hash request');
+            wrapped.getMempoolTransactions = hashes => withTimeout(scanner.getMempoolTransactions(hashes), 'Messenger mempool transaction request');
+          }
+          return wrapped;
+        }).catch(error => { scannerPromise = null; throw error; });
       }
       const scanner = await scannerPromise;
       assertActive();
       return scanner;
+    }
+    function stopMempoolScan() {
+      if (mempoolTimer) clearTimeout(mempoolTimer);
+      mempoolTimer = null;
+    }
+    function scheduleMempoolScan(delay = MEMPOOL_POLL_MS) {
+      stopMempoolScan();
+      if (closed || recovering || section.hidden || document.visibilityState === 'hidden') return;
+      mempoolTimer = setTimeout(() => {
+        mempoolTimer = null;
+        scanMempool().catch(() => {}).finally(() => scheduleMempoolScan());
+      }, Math.max(0, delay));
+    }
+    async function scanMempool() {
+      if (mempoolScanning || recovering || section.hidden || document.visibilityState === 'hidden') return;
+      mempoolScanning = true;
+      try {
+        const scanner = await getScanner();
+        if (!scanner.getTxPoolHashes || !scanner.getMempoolTransactions) return;
+        const hashes = await scanner.getTxPoolHashes(); assertActive();
+        if (!Array.isArray(hashes) || hashes.length > MAX_MEMPOOL_HASHES) {
+          mempoolTransactions.clear(); pendingInbox = []; renderedMessageKey = ''; render(); return;
+        }
+        const current = new Set(hashes);
+        let changed = false;
+        for (const hash of mempoolTransactions.keys()) if (!current.has(hash)) { mempoolTransactions.delete(hash); changed = true; }
+        const missing = hashes.filter(hash => !mempoolTransactions.has(hash));
+        for (let offset = 0; offset < missing.length; offset += MEMPOOL_FETCH_BATCH) {
+          const batch = missing.slice(offset, offset + MEMPOOL_FETCH_BATCH);
+          const transactions = await scanner.getMempoolTransactions(batch); assertActive();
+          for (const tx of transactions) {
+            if (tx && current.has(tx.hash)) { mempoolTransactions.set(tx.hash, tx); changed = true; }
+          }
+        }
+        if (!changed && !missing.length) return;
+        pendingInbox = pendingInboxFromTransactions(state, identity, invitationFromHex(state.ownInvitation), Array.from(mempoolTransactions.values()));
+        renderedMessageKey = '';
+        render();
+      } finally {
+        mempoolScanning = false;
+      }
     }
     async function scan() {
       if (scanning || recovering || !options.createScanner) return;
@@ -1253,6 +1414,9 @@ const QmsMessenger = (() => {
 
     return {
       async clear() {
+        stopMempoolScan();
+        pendingInbox = [];
+        mempoolTransactions.clear();
         if (uiSaveTimer) {
           clearTimeout(uiSaveTimer);
           uiSaveTimer = null;
@@ -1260,6 +1424,7 @@ const QmsMessenger = (() => {
         }
         closed = true;
         if (signal) signal.removeEventListener('abort', onAbort);
+        document.removeEventListener('visibilitychange', onVisibilityChange);
         selectedId = null;
         const messageInput = el('qms-message-input'); if (messageInput) messageInput.value = '';
         const messageList = el('qms-message-list'); if (messageList) messageList.replaceChildren();
@@ -1268,11 +1433,12 @@ const QmsMessenger = (() => {
         await closeStore();
       },
       scan,
-      resumeScan() { nextScanAt = 0; return scan(); }
+      scanMempool,
+      resumeScan() { nextScanAt = 0; scheduleMempoolScan(0); return scan(); }
     };
   }
 
-  return { mount, testing: { normalizeState, activePlan, acceptFragment, retryCompleteReassemblies, evictStaleInboundState, resetDeferredRescan, rollbackForReorg, validateBlockSequence, findCommonCheckpoint, removeDraft, recomputePlanStatus, releasePlanInputs, createOperationMutex, beginBroadcastAttempt, completeBroadcastAttempt, markBroadcastUnknown, relayPlan, statusLabel } };
+  return { mount, testing: { normalizeState, activePlan, acceptFragment, pendingInboxFromTransactions, retryCompleteReassemblies, evictStaleInboundState, resetDeferredRescan, rollbackForReorg, validateBlockSequence, findCommonCheckpoint, removeDraft, recomputePlanStatus, releasePlanInputs, createOperationMutex, beginBroadcastAttempt, completeBroadcastAttempt, markBroadcastUnknown, relayPlan, statusLabel } };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = QmsMessenger;

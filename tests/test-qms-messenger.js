@@ -249,6 +249,37 @@ async function test(name, fn) {
     assert.strictEqual(messenger.testing.acceptFragment(state, bob, bobInvite, fragments[0], {}), null);
   });
 
+  await test('complete authenticated mempool carriers expose only a transient confirmation placeholder', async () => {
+    const messageId = qms.random(16);
+    const secretText = 'plaintext must never enter the pending descriptor ' + 'x'.repeat(900);
+    const fragments = qms.fragmentCiphertext(bobInvite, messageId, qms.sealText(alice, bobInvite, messageId, secretText));
+    assert(fragments.length > 1, 'fixture must use multiple carrier transactions');
+    const aliceId = qms.hex(qms.fingerprint(alice.boxPublic, alice.signPublic));
+    const state = {
+      contacts: [{ id: aliceId, fingerprint: aliceId, invitationHex: invitationHex(qms, aliceInvite), verifiedAt: new Date().toISOString() }],
+      messages: [], plans: [], reassembly: [], unmatched: [], scan: { height: 0, blockHash: '' }
+    };
+    const before = JSON.stringify(state);
+    const transactions = fragments.map((fragment, index) => ({
+      hash: (index + 1).toString(16).padStart(64, '0'),
+      extra: Array.from(qms.carrierExtra(fragment)),
+      receivedTimestamp: 1700000000 + index
+    })).reverse();
+    const pending = messenger.testing.pendingInboxFromTransactions(state, bob, bobInvite, transactions);
+    assert.strictEqual(pending.length, 1);
+    assert.strictEqual(pending[0].id, qms.hex(messageId));
+    assert.strictEqual(pending[0].contactId, aliceId);
+    assert.strictEqual(pending[0].txHashes.length, fragments.length);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(pending[0], 'text'), false);
+    assert(!JSON.stringify(pending).includes(secretText), 'pending descriptors must not retain plaintext');
+    assert.strictEqual(JSON.stringify(state), before, 'mempool inspection must not mutate durable Messenger state');
+    assert.strictEqual(
+      messenger.testing.pendingInboxFromTransactions(state, bob, bobInvite, transactions.slice(1)).length,
+      0,
+      'an incomplete carrier set must not identify a contact-specific pending message'
+    );
+  });
+
   await test('dedicated per-contact recipient invitations remain compatible with the legacy bootstrap invitation', async () => {
     const dedicatedBobInvite = qms.createInvitation(bob);
     const messageId = qms.random(16);

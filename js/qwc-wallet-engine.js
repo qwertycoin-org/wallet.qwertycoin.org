@@ -6,6 +6,7 @@ const QwcWalletEngine = (() => {
   const WORKER_PATH = "/vendor/qwertycoin-ts/qwertycoin.worker.js?v=d8121227e81fe7d0";
   const REQUEST_TIMEOUT_MS = 180000;
   const DAEMON_CHUNK_BYTES = 3000000;
+  const MAX_MEMPOOL_TX_REQUEST = 128;
   let worker;
   let sequence = 0;
   const callbacks = new Map();
@@ -90,6 +91,25 @@ const QwcWalletEngine = (() => {
     return { uri: getDefaultDaemonUri() };
   }
 
+  async function postDaemonPath(path, payload) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);
+    try {
+      const response = await fetch(`${getDefaultDaemonUri()}/api/proxy?path=${encodeURIComponent(path)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload || {}),
+        signal: controller.signal
+      });
+      if (!response.ok) throw new Error(`QWC daemon request ${path} failed with HTTP ${response.status}`);
+      const body = await response.json();
+      if (!body || body.status !== "OK") throw new Error(`QWC daemon request ${path} returned an invalid response`);
+      return body;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
   function attachBlockHeaderHashes(blocks, headers, start, end) {
     if (!Array.isArray(blocks) || !Array.isArray(headers)) {
       throw new Error("QWC daemon returned an invalid Messenger block range");
@@ -135,6 +155,41 @@ const QwcWalletEngine = (() => {
       }
       return Object.assign({}, block, { hash: header.hash });
     });
+  }
+
+  function normalizeMempoolHashes(hashes) {
+    if (!Array.isArray(hashes)) throw new Error("QWC daemon returned an invalid transaction-pool hash list");
+    const unique = new Set();
+    for (const hash of hashes) {
+      if (typeof hash !== "string" || !/^[0-9a-f]{64}$/i.test(hash)) {
+        throw new Error("QWC daemon returned an invalid transaction-pool hash");
+      }
+      unique.add(hash.toLowerCase());
+    }
+    return Array.from(unique);
+  }
+
+  function normalizeMempoolTransactions(response, requestedHashes) {
+    if (!response) throw new Error("QWC daemon returned invalid transaction-pool data");
+    const responseTransactions = response.txs === undefined ? [] : response.txs;
+    if (!Array.isArray(responseTransactions)) throw new Error("QWC daemon returned invalid transaction-pool data");
+    const requested = new Set(requestedHashes);
+    const transactions = [];
+    for (const tx of responseTransactions) {
+      const hash = tx && tx.tx_hash;
+      if (typeof hash !== "string" || !/^[0-9a-f]{64}$/i.test(hash) || tx.in_pool !== true) continue;
+      const normalizedHash = hash.toLowerCase();
+      if (!requested.has(normalizedHash) || typeof tx.as_json !== "string") continue;
+      let decoded;
+      try { decoded = JSON.parse(tx.as_json); } catch (_) { continue; }
+      if (!decoded || !Array.isArray(decoded.extra)) continue;
+      transactions.push({
+        hash: normalizedHash,
+        extra: decoded.extra,
+        receivedTimestamp: Number(tx.received_timestamp || 0)
+      });
+    }
+    return transactions;
   }
 
   async function createWallet(config, method, canSign = true) {
@@ -187,6 +242,26 @@ const QwcWalletEngine = (() => {
       }]);
       return {
         getHeight: () => invoke(daemonId, "daemonGetHeight", []),
+        getTxPoolHashes: async () => {
+          const response = await postDaemonPath("/get_transaction_pool_hashes.bin", {});
+          return normalizeMempoolHashes(response.tx_hashes === undefined ? [] : response.tx_hashes);
+        },
+        getMempoolTransactions: async hashes => {
+          const normalized = normalizeMempoolHashes(hashes);
+          if (normalized.length > MAX_MEMPOOL_TX_REQUEST) {
+            throw new Error(`Messenger transaction-pool request exceeds ${MAX_MEMPOOL_TX_REQUEST} hashes`);
+          }
+          if (!normalized.length) return [];
+          return normalizeMempoolTransactions(
+            await postDaemonPath("/get_transactions", {
+              txs_hashes: normalized,
+              decode_as_json: true,
+              prune: true,
+              split: false
+            }),
+            normalized
+          );
+        },
         getBlocksByRange: async (start, end) => {
           const [blocks, headers] = await Promise.all([
             invoke(daemonId, "daemonGetBlocksByRangeChunked", [start, end, DAEMON_CHUNK_BYTES]),

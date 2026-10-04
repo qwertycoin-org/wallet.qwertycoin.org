@@ -33,14 +33,16 @@ the Core protocol test “Desktop”.
 
 ## Automated evidence
 
-- 44 wallet/compatibility tests
-- 15 presentation-contract tests
+- 45 wallet/compatibility tests
+- 18 presentation-contract tests
 - message-signing and actual bundled worker/WASM custom-`tx_extra` bridge
-- 33 QMS1 protocol/store/scanner/outbox tests
+- 34 QMS1 protocol/store/scanner/outbox tests, including authenticated mempool
+  placeholders without plaintext or durable-state mutation
 - real Chromium, Firefox and WebKit IndexedDB, Web Locks, password rotation and
   KDF-worker tests
 - real Chromium, Firefox and WebKit chat, pagination, drafts, unread/filter,
-  invitation QR/file, verification gate and 390 px navigation tests
+  invitation QR/file, verification gate, mempool arrival/drop/confirmation
+  transitions and 390 px navigation tests
 - Core `a62ac68…` focused suite: 9/9
 - temporary cross-language probe: Web carrier opened by Core; Core reply carrier
   opened by Web

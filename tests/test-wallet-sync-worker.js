@@ -62,6 +62,19 @@ function transactionExtras(block) {
     );
     const scanner = await QwcWalletEngine.createDaemonScanner();
     const scannerHeight = await scanner.getHeight();
+    const mempoolHashes = await scanner.getTxPoolHashes();
+    assert(Array.isArray(mempoolHashes), 'Messenger scanner must return transaction-pool hashes');
+    for (const hash of mempoolHashes) assert.match(hash, /^[0-9a-f]{64}$/, 'Messenger scanner returned an invalid transaction-pool hash');
+    const mempoolSample = mempoolHashes.slice(0, 4);
+    const mempoolTransactions = await scanner.getMempoolTransactions(mempoolSample);
+    assert(Array.isArray(mempoolTransactions), 'Messenger scanner must return transaction-pool transactions');
+    for (const tx of mempoolTransactions) {
+      assert(mempoolSample.includes(tx.hash), 'Messenger scanner returned an unrequested transaction-pool transaction');
+      assert((Array.isArray(tx.extra) && tx.extra.length > 0) || (typeof tx.extraHex === 'string' && tx.extraHex.length > 0),
+        'Messenger transaction-pool transaction has no extra');
+    }
+    const absentMempoolTransactions = await scanner.getMempoolTransactions(['00'.repeat(32)]);
+    assert.deepStrictEqual(absentMempoolTransactions, [], 'unknown transaction-pool hashes must not create carrier records');
     const blocks = await scanner.getBlocksByRange(scannerHeight - 1, scannerHeight - 1);
     assert(Array.isArray(blocks) && blocks.length === 1, 'Messenger scanner must return the requested block');
     assert.strictEqual(Number(blocks[0].height), scannerHeight - 1, 'Messenger scanner returned the wrong block');

@@ -136,11 +136,15 @@ const QmsProtocol = (() => {
     const textSize = readU32(body, p); p += 4; if (textSize > C.MAX_TEXT_BYTES || p + textSize !== body.length) throw new Error('invalid QMS text size');
     return { body, signature, messageId, invitationId: ownInvitation.invitationId, senderFingerprint, textBytes: take(textSize) };
   }
-  function authenticateTextEnvelope(opened, sender) {
+  function authenticateTextEnvelopeMetadata(opened, sender) {
     if (!opened || !verifyInvitation(sender) || !equal(sender.genesis, genesis())) throw new Error('untrusted QMS sender invitation');
     if (!equal(opened.senderFingerprint, fingerprint(sender.boxPublic, sender.signPublic))) throw new Error('QMS pinned sender fingerprint mismatch');
     if (!sodiumApi().crypto_sign_verify_detached(opened.signature, opened.body, sender.signPublic)) throw new Error('QMS sender signature verification failed');
-    return { messageId: opened.messageId, invitationId: opened.invitationId, text: td.decode(opened.textBytes) };
+    return { messageId: opened.messageId, invitationId: opened.invitationId };
+  }
+  function authenticateTextEnvelope(opened, sender) {
+    const authenticated = authenticateTextEnvelopeMetadata(opened, sender);
+    return { messageId: authenticated.messageId, invitationId: authenticated.invitationId, text: td.decode(opened.textBytes) };
   }
   function openText(identity, sender, ownInvitation, expectedMessageId, ciphertext) {
     return authenticateTextEnvelope(openTextEnvelope(identity, ownInvitation, expectedMessageId, ciphertext), sender);
@@ -248,7 +252,7 @@ const QmsProtocol = (() => {
     } return result;
   }
 
-  return { C, ready, hex, unhex, equal, random, genesis, fingerprint, createIdentity, createInvitation, encodeInvitation, decodeInvitation, verifyInvitation, sealText, openTextEnvelope, authenticateTextEnvelope, openText, fragmentCiphertext, encodeFragment, decodeFragment, verifyFragment, reassemble, encodeSegments, decodeSegments, carrierExtra, extractSegmentsFromExtra };
+  return { C, ready, hex, unhex, equal, random, genesis, fingerprint, createIdentity, createInvitation, encodeInvitation, decodeInvitation, verifyInvitation, sealText, openTextEnvelope, authenticateTextEnvelopeMetadata, authenticateTextEnvelope, openText, fragmentCiphertext, encodeFragment, decodeFragment, verifyFragment, reassemble, encodeSegments, decodeSegments, carrierExtra, extractSegmentsFromExtra };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = QmsProtocol;
