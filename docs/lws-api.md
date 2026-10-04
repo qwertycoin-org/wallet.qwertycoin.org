@@ -122,7 +122,7 @@ Called every ~30 seconds by the dashboard while the wallet view is open.
 
 The dashboard computes the **available balance** as
 `total_received - total_sent - locked_funds` (parsed from atomic string,
-displayed via `MoneroRPC.formatXMR()`).
+displayed via `QwertycoinRPC.formatQWC()`).
 
 The dashboard shows a **scanning indicator** while
 `scanned_height < blockchain_height`. The percentage is
@@ -172,7 +172,7 @@ Get the transaction history for the wallet.
 
 The dashboard renders this as a list newest-first with
 direction (received/sent) inferred from `total_received` vs `total_sent`,
-amount via `formatXMR()`, confirmations via
+amount via `formatQWC()`, confirmations via
 `blockchain_height - height`, and a click-to-expand for the rest.
 
 ---

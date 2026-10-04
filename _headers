@@ -9,11 +9,11 @@
   # Inline <script> blocks are forbidden; use external .js files.
   #
   # 'wasm-unsafe-eval' is needed for the vendored, CryptoNote-compatible
-  # MyMonero Core WebAssembly module that builds and signs Qwertycoin
-  # transactions client-side. The inherited upstream name is retained for
-  # compatibility and attribution.
+  # Qwertycoin Core WebAssembly module that builds and signs transactions
+  # client-side. Its upstream origin remains documented with the vendored
+  # artifact and preserved license.
   # 'unsafe-eval' is required because the Emscripten-generated JS glue code
-  # (MyMoneroCoreCpp_WASM.js) uses new Function() internally for error type
+  # (qwertycoin-core-wasm.js) uses new Function() internally for error type
   # registration. This is an Emscripten limitation — the WASM binary itself
   # only needs 'wasm-unsafe-eval', but the JS bootstrap won't load without
   # 'unsafe-eval'. Restricting script URLs to 'self' narrows exposure, but

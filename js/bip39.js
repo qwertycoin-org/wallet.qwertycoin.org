@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: MIT
 /**
- * bip39.js — BIP-39 → SLIP-0010 (ed25519) → Monero spend key
+ * bip39.js — BIP-39 → SLIP-0010 (ed25519) → Qwertycoin spend key
  *
- * Standard BIP-39 wallets (12/15/18/21/24 words) derive a Monero key via:
+ * Supported BIP-39 wallets (12/15/18/21/24 words) derive a Qwertycoin key via:
  *   1. mnemonic → PBKDF2-SHA512(passphrase = "mnemonic" + user_passphrase,
  *                                iterations = 2048, dkLen = 64) → seed
  *   2. SLIP-0010 master:  HMAC-SHA512("ed25519 seed", seed)
  *      → IL = key (32), IR = chain code (32)
- *   3. Hardened-only path m/44'/128'/0' (Monero coin type per SLIP-0044 = 128)
+ *   3. Hardened-only compatibility path m/44'/128'/0' (inherited SLIP-0044 type 128)
  *      Each step:  I = HMAC-SHA512(parent_chaincode,
  *                                  0x00 || parent_key || ser32(0x80000000+i))
- *   4. The final 32-byte key is fed to MoneroKeys.deriveFromSeed.
+ *   4. The final 32-byte key is fed to QwertycoinKeys.deriveFromSeed.
  *
  * All hashing uses SubtleCrypto, so the public entry point is async.
  *
@@ -21,8 +21,8 @@ const Bip39 = (function () {
   'use strict';
 
   const HARDENED = 0x80000000;
-  // m / 44' / 128' / 0'  — Monero per SLIP-0044
-  const MONERO_PATH = [44, 128, 0];
+  // m / 44' / 128' / 0' — inherited compatibility path
+  const QWERTYCOIN_COMPAT_PATH = [44, 128, 0];
 
   function validateMnemonic(words) {
     const valid = [12, 15, 18, 21, 24];
@@ -100,12 +100,12 @@ const Bip39 = (function () {
 
   /**
    * Walk the m/44'/128'/0' path and return the leaf 32-byte key.
-   * This 32-byte value becomes the Monero seed (still requires sc_reduce32).
+   * This 32-byte value becomes the Qwertycoin seed (still requires sc_reduce32).
    */
   async function deriveSpendSeed(mnemonic, passphrase) {
     const seed = await mnemonicToSeed(mnemonic, passphrase);
     let node = await slip10Master(seed);
-    for (const i of MONERO_PATH) {
+    for (const i of QWERTYCOIN_COMPAT_PATH) {
       node = await slip10ChildHardened(node, i);
     }
     return node.key;

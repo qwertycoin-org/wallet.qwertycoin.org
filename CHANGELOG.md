@@ -1,10 +1,18 @@
 # Changelog
 
-All notable changes to monero-web are documented here.
+All notable changes to Qwertycoin Web Wallet are documented here.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Changed
+- Renamed all project-owned browser modules, worker/WASM entry points,
+  JavaScript globals, CSS identifiers, storage namespaces and public build
+  artifacts to Qwertycoin terminology. Existing tab-scoped vaults and
+  subaddress books are migrated from their legacy storage keys on first use.
+- Preserved upstream copyright notices, license texts, provenance records and
+  compatibility-sensitive names inside pinned third-party implementations.
 
 ### Added
 - Added local Qwertycoin spend-key message signing and signature verification
@@ -26,7 +34,7 @@ and uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   browsers cannot combine newly deployed header markup with stale pre-header
   assets and expose the accessibility label instead of the burger control.
 - Versioned the Qwertycoin Open Graph image URL so social clients no longer
-  reuse the cached Monero-Web preview inherited from the original project.
+  reuse a cached preview inherited from the original project.
 
 ## [0.1.0] — 2026-04-09
 
@@ -85,7 +93,7 @@ First public release after the move from Netlify to Cloudflare Pages.
   donation address across README, index, and the QR SVG without drift.
 
 ### Added — docs
-- README threat model — explicit list of what monero-web protects against
+- README threat model — explicit list of what the web wallet protects against
   and what it does not.
 - `SECURITY.md` with disclosure policy + GitHub PVR + email channel.
 - SPDX license headers on every JS file.
@@ -118,5 +126,5 @@ First public release after the move from Netlify to Cloudflare Pages.
   round-trips, network byte selection, and the WalletVault encrypt /
   decrypt / wrong-password paths.
 
-[Unreleased]: https://github.com/Medtabka/monero-web/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/Medtabka/monero-web/releases/tag/v0.1.0
+[Unreleased]: https://github.com/qwertycoin-org/wallet.qwertycoin.org/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/qwertycoin-org/wallet.qwertycoin.org/releases/tag/v0.1.0

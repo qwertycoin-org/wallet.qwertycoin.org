@@ -27,7 +27,9 @@
 const WalletVault = (function () {
   'use strict';
 
-  const STORAGE_KEY = 'monero-web-wallet';
+  const STORAGE_KEY = 'qwertycoin-web-wallet';
+  const LEGACY_STORAGE_KEY = 'monero-web-wallet';
+  const FRESH_WALLET_KEY = 'qwertycoin-web-fresh-wallet';
   const PBKDF2_ITERATIONS = 250000;
   const QMS_PWHASH_OPSLIMIT = 2;
   const QMS_PWHASH_MEMLIMIT = 64 * 1024 * 1024;
@@ -175,13 +177,14 @@ const WalletVault = (function () {
     // here so it's impossible to miss regardless of which UI button
     // triggers the store.
     if (keys && keys.createdAtCurrentTip) {
-      try { sessionStorage.setItem('monero-web-fresh-wallet', '1'); } catch (e) {}
+      try { sessionStorage.setItem(FRESH_WALLET_KEY, '1'); } catch (e) {}
     }
     if (!password) {
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
         encrypted: false,
         keys
       }));
+      sessionStorage.removeItem(LEGACY_STORAGE_KEY);
       return;
     }
     const salt = crypto.getRandomValues(new Uint8Array(16));
@@ -214,10 +217,18 @@ const WalletVault = (function () {
     };
     if (qmsKdf) envelope.qmsKdf = qmsKdf;
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(envelope));
+    sessionStorage.removeItem(LEGACY_STORAGE_KEY);
   }
 
   function readBlob() {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
+    let raw = sessionStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      raw = sessionStorage.getItem(LEGACY_STORAGE_KEY);
+      if (raw) {
+        sessionStorage.setItem(STORAGE_KEY, raw);
+        sessionStorage.removeItem(LEGACY_STORAGE_KEY);
+      }
+    }
     if (!raw) return null;
     try { return JSON.parse(raw); } catch (e) { return null; }
   }
@@ -347,6 +358,7 @@ const WalletVault = (function () {
     replaceQmsUnlockKey(null);
     replaceQmsKdfMetadata(null);
     sessionStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(LEGACY_STORAGE_KEY);
   }
 
   return { store, hasBlob, isLocked, readPlain, unlock, preparePasswordChange, qmsKey, qmsKdf, hasQmsKey, clear };

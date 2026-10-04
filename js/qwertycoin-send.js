@@ -1,25 +1,25 @@
 // SPDX-License-Identifier: MIT
 /**
- * monero-send.js — Send-transaction module for monero-web
+ * qwertycoin-send.js — Send-transaction module for Qwertycoin Web Wallet
  *
- * Uses MoneroCore (mymonero-loader.js) for address validation and tx signing.
+ * Uses QwertycoinCore (qwertycoin-core-loader.js) for address validation and tx signing.
  * Output selection and fee calculation are done in pure JS to avoid the
  * async callback issue with the WASM's send_funds() function.
  *
  * Public API:
- *   MoneroSend.validateAddress(addr)        → { valid, reason, subaddress, integrated }
- *   MoneroSend.estimateFee(keys, to, amt, prio)  → { fee_xmr, fee_atomic, per_byte }
- *   MoneroSend.send(keys, to, amt, prio, pid, preview) → Promise<{ tx_hash }>
+ *   QwertycoinSend.validateAddress(addr)        → { valid, reason, subaddress, integrated }
+ *   QwertycoinSend.estimateFee(keys, to, amt, prio)  → { fee_qwc, fee_atomic, per_byte }
+ *   QwertycoinSend.send(keys, to, amt, prio, pid, preview) → Promise<{ tx_hash }>
  *
  * Depends on:
- *   js/mymonero-loader.js  (MoneroCore — WASM bridge for sendStep2)
+ *   js/qwertycoin-core-loader.js  (QwertycoinCore — WASM bridge for sendStep2)
  *   js/lws-client.js       (LwsClient for network I/O)
  */
 
-const MoneroSend = (function () {
+const QwertycoinSend = (function () {
   'use strict';
 
-  const ATOMIC_PER_XMR = 100000000n;
+  const ATOMIC_PER_QWC = 100000000n;
   const DEFAULT_MIXIN = 15;
 
   // ── Address validation (no WASM needed) ───────────────────────────
@@ -43,20 +43,20 @@ const MoneroSend = (function () {
 
   // ── Amount helpers ────────────────────────────────────────────────
 
-  function xmrToAtomic (xmrStr) {
-    var s = String(xmrStr).trim().replace(',', '.'); // accept comma as decimal separator
+  function qwcToAtomic (qwcStr) {
+    var s = String(qwcStr).trim().replace(',', '.'); // accept comma as decimal separator
     if (!s) return '0';
     if (!/^[0-9]+(\.[0-9]+)?$/.test(s)) throw new Error('Invalid QWC amount');
     var parts = s.split('.');
     var whole = parts[0] || '0';
     var frac = (parts[1] || '').padEnd(8, '0').substring(0, 8);
-    return (BigInt(whole) * ATOMIC_PER_XMR + BigInt(frac)).toString();
+    return (BigInt(whole) * ATOMIC_PER_QWC + BigInt(frac)).toString();
   }
 
-  function atomicToXmr (atomic) {
+  function atomicToQwc (atomic) {
     var n = BigInt(String(atomic || '0'));
-    var whole = n / ATOMIC_PER_XMR;
-    var frac = n % ATOMIC_PER_XMR;
+    var whole = n / ATOMIC_PER_QWC;
+    var frac = n % ATOMIC_PER_QWC;
     if (frac === 0n) return whole.toString();
     var fracStr = frac.toString().padStart(8, '0').replace(/0+$/, '');
     return whole.toString() + '.' + fracStr;
@@ -67,7 +67,7 @@ const MoneroSend = (function () {
   var PRIO_MULT = { 1: 1, 2: 4, 3: 20, 4: 166 };
   var TYPICAL_TX_BYTES = 2000;
 
-  async function estimateFee (walletKeys, toAddress, xmrAmount, priority) {
+  async function estimateFee (walletKeys, toAddress, qwcAmount, priority) {
     // mixin=0: fetch ALL outputs regardless of their historical ring size.
     // Old RingCT outputs received in low-mixin txs (2019-2021 era) are perfectly
     // spendable in modern transactions — LWS's mixin filter incorrectly hides them.
@@ -88,7 +88,7 @@ const MoneroSend = (function () {
 
     return {
       fee_atomic: feeAtomic.toString(),
-      fee_xmr: LwsClient.formatXmr(feeAtomic),
+      fee_qwc: LwsClient.formatQwc(feeAtomic),
       per_byte: (perKbFee / 1024n).toString(),
       _unspentResp: outs,
     };
@@ -96,18 +96,18 @@ const MoneroSend = (function () {
 
   // ── Send transaction ──────────────────────────────────────────────
 
-  async function send (walletKeys, toAddress, xmrAmount, priority, paymentId, preview) {
+  async function send (walletKeys, toAddress, qwcAmount, priority, paymentId, preview) {
     if (paymentId && !/^(?:[0-9a-fA-F]{16}|[0-9a-fA-F]{64})$/.test(String(paymentId).trim())) {
       throw new Error('Payment ID must be 16 or 64 hex characters');
     }
 
     try {
-      await MoneroCore.load();
+      await QwertycoinCore.load();
     } catch (e) {
       throw new Error('Transaction signing requires a component that could not load. Try disabling ad blockers or use a different browser.');
     }
 
-    var amountAtomic = BigInt(xmrToAtomic(xmrAmount));
+    var amountAtomic = BigInt(qwcToAtomic(qwcAmount));
 
     // 1. Always fetch fresh unspent outputs (never use cached preview —
     // the LWS state can change between Review and Confirm steps).
@@ -134,7 +134,7 @@ const MoneroSend = (function () {
     // the real key_image and check if it truly appears in the spend list.
     //
     // Also skip pre-RingCT outputs (empty rct field): those were created
-    // before Monero's v9 hard fork (Oct 2018) and cannot be included in
+    // before the inherited protocol's v9 hard fork (Oct 2018) and cannot be included in
     // modern RingCT transactions regardless of their unspent status.
     var spendableOuts = [];
     for (var oi = 0; oi < unspentResp.outputs.length; oi++) {
@@ -150,7 +150,7 @@ const MoneroSend = (function () {
       } else {
         // Has spend reports — verify with key_image
         try {
-          var realKI = MoneroCore.generateKeyImage(
+          var realKI = QwertycoinCore.generateKeyImage(
             o.tx_pub_key,
             walletKeys.privateViewKeyHex,
             walletKeys.publicSpendKeyHex,
@@ -192,8 +192,8 @@ const MoneroSend = (function () {
 
     if (totalAvailable < amountAtomic + BigInt(estFee)) {
       throw new Error('Insufficient funds: need ' +
-        atomicToXmr((amountAtomic + BigInt(estFee)).toString()) +
-        ' QWC but only have ' + atomicToXmr(totalAvailable.toString()) + ' QWC');
+        atomicToQwc((amountAtomic + BigInt(estFee)).toString()) +
+        ' QWC but only have ' + atomicToQwc(totalAvailable.toString()) + ' QWC');
     }
 
     var feeAmount = BigInt(estFee);
@@ -248,13 +248,13 @@ const MoneroSend = (function () {
 
     var step2Result;
     try {
-      step2Result = MoneroCore.sendStep2(step2Params);
+      step2Result = QwertycoinCore.sendStep2(step2Params);
     } catch (e) {
       var msg = 'Transaction signing failed';
       if (typeof e === 'number') {
         // WASM C++ exception — try to read error string
         try {
-          var mod = MoneroCore._getModule ? MoneroCore._getModule() : null;
+          var mod = QwertycoinCore._getModule ? QwertycoinCore._getModule() : null;
           if (mod && mod.UTF8ToString) msg = mod.UTF8ToString(e) || msg;
         } catch (x) {}
         console.error('[send] WASM signing exception (ptr ' + e + '):', msg);
@@ -306,4 +306,4 @@ const MoneroSend = (function () {
   return { validateAddress: validateAddress, estimateFee: estimateFee, send: send };
 })();
 
-if (typeof module !== 'undefined' && module.exports) module.exports = MoneroSend;
+if (typeof module !== 'undefined' && module.exports) module.exports = QwertycoinSend;

@@ -1,4 +1,9 @@
-# Login Tracker Setup (VPS)
+# Archived legacy login-tracker setup
+
+> **Historical reference only.** This directory documents the retired LWS
+> deployment inherited by the project. It is not part of the Qwertycoin Web
+> Wallet build or the current `wallet-rpc.qwertycoin.org` gateway. Do not
+> deploy these files for the current wallet.
 
 ## 1. Copy files to server
 

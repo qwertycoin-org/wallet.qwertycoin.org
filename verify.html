@@ -32,7 +32,7 @@
   --bg:#071327; --surface:#0f274c; --surface-2:#173762; --surface-3:#f4f8fd;
   --border:rgba(217,232,251,0.18); --border-strong:rgba(255,255,255,0.32);
   --border-focus:rgba(255,175,0,0.56); --text:#ffffff; --text-dim:#a9bdd7; --text-mid:#d9e8fb;
-  --xmr:#ffaf00; --xmr-dim:rgba(255,175,0,0.14); --xmr-glow:rgba(255,175,0,0.24);
+  --qwc:#ffaf00; --qwc-dim:rgba(255,175,0,0.14); --qwc-glow:rgba(255,175,0,0.24);
   --primary:#1465b7; --primary-dark:#0b4f96; --success:#22c55e; --danger:#ef4444; --radius-sm:8px;
   --font-sans:'Open Sans',ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
   --font-display:'Montserrat',ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
@@ -69,7 +69,7 @@ nav{min-height:86px;padding:16px 0;display:flex;align-items:center;justify-conte
 .tabs{display:flex;background:rgba(7,19,39,0.52);border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px;margin-bottom:22px}
 .tab{flex:1;padding:13px 10px;text-align:center;font-size:.82rem;font-weight:700;color:var(--text-dim);border-radius:6px;cursor:pointer;transition:all .25s;border:none;background:none;font-family:var(--font-display)}
 .tab:hover{color:var(--text)}
-.tab.active{background:var(--xmr);color:#201200;box-shadow:0 8px 24px rgba(255,175,0,.18)}
+.tab.active{background:var(--qwc);color:#201200;box-shadow:0 8px 24px rgba(255,175,0,.18)}
 
 .form-section{display:none}
 .form-section.active{display:block}
@@ -79,19 +79,19 @@ nav{min-height:86px;padding:16px 0;display:flex;align-items:center;justify-conte
 .input-group label .hint{font-weight:400;color:var(--text-dim);font-size:.72rem;text-align:right}
 .input-group textarea{width:100%;background:rgba(7,19,39,0.58);border:1px solid var(--border);border-radius:var(--radius-sm);padding:15px 16px;font-family:'JetBrains Mono',monospace;font-size:.82rem;line-height:1.7;color:var(--text);resize:none;outline:none;transition:border-color .25s,box-shadow .25s;min-height:128px}
 .input-group textarea::placeholder{color:var(--text-dim);font-family:'JetBrains Mono',monospace}
-.input-group textarea:focus{border-color:var(--border-focus);box-shadow:0 0 0 3px var(--xmr-dim)}
+.input-group textarea:focus{border-color:var(--border-focus);box-shadow:0 0 0 3px var(--qwc-dim)}
 .input-group input{width:100%;background:rgba(7,19,39,0.58);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;font-family:'JetBrains Mono',monospace;font-size:.8rem;color:var(--text);outline:none;transition:border-color .25s,box-shadow .25s}
 .input-group input::placeholder{color:var(--text-dim)}
-.input-group input:focus{border-color:var(--border-focus);box-shadow:0 0 0 3px var(--xmr-dim)}
+.input-group input:focus{border-color:var(--border-focus);box-shadow:0 0 0 3px var(--qwc-dim)}
 
 .seed-status-row{display:flex;align-items:center;justify-content:space-between;margin-top:6px}
 .word-count{font-size:.72rem;color:var(--text-dim);font-family:'JetBrains Mono',monospace}
-.word-count .count{color:var(--xmr);font-weight:600}
+.word-count .count{color:var(--qwc);font-weight:600}
 .word-count.valid .count{color:var(--success)}
 .seed-format-badge{font-size:.68rem;font-weight:600;padding:3px 10px;border-radius:100px;letter-spacing:.03em}
-.seed-format-badge.standard{background:var(--xmr-dim);border:1px solid rgba(255,175,0,0.15);color:var(--xmr)}
+.seed-format-badge.standard{background:var(--qwc-dim);border:1px solid rgba(255,175,0,0.15);color:var(--qwc)}
 
-.btn-primary{width:100%;padding:15px;background:var(--xmr);color:#201200;font-family:var(--font-display);font-size:.9rem;font-weight:800;border:none;border-radius:var(--radius-sm);cursor:pointer;transition:all .25s;box-shadow:0 10px 28px var(--xmr-glow);display:flex;align-items:center;justify-content:center;gap:8px;text-transform:uppercase}
+.btn-primary{width:100%;padding:15px;background:var(--qwc);color:#201200;font-family:var(--font-display);font-size:.9rem;font-weight:800;border:none;border-radius:var(--radius-sm);cursor:pointer;transition:all .25s;box-shadow:0 10px 28px var(--qwc-glow);display:flex;align-items:center;justify-content:center;gap:8px;text-transform:uppercase}
 .btn-primary:hover{background:#ffc247;transform:translateY(-1px)}
 .btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
 
@@ -101,14 +101,14 @@ nav{min-height:86px;padding:16px 0;display:flex;align-items:center;justify-conte
 .result-card{background:rgba(7,19,39,0.58);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;margin-bottom:12px}
 .result-card .result-label{font-size:.7rem;font-weight:500;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between}
 .result-card .result-value{font-family:'JetBrains Mono',monospace;font-size:.75rem;color:var(--text);word-break:break-all;line-height:1.6;user-select:all}
-.result-card .result-value.address{color:var(--xmr);font-size:.8rem;font-weight:500}
+.result-card .result-value.address{color:var(--qwc);font-size:.8rem;font-weight:500}
 .copy-btn{background:none;border:1px solid var(--border);border-radius:6px;padding:3px 10px;font-size:.65rem;color:var(--text-dim);cursor:pointer;font-family:var(--font-display);transition:all .2s}
 .copy-btn:hover{color:var(--text);border-color:rgba(255,255,255,.15)}
 .copy-btn.copied{color:var(--success);border-color:rgba(34,197,94,.3)}
 
 .result-match{display:flex;align-items:center;gap:8px;padding:12px 16px;border-radius:var(--radius-sm);margin-bottom:12px;font-size:.8rem;font-weight:500}
 .result-match.success{background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.15);color:#4ade80}
-.result-match.info{background:var(--xmr-dim);border:1px solid rgba(255,175,0,0.12);color:var(--xmr)}
+.result-match.info{background:var(--qwc-dim);border:1px solid rgba(255,175,0,0.12);color:var(--qwc)}
 
 .error-msg{background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.15);color:#f87171;padding:12px 16px;border-radius:var(--radius-sm);font-size:.8rem;margin-top:12px;display:none}
 .error-msg.show{display:block}
@@ -149,7 +149,7 @@ footer p{font-size:.7rem;color:var(--text-dim)}
   .security-notice p{font-size:.7rem}
 }
 </style>
-<link rel="stylesheet" href="/assets/wallet-ui.50dd4ba.css">
+<link rel="stylesheet" href="/assets/wallet-ui.d2fe472d.css">
 </head>
 <body class="wallet-app wallet-verify">
 
@@ -308,7 +308,7 @@ footer p{font-size:.7rem;color:var(--text-dim)}
             </select>
           </div>
           <div class="security-notice" style="border-color:rgba(255,175,0,0.15)">
-            <svg fill="none" stroke="var(--xmr)" stroke-width="2" viewBox="0 0 24 24" style="width:20px;height:20px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <svg fill="none" stroke="var(--qwc)" stroke-width="2" viewBox="0 0 24 24" style="width:20px;height:20px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
             <p><strong>This creates a brand new Qwertycoin wallet.</strong> A 25-word seed phrase will be generated using your browser's cryptographic random number generator. Write it down and store it safely — it's the only way to recover your wallet.</p>
           </div>
 
@@ -320,7 +320,7 @@ footer p{font-size:.7rem;color:var(--text-dim)}
           <div id="create-result" style="display:none;margin-top:20px">
             <div class="result-match info">◆ New wallet created — write down your seed phrase!</div>
             <div class="result-card" style="border-color:rgba(255,175,0,0.2);background:rgba(255,175,0,0.04)">
-              <div class="result-label" style="color:var(--xmr)">Your Seed Phrase — WRITE THIS DOWN <button class="copy-btn" data-target="create-mnemonic">Copy</button></div>
+              <div class="result-label" style="color:var(--qwc)">Your Seed Phrase — WRITE THIS DOWN <button class="copy-btn" data-target="create-mnemonic">Copy</button></div>
               <div class="result-value" id="create-mnemonic" style="font-size:.82rem;line-height:2;color:var(--text)"></div>
             </div>
             <div class="result-card">
@@ -346,7 +346,7 @@ footer p{font-size:.7rem;color:var(--text-dim)}
           <div class="result-match info" id="result-format"></div>
 
           <div class="result-card" id="res-mnemonic-card" style="display:none;border-color:rgba(255,175,0,0.2);background:rgba(255,175,0,0.04)">
-            <div class="result-label" style="color:var(--xmr)">Recovered 25-word Mnemonic <button class="copy-btn" data-target="res-mnemonic">Copy</button></div>
+            <div class="result-label" style="color:var(--qwc)">Recovered 25-word Mnemonic <button class="copy-btn" data-target="res-mnemonic">Copy</button></div>
             <div class="result-value" id="res-mnemonic" style="font-size:.78rem;line-height:1.9;color:var(--text);word-spacing:.15em"></div>
             <div style="font-size:.7rem;color:var(--text-dim);margin-top:8px;line-height:1.5">The standard 25-word QWC phrase is a reversible encoding of your spend key — write this down for backup.</div>
           </div>
@@ -386,16 +386,16 @@ footer p{font-size:.7rem;color:var(--text-dim)}
 <!-- Crypto engine (order matters) -->
 <script src="/js/nav-menu.f152d12.js"></script>
 <script src="js/keccak256.js"></script>
-<script src="js/monero-ed25519.js"></script>
-<script src="js/monero-wordlist.js"></script>
-<script src="js/monero-keys.js"></script>
+<script src="js/qwertycoin-ed25519.js"></script>
+<script src="js/qwertycoin-wordlist.js"></script>
+<script src="js/qwertycoin-keys.js"></script>
 <script src="vendor/libsodium/libsodium-sumo.js?v=a3d0b7eb2c24ba6b"></script>
 <script src="vendor/libsodium/libsodium-wrappers.js?v=4e2c5442899321d7"></script>
 <script src="js/qms-kdf.js?v=02a7aefd8e5bbd95"></script>
-<script src="js/wallet-vault.js?v=1ec0d9034abb7b27"></script>
+<script src="js/wallet-vault.js?v=ec7a828b1cd56b46"></script>
 <script src="js/lws-client.js"></script>
-<script src="js/monero-english-wordlist.js"></script>
-<script src="js/monero-wordlists-all.js"></script>
+<script src="js/qwertycoin-english-wordlist.js"></script>
+<script src="js/qwertycoin-wordlists-all.js"></script>
 <script src="js/verify-page.js"></script>
 </body>
 </html>

@@ -49,7 +49,7 @@ Out of scope:
 
 ## Third-party components
 
-Some compatibility filenames and JavaScript symbols retain inherited `monero` or `mymonero` names. They are technical provenance, not user-facing product support. Their copyright and license notices must remain intact, including `js/mymonero-core/LICENSE.txt`, `vendor/qwertycoin-ts/monero.worker.js.LICENSE.txt`, `vendor/libsodium/LICENSE.libsodium-wrappers-sumo`, `fonts/LICENSES.md`, the root `LICENSE`, and SPDX headers.
+Project-owned runtime files and public JavaScript symbols use Qwertycoin names. Inherited upstream names remain only inside pinned third-party implementations, licenses and provenance documentation. Their copyright and license notices must remain intact, including `vendor/qwertycoin-core-wasm/LICENSE.txt`, `vendor/qwertycoin-ts/qwertycoin.worker.js.LICENSE.txt`, `vendor/libsodium/LICENSE.libsodium-wrappers-sumo`, `fonts/LICENSES.md`, the root `LICENSE`, and SPDX headers.
 
 ## Disclosure
 

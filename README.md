@@ -112,14 +112,14 @@ For substantial funds, use a dedicated wallet environment and independently veri
 
 ## Third-party provenance and copyright
 
-Qwertycoin inherits CryptoNote-compatible algorithms and includes compatibility modules whose historical filenames or public JavaScript symbols contain `monero` or `mymonero`. Those technical names are intentionally retained where renaming could break interoperability or obscure provenance.
+All project-owned runtime files and public JavaScript symbols use Qwertycoin names. Inherited upstream names remain only inside pinned third-party implementations, licenses and provenance documentation where rewriting them would obscure origin or break compatibility.
 
 Upstream copyright, license texts and notices are preserved in:
 
 - [`LICENSE`](LICENSE)
 - [`fonts/LICENSES.md`](fonts/LICENSES.md)
-- [`js/mymonero-core/LICENSE.txt`](js/mymonero-core/LICENSE.txt)
-- [`vendor/qwertycoin-ts/monero.worker.js.LICENSE.txt`](vendor/qwertycoin-ts/monero.worker.js.LICENSE.txt)
+- [`vendor/qwertycoin-core-wasm/LICENSE.txt`](vendor/qwertycoin-core-wasm/LICENSE.txt)
+- [`vendor/qwertycoin-ts/qwertycoin.worker.js.LICENSE.txt`](vendor/qwertycoin-ts/qwertycoin.worker.js.LICENSE.txt)
 - [`vendor/libsodium/LICENSE.libsodium-wrappers-sumo`](vendor/libsodium/LICENSE.libsodium-wrappers-sumo)
 - [`vendor/libsodium/BUILDINFO.txt`](vendor/libsodium/BUILDINFO.txt)
 - SPDX headers in source files

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 /**
- * monero-rpc.js
- * Monero Remote Node JSON-RPC Client
+ * qwertycoin-rpc.js
+ * Qwertycoin remote-node JSON-RPC client
  *
- * Connects to Monero remote nodes from the browser via fetch().
+ * Connects to Qwertycoin remote nodes from the browser via fetch().
  * Supports automatic failover between multiple nodes.
  *
  * RPC Methods implemented:
@@ -16,7 +16,7 @@
  * Depends on: nothing (standalone module)
  */
 
-const MoneroRPC = (function () {
+const QwertycoinRPC = (function () {
   'use strict';
 
   // Same-origin RPC proxy. Both Cloudflare Pages Functions and Netlify
@@ -311,7 +311,7 @@ const MoneroRPC = (function () {
    * Format QWC atomic units to a display string.
    * 1 QWC = 1e8 atomic units.
    */
-  function formatXMR(atomicUnits) {
+  function formatQWC(atomicUnits) {
     if (typeof atomicUnits === 'string') atomicUnits = BigInt(atomicUnits);
     if (typeof atomicUnits === 'number') atomicUnits = BigInt(Math.round(atomicUnits));
     const qwc = Number(atomicUnits) / 1e8;
@@ -321,8 +321,8 @@ const MoneroRPC = (function () {
   /**
    * Parse a QWC amount string to atomic units.
    */
-  function parseXMR(xmrString) {
-    const parts = xmrString.split('.');
+  function parseQWC(qwcString) {
+    const parts = qwcString.split('.');
     const whole = BigInt(parts[0] || '0');
     const frac = (parts[1] || '').padEnd(8, '0').substring(0, 8);
     return whole * 100000000n + BigInt(frac);
@@ -343,12 +343,12 @@ const MoneroRPC = (function () {
     sendRawTransaction,
     getConnectionState,
     onConnectionChange,
-    formatXMR,
-    parseXMR,
+    formatQWC,
+    parseQWC,
     jsonRpc,
     rpcOther,
     DEFAULT_NODES,
   };
 })();
 
-if (typeof module !== 'undefined' && module.exports) module.exports = MoneroRPC;
+if (typeof module !== 'undefined' && module.exports) module.exports = QwertycoinRPC;

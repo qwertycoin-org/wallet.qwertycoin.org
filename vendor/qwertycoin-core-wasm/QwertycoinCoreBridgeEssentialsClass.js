@@ -5,9 +5,9 @@
 // v--- These should maybe be injected into a context and supplied to currencyConfig for future platforms
 const JSBigInt = require("@mymonero/mymonero-bigint").BigInteger;
 const nettype_utils = require("@mymonero/mymonero-nettype");
-const MyMoneroBridge_utils = require('@mymonero/mymonero-bridge-utils')
+const QwertycoinBridgeUtils = require('@mymonero/mymonero-bridge-utils')
 //
-class MyMoneroCoreBridgeEssentialsClass
+class QwertycoinCoreBridgeEssentialsClass
 {
 	constructor(this_Module)
 	{
@@ -85,7 +85,7 @@ class MyMoneroCoreBridgeEssentialsClass
 			spend: ret.publicSpendKey,
 			view: ret.publicViewKey,
 			intPaymentId: ret.paymentId, // may be undefined
-			isSubaddress: MyMoneroBridge_utils.ret_val_boolstring_to_bool(ret.isSubaddress)
+			isSubaddress: QwertycoinBridgeUtils.ret_val_boolstring_to_bool(ret.isSubaddress)
 		}
 	}
 
@@ -131,7 +131,7 @@ class MyMoneroCoreBridgeEssentialsClass
 		const args =
 		{
 			seed_string: seed_string,
-			wordset_name: MyMoneroBridge_utils.api_safe_wordset_name(wordset_name)
+			wordset_name: QwertycoinBridgeUtils.api_safe_wordset_name(wordset_name)
 		};
 		const ret_string = this.Module.mnemonic_from_seed(args.seed_string, args.wordset_name);
 		const ret = JSON.parse(ret_string);
@@ -187,8 +187,8 @@ class MyMoneroCoreBridgeEssentialsClass
 			throw ret.err_msg
 		}
 		return { // calling these out so as to provide a stable ret val interface
-			isValid: MyMoneroBridge_utils.ret_val_boolstring_to_bool(ret.isValid),
-			isInViewOnlyMode: MyMoneroBridge_utils.ret_val_boolstring_to_bool(ret.isViewOnly),
+			isValid: QwertycoinBridgeUtils.ret_val_boolstring_to_bool(ret.isValid),
+			isInViewOnlyMode: QwertycoinBridgeUtils.ret_val_boolstring_to_bool(ret.isViewOnly),
 			pub_viewKey_string: ret.publicViewKey,
 			pub_spendKey_string: ret.publicSpendKey
 		};
@@ -279,4 +279,4 @@ class MyMoneroCoreBridgeEssentialsClass
 	}
 }
 //
-module.exports = MyMoneroCoreBridgeEssentialsClass
+module.exports = QwertycoinCoreBridgeEssentialsClass

@@ -34,15 +34,15 @@ global.atob = s => Buffer.from(s, 'base64').toString('binary');
 
 // ── Engine modules (load order matches the HTML pages) ──────────────
 global.Keccak256       = require('../js/keccak256.js');
-global.MoneroEd25519   = require('../js/monero-ed25519.js');
-global.MoneroWordList  = require('../js/monero-wordlist.js');
-require('../js/monero-english-wordlist.js');
-require('../js/monero-wordlists-all.js');
+global.QwertycoinEd25519   = require('../js/qwertycoin-ed25519.js');
+global.QwertycoinWordList  = require('../js/qwertycoin-wordlist.js');
+require('../js/qwertycoin-english-wordlist.js');
+require('../js/qwertycoin-wordlists-all.js');
 global.BIP39_WORDLIST  = require('../js/bip39-wordlist.js');
 global.Bip39           = require('../js/bip39.js');
 global.Polyseed        = require('../js/polyseed.js');
-global.MoneroKeys      = require('../js/monero-keys.js');
-global.MoneroSubaddress = require('../js/monero-subaddress.js');
+global.QwertycoinKeys      = require('../js/qwertycoin-keys.js');
+global.QwertycoinSubaddress = require('../js/qwertycoin-subaddress.js');
 global.WalletVault     = require('../js/wallet-vault.js');
 // LwsClient relies on `localStorage` and a few browser globals; provide
 // minimal shims so the require() doesn't blow up under Node.
@@ -80,8 +80,8 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
 
   // 25-word round-trip — sanity check the generate → derive loop is unbroken
   await test('25-word generate → re-derive matches', () => {
-    const w = MoneroKeys.generateWallet('english', 'mainnet');
-    const k = MoneroKeys.deriveFromMnemonic(w.mnemonic, 'english', 'mainnet');
+    const w = QwertycoinKeys.generateWallet('english', 'mainnet');
+    const k = QwertycoinKeys.deriveFromMnemonic(w.mnemonic, 'english', 'mainnet');
     assertEq(k.address,            w.address,            'address');
     assertEq(k.privateSpendKeyHex, w.privateSpendKeyHex, 'spend key');
     assertEq(k.privateViewKeyHex,  w.privateViewKeyHex,  'view key');
@@ -91,20 +91,20 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
   // BIP-39
   await test('BIP-39 12 words → produces a valid QWC mainnet address', async () => {
     const m = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
-    const k = await MoneroKeys.deriveFromBip39(m, '', 'mainnet');
+    const k = await QwertycoinKeys.deriveFromBip39(m, '', 'mainnet');
     assertEq(k.address.length, 98, 'mainnet length');
     assertEq(k.address.slice(0, 3), 'QWC', 'mainnet prefix');
     assertEq(k.privateSpendKeyHex.length, 64);
     assertEq(k.privateViewKeyHex.length,  64);
     // Determinism: re-derive
-    const k2 = await MoneroKeys.deriveFromBip39(m, '', 'mainnet');
+    const k2 = await QwertycoinKeys.deriveFromBip39(m, '', 'mainnet');
     assertEq(k2.address, k.address, 'deterministic');
   });
 
   await test('BIP-39 passphrase changes the derived address', async () => {
     const m = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
-    const a = await MoneroKeys.deriveFromBip39(m, '',     'mainnet');
-    const b = await MoneroKeys.deriveFromBip39(m, 'salt', 'mainnet');
+    const a = await QwertycoinKeys.deriveFromBip39(m, '',     'mainnet');
+    const b = await QwertycoinKeys.deriveFromBip39(m, 'salt', 'mainnet');
     assert(a.address !== b.address, 'passphrase should change output');
   });
 
@@ -137,7 +137,7 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
 
   await test('Polyseed → full QWC address derivation', async () => {
     const ps = 'raven tail swear infant grief assist regular lamp duck valid someone little harsh puppy airport language';
-    const k  = await MoneroKeys.deriveFromPolyseed(ps, 'mainnet');
+    const k  = await QwertycoinKeys.deriveFromPolyseed(ps, 'mainnet');
     assertEq(k.address.length, 98);
     assertEq(k.address.slice(0, 3), 'QWC');
     assertEq(k.seedFormat,     'polyseed');
@@ -146,10 +146,10 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
 
   // Subaddresses
   await test('Subaddress (0,1) starts with 8 and differs from primary', () => {
-    const w = MoneroKeys.generateWallet('english', 'mainnet');
-    const sub = MoneroSubaddress.generate({
-      privateViewKey: MoneroKeys.hexToBytes(w.privateViewKeyHex),
-      publicSpendKey: MoneroKeys.hexToBytes(w.publicSpendKeyHex),
+    const w = QwertycoinKeys.generateWallet('english', 'mainnet');
+    const sub = QwertycoinSubaddress.generate({
+      privateViewKey: QwertycoinKeys.hexToBytes(w.privateViewKeyHex),
+      publicSpendKey: QwertycoinKeys.hexToBytes(w.publicSpendKeyHex),
     }, 0, 1);
     assertEq(sub.address.length, 95);
     assertEq(sub.address[0],     '8', 'subaddress netbyte');
@@ -157,27 +157,27 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
   });
 
   await test('Subaddress generation is deterministic', () => {
-    const w = MoneroKeys.generateWallet('english', 'mainnet');
+    const w = QwertycoinKeys.generateWallet('english', 'mainnet');
     const k = {
-      privateViewKey: MoneroKeys.hexToBytes(w.privateViewKeyHex),
-      publicSpendKey: MoneroKeys.hexToBytes(w.publicSpendKeyHex),
+      privateViewKey: QwertycoinKeys.hexToBytes(w.privateViewKeyHex),
+      publicSpendKey: QwertycoinKeys.hexToBytes(w.publicSpendKeyHex),
     };
-    const a = MoneroSubaddress.generate(k, 1, 7);
-    const b = MoneroSubaddress.generate(k, 1, 7);
+    const a = QwertycoinSubaddress.generate(k, 1, 7);
+    const b = QwertycoinSubaddress.generate(k, 1, 7);
     assertEq(a.address, b.address, 'same index → same address');
-    const c = MoneroSubaddress.generate(k, 1, 8);
+    const c = QwertycoinSubaddress.generate(k, 1, 8);
     assert(a.address !== c.address, 'different minor → different address');
-    const d = MoneroSubaddress.generate(k, 2, 7);
+    const d = QwertycoinSubaddress.generate(k, 2, 7);
     assert(a.address !== d.address, 'different major → different address');
   });
 
   await test('Subaddress (0,0) is rejected as the primary address', () => {
-    const w = MoneroKeys.generateWallet('english', 'mainnet');
+    const w = QwertycoinKeys.generateWallet('english', 'mainnet');
     let threw = false;
     try {
-      MoneroSubaddress.generate({
-        privateViewKey: MoneroKeys.hexToBytes(w.privateViewKeyHex),
-        publicSpendKey: MoneroKeys.hexToBytes(w.publicSpendKeyHex),
+      QwertycoinSubaddress.generate({
+        privateViewKey: QwertycoinKeys.hexToBytes(w.privateViewKeyHex),
+        publicSpendKey: QwertycoinKeys.hexToBytes(w.publicSpendKeyHex),
       }, 0, 0);
     } catch (e) { threw = true; }
     assert(threw, '(0,0) should throw');
@@ -194,10 +194,10 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
   ];
   for (const lang of ALL_LANGUAGES) {
     await test(`25-word round-trip — ${lang}`, () => {
-      assert(MoneroWordList.isLoaded(lang), `wordlist "${lang}" failed to load`);
-      const w = MoneroKeys.generateWallet(lang, 'mainnet');
+      assert(QwertycoinWordList.isLoaded(lang), `wordlist "${lang}" failed to load`);
+      const w = QwertycoinKeys.generateWallet(lang, 'mainnet');
       assert(w.mnemonic.split(/\s+/).length === 25, '25 words expected');
-      const k = MoneroKeys.deriveFromMnemonic(w.mnemonic, lang, 'mainnet');
+      const k = QwertycoinKeys.deriveFromMnemonic(w.mnemonic, lang, 'mainnet');
       assertEq(k.address,            w.address,            'address');
       assertEq(k.privateSpendKeyHex, w.privateSpendKeyHex, 'spend key');
       assertEq(k.privateViewKeyHex,  w.privateViewKeyHex,  'view key');
@@ -206,11 +206,11 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
 
   // Network selection
   await test('Stagenet derivation produces a 5… address', () => {
-    const w = MoneroKeys.generateWallet('english', 'stagenet');
+    const w = QwertycoinKeys.generateWallet('english', 'stagenet');
     assertEq(w.address[0], '5');
   });
   await test('Testnet derivation produces a 9… or A… address', () => {
-    const w = MoneroKeys.generateWallet('english', 'testnet');
+    const w = QwertycoinKeys.generateWallet('english', 'testnet');
     assert(w.address[0] === '9' || w.address[0] === 'A',
       'testnet prefix was: ' + w.address[0]);
   });
@@ -225,6 +225,17 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
     assert(!WalletVault.isLocked(), 'not locked');
     const out = WalletVault.readPlain();
     assertEq(out.address, 'demo');
+  });
+
+  await test('WalletVault migrates the retired session key to the Qwertycoin namespace', () => {
+    sessionStorage.clear();
+    sessionStorage.setItem('monero-web-wallet', JSON.stringify({
+      encrypted: false,
+      keys: { address: 'legacy-session' }
+    }));
+    assertEq(WalletVault.readPlain().address, 'legacy-session');
+    assert(sessionStorage.getItem('qwertycoin-web-wallet'), 'branded session key was not created');
+    assertEq(sessionStorage.getItem('monero-web-wallet'), null, 'retired session key was not removed');
   });
 
   await test('WalletVault encrypted round-trip', async () => {
@@ -253,24 +264,24 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
   // in the dropdown and got "Invalid checksum word" because lookup()
   // returned random matches via prefix collisions across wordlists.
   await test('Italian seed + lang=english → auto-detected as italian', () => {
-    const w = MoneroKeys.generateWallet('italian', 'mainnet');
-    const k = MoneroKeys.deriveFromMnemonic(w.mnemonic, 'english', 'mainnet');
+    const w = QwertycoinKeys.generateWallet('italian', 'mainnet');
+    const k = QwertycoinKeys.deriveFromMnemonic(w.mnemonic, 'english', 'mainnet');
     assertEq(k.address, w.address, 'auto-detect should pick italian');
   });
   await test('Spanish seed + lang=french → auto-detected as spanish', () => {
-    const w = MoneroKeys.generateWallet('spanish', 'mainnet');
-    const k = MoneroKeys.deriveFromMnemonic(w.mnemonic, 'french', 'mainnet');
+    const w = QwertycoinKeys.generateWallet('spanish', 'mainnet');
+    const k = QwertycoinKeys.deriveFromMnemonic(w.mnemonic, 'french', 'mainnet');
     assertEq(k.address, w.address, 'auto-detect should pick spanish');
   });
   await test('25-word seed with no language hint → auto-detects', () => {
-    const w = MoneroKeys.generateWallet('german', 'mainnet');
-    const k = MoneroKeys.deriveFromMnemonic(w.mnemonic, null, 'mainnet');
+    const w = QwertycoinKeys.generateWallet('german', 'mainnet');
+    const k = QwertycoinKeys.deriveFromMnemonic(w.mnemonic, null, 'mainnet');
     assertEq(k.address, w.address);
   });
   await test('Garbage 25-word input → friendly error, not silent corruption', () => {
     let threw = false, msg = '';
     try {
-      MoneroKeys.deriveFromMnemonic(
+      QwertycoinKeys.deriveFromMnemonic(
         'one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twentyone twentytwo twentythree twentyfour twentyfive',
         null, 'mainnet'
       );
@@ -281,11 +292,11 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
   });
 
   // ── LwsClient (mock-mode behaviour) ────────────────────────────────
-  await test('LwsClient.formatXmr — atomic units → human QWC', () => {
-    assertEq(LwsClient.formatXmr('100000000'), '1');
-    assertEq(LwsClient.formatXmr('123456789'), '1.23456789');
-    assertEq(LwsClient.formatXmr('0'), '0');
-    assertEq(LwsClient.formatXmr('1'), '0.00000001');
+  await test('LwsClient.formatQwc — atomic units → human QWC', () => {
+    assertEq(LwsClient.formatQwc('100000000'), '1');
+    assertEq(LwsClient.formatQwc('123456789'), '1.23456789');
+    assertEq(LwsClient.formatQwc('0'), '0');
+    assertEq(LwsClient.formatQwc('1'), '0.00000001');
   });
 
   await test('LwsClient.availableBalance — total - sent - locked', () => {
@@ -317,7 +328,7 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
     const pathProxy = fs.readFileSync(path.join(__dirname, '../functions/_qwcRpcProxy.js'), 'utf8');
     const blockScanRoute = fs.readFileSync(path.join(__dirname, '../functions/get_blocks_by_height.bin.js'), 'utf8');
     const lws = fs.readFileSync(path.join(__dirname, '../js/lws-client.js'), 'utf8');
-    const rpcClient = fs.readFileSync(path.join(__dirname, '../js/monero-rpc.js'), 'utf8');
+    const rpcClient = fs.readFileSync(path.join(__dirname, '../js/qwertycoin-rpc.js'), 'utf8');
     const dashboard = fs.readFileSync(path.join(__dirname, '../dashboard.html'), 'utf8');
 
     assert(proxy.includes('https://wallet-rpc.qwertycoin.org/api/v1/wallet-rpc'),
@@ -374,12 +385,12 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
       'verified Unbound source provenance is missing');
     assert(buildInfo.includes('translation_files_sha256=320ecf8874eaad13b97c2d98f5f6bdde5fa3e37fbfac21a78ea4184a63b57dcb'),
       'generated translation header provenance is missing');
-    assert(buildInfo.includes('monero_js_sha256=65b20e67c11d6b42ce3c3431dd40fa3d966540b23cdcc931930a05761a8a9e26'),
-      'monero.js artifact hash is missing');
-    assert(buildInfo.includes('monero_worker_js_sha256=6e067bb0fd55161486dfe3ccd2b395eaf111da1a0bc5e735fdf1dd037d6fe379'),
+    assert(buildInfo.includes('qwertycoin_js_sha256=65b20e67c11d6b42ce3c3431dd40fa3d966540b23cdcc931930a05761a8a9e26'),
+      'Qwertycoin browser bundle artifact hash is missing');
+    assert(buildInfo.includes('qwertycoin_worker_js_sha256=d8121227e81fe7d0320a6ba66d1ada829de3ab7c1785cda1555821831624ac95'),
       'worker artifact hash is missing');
     assert(!buildInfo.includes('=pending'), 'WASM provenance contains unresolved hashes');
-    assert(engine.includes('monero.worker.js?v=6e067bb0fd551614'),
+    assert(engine.includes('qwertycoin.worker.js?v=d8121227e81fe7d0'),
       'wallet worker cache key is not bound to the reviewed artifact');
   });
 
@@ -407,9 +418,9 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
     assert(html.includes('id="balance-breakdown"'), 'locked/total balance breakdown is missing');
     assert(dashboard.includes('function renderBalanceSummary'), 'shared balance renderer is missing');
     assert(dashboard.includes('renderBalanceSummary(balance, unlocked)'), 'QWC wallet balance should render unlocked funds as available');
-    assert(dashboard.includes('renderBalanceSummary(avail + locked, avail, LwsClient.formatXmr)'), 'LWS balance should render spendable funds as available');
+    assert(dashboard.includes('renderBalanceSummary(avail + locked, avail, LwsClient.formatQwc)'), 'LWS balance should render spendable funds as available');
     assert(dashboard.includes('setSendAvailableDisplay(qwcLastAvailableDisplay)'), 'send dialog should preserve spendable balance');
-    assert(!dashboard.includes("const balText = document.getElementById('balance-xmr').textContent"), 'send dialog should not copy total balance from the header');
+    assert(!dashboard.includes("const balText = document.getElementById('balance-qwc').textContent"), 'send dialog should not copy total balance from the header');
   });
 
   await test('LwsClient.login (mock) returns plausible response', async () => {

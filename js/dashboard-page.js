@@ -87,7 +87,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         <svg width="48" height="48" fill="none" stroke="var(--text-dim)" stroke-width="1.5" viewBox="0 0 24 24" style="margin-bottom:12px;opacity:.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
         <p style="color:var(--text);font-size:.95rem;font-weight:500;margin-bottom:6px">No wallet connected</p>
         <p style="color:var(--text-dim);font-size:.8rem;margin-bottom:20px">Enter your seed phrase or private key to access your wallet</p>
-        <a href="/verify" style="display:inline-block;padding:12px 28px;background:var(--xmr);color:#fff;text-decoration:none;border-radius:10px;font-weight:600;font-size:.85rem;box-shadow:0 4px 24px rgba(255,102,0,0.2)">Open Wallet →</a>
+        <a href="/verify" style="display:inline-block;padding:12px 28px;background:var(--qwc);color:#fff;text-decoration:none;border-radius:10px;font-weight:600;font-size:.85rem;box-shadow:0 4px 24px rgba(255,102,0,0.2)">Open Wallet →</a>
       </div>
     `;
     return;
@@ -147,8 +147,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // startBalancePolling().
     // Preload WASM in background so it's ready for key_image verification
     // and send. Don't await — let it load while the dashboard connects.
-    if (typeof MoneroCore !== 'undefined') {
-      MoneroCore.load().catch(function () {}); // fire-and-forget
+    if (typeof QwertycoinCore !== 'undefined') {
+      QwertycoinCore.load().catch(function () {}); // fire-and-forget
     }
     populateWallet();
     installIdleListeners();
@@ -172,21 +172,21 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ─── Seed phrase recovery ───
   // For 25-word standard seeds, the mnemonic is a reversible encoding of
   // the spend key. Reconstruct it so users can see/backup their seed.
-  // For BIP-39, polyseed, and MyMonero seeds this isn't possible (one-way KDFs).
+  // For BIP-39, polyseed, and legacy 13-word seeds this isn't possible (one-way KDFs).
   (function showMnemonic () {
     if (isWatchOnly || !walletKeys.privateSpendKeyHex) return;
-    // Only show for 25-word standard seeds. BIP-39, polyseed, and MyMonero
+    // Only show for 25-word standard seeds. BIP-39, polyseed, and legacy 13-word
     // seeds use one-way KDFs — reconstructing a mnemonic from the spend key
     // would produce a DIFFERENT (wrong) 25-word seed.
     var fmt = walletKeys.seedFormat;
     if (fmt && fmt !== 'standard') return;
     var mnemonic = walletKeys.mnemonic || null;
-    if (!mnemonic && typeof MoneroWordList !== 'undefined' && MoneroWordList.isLoaded('english')) {
+    if (!mnemonic && typeof QwertycoinWordList !== 'undefined' && QwertycoinWordList.isLoaded('english')) {
       try {
-        var spendBytes = MoneroKeys.hexToBytes(walletKeys.privateSpendKeyHex);
-        var reduced = MoneroEd25519.sc_reduce32(spendBytes);
-        var dataWords = MoneroWordList.encodeBytes('english', reduced);
-        var fullWords = MoneroWordList.appendChecksum('english', dataWords);
+        var spendBytes = QwertycoinKeys.hexToBytes(walletKeys.privateSpendKeyHex);
+        var reduced = QwertycoinEd25519.sc_reduce32(spendBytes);
+        var dataWords = QwertycoinWordList.encodeBytes('english', reduced);
+        var fullWords = QwertycoinWordList.appendChecksum('english', dataWords);
         mnemonic = fullWords.join(' ');
       } catch (e) { /* wordlist missing or encode failed */ }
     }
@@ -246,8 +246,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Reconstruct the raw byte buffers we need from the hex strings stored in
   // sessionStorage. The dashboard never sees the seed phrase — only the keys.
   const subKeys = isWatchOnly ? null : {
-    privateViewKey: MoneroKeys.hexToBytes(walletKeys.privateViewKeyHex),
-    publicSpendKey: MoneroKeys.hexToBytes(walletKeys.publicSpendKeyHex)
+    privateViewKey: QwertycoinKeys.hexToBytes(walletKeys.privateViewKeyHex),
+    publicSpendKey: QwertycoinKeys.hexToBytes(walletKeys.publicSpendKeyHex)
   };
   // ─── Subaddress book (persistent metadata + on-demand address derivation) ──
   // We persist {major, minor, label, createdAt} per wallet in localStorage so
@@ -259,11 +259,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   const subLabel  = document.getElementById('sub-label');
   const subMajor  = document.getElementById('sub-major');
   const subMinor  = document.getElementById('sub-minor');
-  const subBookKey = 'monero-web-subaddrs-' + walletKeys.address.slice(0, 12);
+  const subBookKey = 'qwertycoin-web-subaddrs-' + walletKeys.address.slice(0, 12);
+  const legacySubBookKey = 'monero-web-subaddrs-' + walletKeys.address.slice(0, 12);
 
   function loadSubBook () {
     try {
-      const raw = localStorage.getItem(subBookKey);
+      let raw = localStorage.getItem(subBookKey);
+      if (!raw) {
+        raw = localStorage.getItem(legacySubBookKey);
+        if (raw) {
+          localStorage.setItem(subBookKey, raw);
+          localStorage.removeItem(legacySubBookKey);
+        }
+      }
       if (!raw) return [];
       const list = JSON.parse(raw);
       return Array.isArray(list) ? list : [];
@@ -297,7 +305,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const realIdx = list.length - 1 - displayIdx;
       let address = '— locked —';
       try {
-        if (subKeys) address = MoneroSubaddress.generate(subKeys, entry.major, entry.minor).address;
+        if (subKeys) address = QwertycoinSubaddress.generate(subKeys, entry.major, entry.minor).address;
       } catch (e) { address = '(error)'; }
 
       const row = document.createElement('div');
@@ -353,7 +361,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const minor = parseInt(subMinor.value, 10) || 0;
       if (major === 0 && minor === 0) throw new Error('Index (0,0) is your primary address — cannot be a subaddress');
       // Validate by actually deriving
-      MoneroSubaddress.generate(subKeys, major, minor);
+      QwertycoinSubaddress.generate(subKeys, major, minor);
       const list = loadSubBook();
       // Don't allow exact duplicates of (major, minor)
       if (list.some(e => e.major === major && e.minor === minor)) {
@@ -401,7 +409,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const connDot = document.getElementById('conn-dot');
   const connInfo = document.getElementById('conn-info');
 
-  MoneroRPC.onConnectionChange((state) => {
+  QwertycoinRPC.onConnectionChange((state) => {
     connDot.className = 'conn-dot ' + state.status;
     if (state.status === 'connected') {
       connInfo.innerHTML = '<span>' + escapeHtml(state.node) + '</span> · <span class="conn-height">' + (state.height ? state.height.toLocaleString() : '—') + '</span>';
@@ -410,7 +418,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else {
       // Disconnected — surface a retry link inline so the user doesn't have
       // to reload the whole page to recover from a transient proxy outage.
-      connInfo.innerHTML = '<span style="color:#f87171">' + escapeHtml(state.message || 'Disconnected') + '</span> · <a href="#" id="conn-retry" style="color:var(--xmr);text-decoration:underline;cursor:pointer">retry</a>';
+      connInfo.innerHTML = '<span style="color:#f87171">' + escapeHtml(state.message || 'Disconnected') + '</span> · <a href="#" id="conn-retry" style="color:var(--qwc);text-decoration:underline;cursor:pointer">retry</a>';
       const r = document.getElementById('conn-retry');
       if (r) r.addEventListener('click', (e) => { e.preventDefault(); connectAndPopulate(); });
     }
@@ -472,7 +480,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function renderBalanceSummary (totalAtomic, availableAtomic, formatter) {
-    var balEl = document.getElementById('balance-xmr');
+    var balEl = document.getElementById('balance-qwc');
     var breakdownEl = document.getElementById('balance-breakdown');
     if (!balEl) return;
 
@@ -648,9 +656,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (typeof QwcWalletEngine === 'undefined') {
         throw new Error('QWC wallet engine is not available');
       }
-      if (!walletKeys.mnemonic && walletKeys.privateSpendKeyHex && !walletKeys.watchOnly && typeof MoneroKeys !== 'undefined') {
+      if (!walletKeys.mnemonic && walletKeys.privateSpendKeyHex && !walletKeys.watchOnly && typeof QwertycoinKeys !== 'undefined') {
         try {
-          var recovered = MoneroKeys.deriveFromSpendKey(walletKeys.privateSpendKeyHex, 'mainnet');
+          var recovered = QwertycoinKeys.deriveFromSpendKey(walletKeys.privateSpendKeyHex, 'mainnet');
           if (recovered && recovered.mnemonic) {
             walletKeys.mnemonic = recovered.mnemonic;
             walletKeys.seedFormat = 'standard';
@@ -1073,7 +1081,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       var display = qwcAtomicToDisplay(txDisplay.amount);
       var arrow = outgoing ? '↑' : '↓';
       var sign = outgoing ? '−' : '+';
-      var color = outgoing ? 'var(--xmr)' : 'var(--success)';
+      var color = outgoing ? 'var(--qwc)' : 'var(--success)';
       var height = typeof block.height === 'number' ? block.height.toLocaleString() : 'pool';
       var rawHeight = typeof block.height === 'number' ? block.height : 0;
       var shortHash = hash ? hash.slice(0, 16) + '…' : 'unknown';
@@ -1107,7 +1115,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         detailRows += '<tr><td style="color:var(--text-dim);padding:4px 12px 4px 0">Tx public key</td><td style="padding:4px 0;word-break:break-all">' + escapeHtml(txPublicKey) + '</td></tr>';
       }
       if (explorerUrl) {
-        detailRows += '<tr><td colspan="2" style="padding:8px 0 0 0"><a href="' + escapeHtml(explorerUrl) + '" target="_blank" rel="noopener noreferrer" style="color:var(--xmr);font-size:.72rem;text-decoration:none">View on QWC Explorer ↗</a></td></tr>';
+        detailRows += '<tr><td colspan="2" style="padding:8px 0 0 0"><a href="' + escapeHtml(explorerUrl) + '" target="_blank" rel="noopener noreferrer" style="color:var(--qwc);font-size:.72rem;text-decoration:none">View on QWC Explorer ↗</a></td></tr>';
       }
 
       return '<div class="key-card" style="margin-bottom:6px;padding:0;overflow:hidden">' +
@@ -1130,7 +1138,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   async function startBalancePolling () {
-    const balEl  = document.getElementById('balance-xmr');
+    const balEl  = document.getElementById('balance-qwc');
     const noteEl = document.getElementById('balance-note');
     const availEl = document.getElementById('send-available');
     const listEl = document.getElementById('tx-list');
@@ -1190,13 +1198,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       // 1. sessionStorage flag written by verify-page.js Create flow
       // 2. Vault flag createdAtCurrentTip (survives page refresh)
       var freshFlag = false;
-      try { freshFlag = sessionStorage.getItem('monero-web-fresh-wallet') === '1'; } catch (e) {}
+      try {
+        freshFlag = sessionStorage.getItem('qwertycoin-web-fresh-wallet') === '1' ||
+          sessionStorage.getItem('monero-web-fresh-wallet') === '1';
+      } catch (e) {}
       if (!freshFlag && walletKeys.createdAtCurrentTip === true) {
         freshFlag = true;
       }
       if (freshFlag) {
         opts.generatedLocally = true;
-        try { sessionStorage.removeItem('monero-web-fresh-wallet'); } catch (e) {}
+        try {
+          sessionStorage.removeItem('qwertycoin-web-fresh-wallet');
+          sessionStorage.removeItem('monero-web-fresh-wallet');
+        } catch (e) {}
       }
 
       if (walletKeys.createdAtCurrentTip === true) {
@@ -1266,7 +1280,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       console.warn('[lws] register failed:', e);
       balEl.textContent = '—';
       noteEl.innerHTML = 'QWC light-wallet sync unavailable — ' +
-        '<a href="#" id="bal-retry" style="color:var(--xmr);text-decoration:underline">retry</a>';
+        '<a href="#" id="bal-retry" style="color:var(--qwc);text-decoration:underline">retry</a>';
       const r = document.getElementById('bal-retry');
       if (r) r.addEventListener('click', (ev) => { ev.preventDefault(); startBalancePolling(); });
       return;
@@ -1345,12 +1359,12 @@ document.addEventListener('DOMContentLoaded', async () => {
           && walletKeys.privateSpendKeyHex && !walletKeys.watchOnly) {
         var falseSpendTotal = 0n;
         try {
-          if (!MoneroCore.isLoaded()) await MoneroCore.load();
+          if (!QwertycoinCore.isLoaded()) await QwertycoinCore.load();
           for (var so of info.spent_outputs) {
             var cacheKey = so.tx_pub_key + ':' + so.out_index;
             if (!_keyImageCache[cacheKey]) {
               try {
-                _keyImageCache[cacheKey] = MoneroCore.generateKeyImage(
+                _keyImageCache[cacheKey] = QwertycoinCore.generateKeyImage(
                   so.tx_pub_key,
                   walletKeys.privateViewKeyHex,
                   walletKeys.publicSpendKeyHex,
@@ -1422,8 +1436,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       const progress = LwsClient.scanProgress(info);
       var locked = BigInt(info.locked_funds || '0');
-      renderBalanceSummary(avail + locked, avail, LwsClient.formatXmr);
-      const balEl = document.getElementById('balance-xmr');
+      renderBalanceSummary(avail + locked, avail, LwsClient.formatQwc);
+      const balEl = document.getElementById('balance-qwc');
 
       // Watch-only: show a note that balance is receive-only
       if (isWatchOnly) {
@@ -1532,7 +1546,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const sent     = isWatchOnly ? 0n : BigInt(tx.total_sent || '0');
         const net      = received - sent;
         const isIn     = net >= 0n;
-        const display  = LwsClient.formatXmr(net < 0n ? -net : net);
+        const display  = LwsClient.formatQwc(net < 0n ? -net : net);
         const confirms = tx.mempool ? 0 : Math.max(0, chainTip - (tx.height || 0));
         const when     = tx.timestamp ? new Date(tx.timestamp).toLocaleString() : '—';
         const status   = tx.mempool
@@ -1541,10 +1555,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             ? '<span style="color:var(--warning)">' + confirms + ' / 10 confs</span>'
             : '<span style="color:var(--success)">confirmed</span>');
         const arrow    = isIn ? '↓' : '↑';
-        const arrowCol = isIn ? 'var(--success)' : 'var(--xmr)';
+        const arrowCol = isIn ? 'var(--success)' : 'var(--qwc)';
         const hash     = (tx.hash || '').slice(0, 16) + '…';
         const fullHash = tx.hash || '';
-        const feeDisplay = tx.fee && tx.fee !== '0' ? LwsClient.formatXmr(tx.fee) : '—';
+        const feeDisplay = tx.fee && tx.fee !== '0' ? LwsClient.formatQwc(tx.fee) : '—';
         const paymentId  = tx.payment_id && tx.payment_id !== '0000000000000000' ? tx.payment_id : '';
         const explorerUrl = 'https://explorer.qwertycoin.org/tx/' + encodeURIComponent(fullHash);
 
@@ -1560,7 +1574,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           detailRows += '<tr><td style="color:var(--text-dim);padding:4px 12px 4px 0">Payment ID</td><td style="padding:4px 0;word-break:break-all">' + escapeHtml(paymentId) + '</td></tr>';
         }
         detailRows += '<tr><td style="color:var(--text-dim);padding:4px 12px 4px 0">Direction</td><td style="padding:4px 0">' + (isIn ? 'Received' : 'Sent') + '</td></tr>';
-        detailRows += '<tr><td colspan="2" style="padding:8px 0 0 0"><a href="' + escapeHtml(explorerUrl) + '" target="_blank" rel="noopener noreferrer" style="color:var(--xmr);font-size:.72rem;text-decoration:none">View on block explorer ↗</a></td></tr>';
+        detailRows += '<tr><td colspan="2" style="padding:8px 0 0 0"><a href="' + escapeHtml(explorerUrl) + '" target="_blank" rel="noopener noreferrer" style="color:var(--qwc);font-size:.72rem;text-decoration:none">View on block explorer ↗</a></td></tr>';
 
         return '<div class="key-card" style="margin-bottom:6px;padding:0;overflow:hidden">' +
           '<div class="tx-row" style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;cursor:pointer">' +
@@ -1595,7 +1609,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('loading-state').innerHTML =
       '<div class="spinner"></div><p>Connecting to QWC network…</p>';
     try {
-      const node = await MoneroRPC.connect();
+      const node = await QwertycoinRPC.connect();
 
       document.getElementById('loading-state').style.display = 'none';
       document.getElementById('dashboard').style.display = 'block';
@@ -1607,8 +1621,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (node.height) qwcLastSyncHeight = node.height;
 
       try {
-        const fee = await MoneroRPC.getFeeEstimate();
-        document.getElementById('net-fee').textContent = MoneroRPC.formatXMR(fee.feePerByte) + ' QWC/byte';
+        const fee = await QwertycoinRPC.getFeeEstimate();
+        document.getElementById('net-fee').textContent = QwertycoinRPC.formatQWC(fee.feePerByte) + ' QWC/byte';
       } catch (e) {
         document.getElementById('net-fee').textContent = 'unavailable';
       }
@@ -1748,7 +1762,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   function refreshSendReviewState () {
     const addr = (sendToEl.value || '').trim();
     const amt  = (sendAmountEl.value || '').trim();
-    const v = MoneroSend.validateAddress(addr);
+    const v = QwertycoinSend.validateAddress(addr);
     if (addr.length === 0) {
       sendToHintEl.textContent = '';
     } else if (!v.valid) {
@@ -1794,7 +1808,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       if (qmsSpendBlocked) throw new Error('Resolve the prepared Messenger transaction before creating another wallet spend');
       const toAddress = (sendToEl.value || '').trim();
-      const xmrAmount = (sendAmountEl.value || '').trim();
+      const qwcAmount = (sendAmountEl.value || '').trim();
       const paymentId = (document.getElementById('send-pid').value || '').trim();
 
       if (typeof QwcWalletEngine !== 'undefined') {
@@ -1803,7 +1817,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (paymentIdNormalized && !/^(?:[0-9a-f]{16}|[0-9a-f]{64})$/.test(paymentIdNormalized)) {
           throw new Error('Payment ID must be 16 or 64 hex characters');
         }
-        const amountAtomic = qwcDisplayToAtomic(xmrAmount);
+        const amountAtomic = qwcDisplayToAtomic(qwcAmount);
         if (wallet.reconnectDaemon) await wallet.reconnectDaemon();
         await wallet.sync(getQwcRestoreHeight());
         sendPreview = await wallet.createTx({
@@ -1828,12 +1842,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
-      sendPreview = await MoneroSend.estimateFee(walletKeys, toAddress, xmrAmount, sendPriority);
+      sendPreview = await QwertycoinSend.estimateFee(walletKeys, toAddress, qwcAmount, sendPriority);
 
       document.getElementById('confirm-to').textContent = toAddress;
-      document.getElementById('confirm-amount').textContent = xmrAmount + ' QWC';
-      document.getElementById('confirm-fee').textContent = sendPreview.fee_xmr + ' QWC';
-      const total = (Number(xmrAmount) + Number(sendPreview.fee_xmr)).toString();
+      document.getElementById('confirm-amount').textContent = qwcAmount + ' QWC';
+      document.getElementById('confirm-fee').textContent = sendPreview.fee_qwc + ' QWC';
+      const total = (Number(qwcAmount) + Number(sendPreview.fee_qwc)).toString();
       document.getElementById('confirm-total').textContent = total + ' QWC';
 
       sendShowStep('confirm');
@@ -1857,7 +1871,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       if (qmsSpendBlocked) throw new Error('Resolve the prepared Messenger transaction before broadcasting another wallet spend');
       const toAddress = (sendToEl.value || '').trim();
-      const xmrAmount = (sendAmountEl.value || '').trim();
+      const qwcAmount = (sendAmountEl.value || '').trim();
       const paymentId = (document.getElementById('send-pid').value || '').trim();
       if (typeof QwcWalletEngine !== 'undefined') {
         const wallet = await getQwcWallet();
@@ -1871,7 +1885,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const hash = Array.isArray(hashes) ? hashes[0] : hashes;
         document.getElementById('send-result-hash').textContent = hash || 'submitted';
       } else {
-        const result = await MoneroSend.send(walletKeys, toAddress, xmrAmount, sendPriority, paymentId, sendPreview);
+        const result = await QwertycoinSend.send(walletKeys, toAddress, qwcAmount, sendPriority, paymentId, sendPreview);
         document.getElementById('send-result-hash').textContent = result.tx_hash;
       }
       sendShowResultState('success');
@@ -1939,7 +1953,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await closeQmsSession();
     clearMessageSigningState();
     WalletVault.clear();
-    MoneroRPC.disconnect();
+    QwertycoinRPC.disconnect();
     window.location.href = '/';
   });
 
@@ -1951,7 +1965,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ─── Custom node settings ───
   const customNodeInput = document.getElementById('custom-node');
   const nodeMsg = document.getElementById('node-msg');
-  customNodeInput.value = MoneroRPC.getCustomNode();
+  customNodeInput.value = QwertycoinRPC.getCustomNode();
   if (customNodeInput.value) {
     nodeMsg.textContent = 'Using custom node — proxy bypassed.';
   }
@@ -1962,12 +1976,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       nodeMsg.style.color = '#f87171';
       return;
     }
-    MoneroRPC.setCustomNode(v);
+    QwertycoinRPC.setCustomNode(v);
     nodeMsg.style.color = 'var(--success)';
     nodeMsg.textContent = v ? 'Saved. Reload to reconnect.' : 'Cleared.';
   });
   document.getElementById('btn-node-clear').addEventListener('click', () => {
-    MoneroRPC.setCustomNode('');
+    QwertycoinRPC.setCustomNode('');
     customNodeInput.value = '';
     nodeMsg.style.color = 'var(--text-dim)';
     nodeMsg.textContent = 'Reverted to QWC proxy. Reload to reconnect.';
@@ -2128,9 +2142,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   setInterval(async () => {
     try {
-      const height = await MoneroRPC.getHeight();
+      const height = await QwertycoinRPC.getHeight();
       document.getElementById('net-height').textContent = height.toLocaleString();
-      connInfo.innerHTML = `<span>${MoneroRPC.getConnectionState().node}</span> · <span class="conn-height">${height.toLocaleString()}</span>`;
+      connInfo.innerHTML = `<span>${QwertycoinRPC.getConnectionState().node}</span> · <span class="conn-height">${height.toLocaleString()}</span>`;
     } catch(e) {}
     if (qmsController) {
       try { await qmsController.scan(); }

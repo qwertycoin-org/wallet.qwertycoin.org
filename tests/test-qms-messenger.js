@@ -791,7 +791,7 @@ async function test(name, fn) {
     const engine = read('js/qwc-wallet-engine.js');
     const dashboardScript = read('js/dashboard-page.js');
     const messengerScript = read('js/qms-messenger.js');
-    const worker = read('vendor/qwertycoin-ts/monero.worker.js');
+    const worker = read('vendor/qwertycoin-ts/qwertycoin.worker.js');
     const css = read('assets/qms-messenger.css');
     const buildInfo = Object.fromEntries(read('vendor/qwertycoin-ts/BUILDINFO.txt').trim().split(/\n/).slice(1).map(line => line.split('=')));
     for (const value of [
@@ -805,7 +805,7 @@ async function test(name, fn) {
     ]) assert(html.includes(value), `missing Messenger UI contract: ${value}`);
     assert(html.indexOf('vendor/libsodium/libsodium-sumo.js') < html.indexOf('js/qms-protocol.js'));
     assert(html.indexOf('js/qms-messenger.js') < html.indexOf('js/dashboard-page.js'));
-    assert(engine.includes('monero.worker.js?v=6e067bb0fd551614'));
+    assert(engine.includes('qwertycoin.worker.js?v=d8121227e81fe7d0'));
     assert(engine.includes('invoke(walletId, "freezeOutput", [keyImage])'));
     assert(engine.includes('daemonGetBlocksByRangeChunked'));
     assert(engine.includes('daemonGetBlockHeadersByRange'));
@@ -831,9 +831,9 @@ async function test(name, fn) {
     assert(worker.includes('extraHex'));
     assert(worker.includes('freezeOutput'));
     assert(worker.includes('daemonGetBlocksByRangeChunked'));
-    assert.strictEqual(sha256('vendor/qwertycoin-ts/monero.js'), buildInfo.monero_js_sha256);
-    assert.strictEqual(sha256('vendor/qwertycoin-ts/monero.worker.js'), buildInfo.monero_worker_js_sha256);
-    assert.strictEqual(sha256('vendor/qwertycoin-ts/monero.worker.js.LICENSE.txt'), buildInfo.monero_worker_license_sha256);
+    assert.strictEqual(sha256('vendor/qwertycoin-ts/qwertycoin.js'), buildInfo.qwertycoin_js_sha256);
+    assert.strictEqual(sha256('vendor/qwertycoin-ts/qwertycoin.worker.js'), buildInfo.qwertycoin_worker_js_sha256);
+    assert.strictEqual(sha256('vendor/qwertycoin-ts/qwertycoin.worker.js.LICENSE.txt'), buildInfo.qwertycoin_worker_license_sha256);
     assert.strictEqual(buildInfo.qwertycoin_ts_revision, '42050b20f13089251d1aa7d117a1eea515da0444');
     assert.strictEqual(buildInfo.qwertycoin_cpp_revision, 'd4a8cc78ac80e96a2e362ac0ad2630bf99a0759c');
     assert.strictEqual(sodiumBuildInfo.libsodium_wrappers_sumo_package, 'libsodium-wrappers-sumo@0.8.4');

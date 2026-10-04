@@ -17,7 +17,7 @@ const dashboard = fs.readFileSync(path.join(root, 'dashboard.html'), 'utf8');
 const fragmentStart = dashboard.indexOf('<div class="wallet-tabs');
 const fragmentEnd = dashboard.indexOf('<!-- Balance -->');
 if (fragmentStart < 0 || fragmentEnd < 0) throw new Error('Unable to locate Messenger dashboard fixture');
-const fixture = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/assets/wallet-ui.50dd4ba.css"><link rel="stylesheet" href="/assets/qms-messenger.css"><div id="dashboard"><div class="wallet-header"></div>${dashboard.slice(fragmentStart, fragmentEnd)}</div>`;
+const fixture = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/assets/wallet-ui.d2fe472d.css"><link rel="stylesheet" href="/assets/qms-messenger.css"><div id="dashboard"><div class="wallet-header"></div>${dashboard.slice(fragmentStart, fragmentEnd)}</div>`;
 
 (async function () {
   const server = http.createServer((request, response) => {
@@ -206,6 +206,10 @@ const fixture = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" hre
         type: 'qwc-qms1-invitation', version: 1, profile: 'qms1-fast', invitation: setup.importedInvitation
       }))
     });
+    await page.waitForFunction(expected =>
+      document.getElementById('qms-contact-invitation').value === expected,
+      setup.importedInvitation
+    );
     assert.strictEqual(await page.locator('#qms-contact-invitation').inputValue(), setup.importedInvitation);
     await page.locator('#qms-import-contact').click();
     await page.locator('#qms-status').filter({ hasText: 'as unverified' }).waitFor();
