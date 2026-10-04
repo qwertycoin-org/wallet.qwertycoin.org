@@ -44,6 +44,11 @@ the gateway. The dedicated pool-challenge view validates the exact address,
 threshold, nonce, expiration and domain locally before creating a spend-key
 signature.
 
+Wallet access is intentionally tab-scoped: derived keys are stored in
+`sessionStorage`, survive reloads in the same tab, and are removed when that
+browser session is closed. The optional session password encrypts this in-tab
+vault; it does not make the wallet persist across browser restarts.
+
 ## Message signing
 
 Open **Sign / Verify** in a loaded wallet to create or verify a Qwertycoin

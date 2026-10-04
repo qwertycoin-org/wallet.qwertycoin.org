@@ -15,6 +15,13 @@ and uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   signing.
 
 ### Fixed
+- Removed the retired landing page and its script, made `/verify` the only
+  wallet entry point, and restored real branded HTTP 404 responses for unknown
+  pages instead of Cloudflare Pages serving the old landing page as an SPA.
+- Widened the desktop wallet-access panel to the established 980 px
+  Qwertycoin content width.
+- Clarified at wallet import that the encrypted vault is tab-scoped and is
+  intentionally forgotten when the browser session closes.
 - Versioned the shared wallet-header CSS and navigation script URLs so mobile
   browsers cannot combine newly deployed header markup with stale pre-header
   assets and expose the accessibility label instead of the burger control.

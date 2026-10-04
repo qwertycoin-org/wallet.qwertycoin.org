@@ -9,6 +9,7 @@
 // hard-reload before they see the fix.
 //
 // What this does:
+//   • For 404 responses → preserve the status and prevent indexing
 //   • For HTML, JS, JSON, MANIFEST.txt, /api/* → max-age=0, must-revalidate
 //     (browser asks Cloudflare on every reload; Cloudflare returns 304 via
 //      ETag if unchanged — cheap)
@@ -24,6 +25,16 @@ export async function onRequest (context) {
   const response = await context.next();
   const url = new URL(context.request.url);
   const path = url.pathname;
+
+  // A top-level 404.html disables Cloudflare Pages' implicit SPA fallback.
+  // Preserve the 404 status for unknown pages, assets and API routes; only
+  // the explicit / and /index.html rules in _redirects enter the wallet.
+  if (response.status === 404) {
+    const r = new Response(response.body, response);
+    r.headers.set('Cache-Control', 'public, max-age=0, must-revalidate');
+    r.headers.set('X-Robots-Tag', 'noindex, nofollow');
+    return r;
+  }
 
   // Long cache for content-addressed fonts (filename hash → URL changes
   // when content changes, so any cached copy is automatically invalidated).

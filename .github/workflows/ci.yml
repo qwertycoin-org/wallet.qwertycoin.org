@@ -1,0 +1,47 @@
+name: Required CI
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-wallet-required-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  wallet:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout immutable revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Run wallet, UI, worker, and manifest contracts
+        run: npm test
+      - name: Reject whitespace errors
+        run: git diff --check
+
+  required:
+    name: required
+    if: always()
+    needs: [wallet]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require every gate
+        env:
+          WALLET_RESULT: ${{ needs.wallet.result }}
+        run: test "$WALLET_RESULT" = success

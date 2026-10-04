@@ -15,7 +15,7 @@ const dashboard = fs.readFileSync(path.join(root, 'dashboard.html'), 'utf8');
 const fragmentStart = dashboard.indexOf('<div class="wallet-tabs');
 const fragmentEnd = dashboard.indexOf('<!-- Balance -->');
 if (fragmentStart < 0 || fragmentEnd < 0) throw new Error('Unable to locate Messenger dashboard fixture');
-const fixture = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/assets/wallet-ui.f152d12.css"><link rel="stylesheet" href="/assets/qms-messenger.css"><div id="dashboard"><div class="wallet-header"></div>${dashboard.slice(fragmentStart, fragmentEnd)}</div>`;
+const fixture = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/assets/wallet-ui.50dd4ba.css"><link rel="stylesheet" href="/assets/qms-messenger.css"><div id="dashboard"><div class="wallet-header"></div>${dashboard.slice(fragmentStart, fragmentEnd)}</div>`;
 
 function percentile(values, percentage) {
   const sorted = values.slice().sort((left, right) => left - right);
