@@ -312,16 +312,30 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
     assert(LwsClient.isMock(), 'mock should auto-enable on localhost');
   });
 
-  await test('QWC proxy uses the configured mainnet RPC and Turnstile site key', () => {
+  await test('QWC proxy uses the dedicated production wallet gateway and Turnstile site key', () => {
     const proxy = fs.readFileSync(path.join(__dirname, '../functions/api/proxy.js'), 'utf8');
     const pathProxy = fs.readFileSync(path.join(__dirname, '../functions/_qwcRpcProxy.js'), 'utf8');
     const blockScanRoute = fs.readFileSync(path.join(__dirname, '../functions/get_blocks_by_height.bin.js'), 'utf8');
     const lws = fs.readFileSync(path.join(__dirname, '../js/lws-client.js'), 'utf8');
+    const rpcClient = fs.readFileSync(path.join(__dirname, '../js/monero-rpc.js'), 'utf8');
+    const dashboard = fs.readFileSync(path.join(__dirname, '../dashboard.html'), 'utf8');
 
-    assert(proxy.includes('https://explorer.qwertycoin.org/api/v1/wallet-rpc'),
+    assert(proxy.includes('https://wallet-rpc.qwertycoin.org/api/v1/wallet-rpc'),
       'production QWC RPC endpoint missing');
-    assert(pathProxy.includes('https://explorer.qwertycoin.org/api/v1/wallet-rpc'),
+    assert(pathProxy.includes('https://wallet-rpc.qwertycoin.org/api/v1/wallet-rpc'),
       'path-based production QWC RPC endpoint missing');
+    assert(!proxy.includes('https://explorer.qwertycoin.org/api/v1/wallet-rpc'),
+      'Explorer wallet RPC endpoint must not be used by the production candidate');
+    assert(!pathProxy.includes('https://explorer.qwertycoin.org/api/v1/wallet-rpc'),
+      'path-based Explorer wallet RPC endpoint must not be used by the production candidate');
+    assert(proxy.includes('"Origin": OFFICIAL_WALLET_ORIGIN'),
+      'production proxy must identify the official wallet origin to the dedicated gateway');
+    assert(pathProxy.includes('"Origin": OFFICIAL_WALLET_ORIGIN'),
+      'path-based proxy must identify the official wallet origin to the dedicated gateway');
+    assert(rpcClient.includes("name: 'wallet-rpc.qwertycoin.org'"),
+      'wallet UI does not identify the active production gateway');
+    assert(dashboard.includes('<span class="label">Gateway</span>'),
+      'network card does not label the active endpoint as a gateway');
     assert(!proxy.includes('https://integration-explorer.qwertycoin.org'),
       'integration QWC RPC endpoint must not be used by the production candidate');
     assert(!pathProxy.includes('https://integration-explorer.qwertycoin.org'),
@@ -329,7 +343,7 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
     assert(pathProxy.includes('"/get_blocks_by_height.bin"'),
       'canonical block scan RPC path is not allowed');
     assert(pathProxy.includes('path === "/get_blocks_by_height.bin" ? "/getblocks_by_height.bin" : path'),
-      'canonical block scan RPC path is not adapted to the explorer gateway alias');
+      'canonical block scan RPC path is not adapted to the dedicated gateway alias');
     assert(proxy.includes('/get_outs'), 'get outs RPC path missing');
     assert(proxy.includes('/get_output_distribution.bin'), 'output distribution RPC path missing');
     assert(blockScanRoute.includes('proxyQwcRpc(context, "/get_blocks_by_height.bin")'),

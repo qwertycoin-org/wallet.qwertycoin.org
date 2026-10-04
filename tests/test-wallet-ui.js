@@ -311,6 +311,8 @@ test('asset build, manifest and cache policy cover the new local presentation fi
   linked(build, '"js/*.js"');
   linked(build, '"vendor/libsodium/*"');
   linked(headers, '/assets/*');
+  linked(headers, '/api/*');
+  linked(headers, 'Cache-Control: no-store');
   linked(headers, '/js/*');
   linked(headers, '/vendor/libsodium/*');
   linked(manifest, '  js/message-signing.js');

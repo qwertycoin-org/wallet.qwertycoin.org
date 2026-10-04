@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 const DEFAULT_NODES = [
-  "https://explorer.qwertycoin.org/api/v1/wallet-rpc"
+  "https://wallet-rpc.qwertycoin.org/api/v1/wallet-rpc"
 ];
+
+const OFFICIAL_WALLET_ORIGIN = "https://wallet.qwertycoin.org";
 
 const JSON_RPC_METHODS = new Set([
   "get_info",
@@ -63,7 +65,8 @@ export function corsHeaders(request, contentType = "application/json") {
   return {
     ...BASE_CORS_HEADERS,
     "Access-Control-Allow-Origin": getAllowedOrigin(request),
-    "Content-Type": contentType
+    "Content-Type": contentType,
+    "Cache-Control": "no-store"
   };
 }
 
@@ -99,7 +102,7 @@ export function isAllowedRootRpcPath(path) {
 }
 
 function upstreamPath(path) {
-  // The explorer wallet gateway still exposes Core's historical alias while
+  // The dedicated wallet gateway still exposes Core's historical alias while
   // qwertycoin-ts correctly requests the canonical route.
   return path === "/get_blocks_by_height.bin" ? "/getblocks_by_height.bin" : path;
 }
@@ -143,7 +146,12 @@ export async function proxyQwcRpc(context, path) {
     try {
       const upstream = await fetch(node + upstreamPath(path), {
         method: "POST",
-        headers: { "Content-Type": requestContentType },
+        // The dedicated edge accepts only the official server-side wallet
+        // proxy. The browser never receives or calls this upstream directly.
+        headers: {
+          "Content-Type": requestContentType,
+          "Origin": OFFICIAL_WALLET_ORIGIN
+        },
         body: path.endsWith(".bin") ? new Uint8Array(body) : body,
         signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)
       });

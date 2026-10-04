@@ -48,7 +48,7 @@ const MoneroRPC = (function () {
 
   // Default nodes (used by proxy server-side, listed here for reference)
   const DEFAULT_NODES = [
-    { url: 'proxy', name: 'QWC proxy', cors: true },
+    { url: 'proxy', name: 'wallet-rpc.qwertycoin.org', cors: true },
   ];
 
   let currentNode = null;
@@ -193,7 +193,7 @@ const MoneroRPC = (function () {
       const latency = Date.now() - start;
 
       currentNode = {
-        name: 'QWC proxy',
+        name: 'wallet-rpc.qwertycoin.org',
         url: PROXY_URL,
         ok: true,
         latency,

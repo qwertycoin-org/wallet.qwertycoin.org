@@ -1,5 +1,5 @@
 # Qwertycoin Web Wallet build manifest
-# Generated 2026-10-04T11:35:57Z from commit 2034d40
+# Generated 2026-10-04T13:47:55Z from commit 17fc447
 #
 # Verify the live deployment matches a specific git tag with:
 #   git checkout v0.1.0
@@ -22,7 +22,7 @@ b83c4b9a436236620b4107628799459f778c35b7aa45b1dd389c97b9649bb592  assets/favicon
 2f2114c74813e11b739fb7d0293f0244db10d13a63cbdb4a21b4c7e9c2768681  assets/social-card.png
 6e761de434fb98032c3a3b562e04e7d1b2fbd7a5d392db15bfbab0f1854468aa  assets/social-card.svg
 d5c5382f4d81a4206f4a42c3b4797a502270a8cce84640975a297c97b6096f1d  assets/wallet-ui.50dd4ba.css
-8de3b7e60adcc66136bcce992cc3da47eba3b642fa57038248daecc781286dbe  dashboard.html
+c3564409c18e4eb46b17df0351a6d54c79ef26dba7ffd15d74eaaa552b05c256  dashboard.html
 49845fb6edd4109c5f9aa61feaf105f9125f5c10c00e7d1c6726b0c2f5594ec9  favicon.ico
 a81550eef33de480531b7220d41a0ddc46129b36c1b6d2875d170de441d5da66  favicon.svg
 e17cfd15fb96909d64095015f958207063a0c07191da3512df7d560a781aebdf  fonts/028edbf56089.woff2
@@ -48,7 +48,7 @@ b780f029e218e4b7c7142cfdb2161f8fb30248da8f9c022619812bc9180e7d69  js/keccak256.j
 9eee6ea1db393dfbd12bb06e4116d5c61f3c03aa75b4be3403d362857cde821a  js/monero-ed25519.js
 d5809ca4685de99f36ca8f14650ce73b1ed5abfa196a75a1d225a0e82ceb006d  js/monero-english-wordlist.js
 dda27b462f3120048f0a53aa3a7a33f2f68bfaa5b55516611f49d63d9effd338  js/monero-keys.js
-e1ca532c5ad7cb61ac9b6947ff5679c2c9edbda4e00a29377d89d64ebc699db7  js/monero-rpc.js
+2f97b6f44eb1d93b41d01c8fd4e127e48855d25526a018a980f9e3a9cb606b3c  js/monero-rpc.js
 b5d7041aeada3737091b3471790727b365b656085fae68c6ee19101696f5ed1e  js/monero-send.js
 36726c9b7d217caf379bc5d69c43480ffd90490ca2477ed51807544308d56426  js/monero-subaddress.js
 9a0792500d640b96faf138f867576179ab259ff4122e9e309a7a996877fde406  js/monero-wordlist.js

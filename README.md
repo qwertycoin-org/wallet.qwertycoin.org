@@ -34,7 +34,7 @@ Cloudflare Pages
 └── abuse controls for transaction submission
 
 Qwertycoin infrastructure
-└── Production Explorer's restricted, allowlisted wallet RPC gateway
+└── Dedicated wallet-rpc.qwertycoin.org restricted RPC gateway
 ```
 
 The seed, private spend key and private view key remain in the browser. The RPC

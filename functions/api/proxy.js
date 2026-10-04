@@ -6,8 +6,10 @@
 // daemon methods such as mining, peer bans, stop_daemon, or unrestricted RPC.
 
 const QWC_NODES = [
-  "https://explorer.qwertycoin.org/api/v1/wallet-rpc"
+  "https://wallet-rpc.qwertycoin.org/api/v1/wallet-rpc"
 ];
+
+const OFFICIAL_WALLET_ORIGIN = "https://wallet.qwertycoin.org";
 
 const JSON_RPC_METHODS = new Set([
   "get_info",
@@ -70,7 +72,8 @@ function corsHeaders(request, contentType = "application/json") {
   return {
     ...BASE_CORS_HEADERS,
     "Access-Control-Allow-Origin": getAllowedOrigin(request),
-    "Content-Type": contentType
+    "Content-Type": contentType,
+    "Cache-Control": "no-store"
   };
 }
 
@@ -149,7 +152,12 @@ export async function onRequestPost(context) {
     try {
       const upstream = await fetch(node + upstreamPath(path), {
         method: "POST",
-        headers: { "Content-Type": requestContentType },
+        // The dedicated edge accepts only the official server-side wallet
+        // proxy. The browser never receives or calls this upstream directly.
+        headers: {
+          "Content-Type": requestContentType,
+          "Origin": OFFICIAL_WALLET_ORIGIN
+        },
         body: path.endsWith(".bin") ? new Uint8Array(body) : body,
         signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)
       });
