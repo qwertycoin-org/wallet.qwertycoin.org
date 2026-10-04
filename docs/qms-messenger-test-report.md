@@ -33,7 +33,7 @@ the Core protocol test “Desktop”.
 
 ## Automated evidence
 
-- 45 wallet/compatibility tests
+- 46 wallet/compatibility tests
 - 18 presentation-contract tests
 - message-signing and actual bundled worker/WASM custom-`tx_extra` bridge
 - 34 QMS1 protocol/store/scanner/outbox tests, including authenticated mempool

@@ -376,6 +376,46 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
     assert(lws.includes('0x4AAAAAAEkKWLZIa61TTy18'), 'Turnstile site key missing');
   });
 
+  await test('Messenger decodes every byte of a non-empty binary tx-pool hash response', async () => {
+    const originalFetch = global.fetch;
+    const originalWorker = global.Worker;
+    const originalLocation = global.location;
+    const hashBytes = Uint8Array.from({ length: 32 }, (_, index) => index);
+    const escapeMap = new Map([[8, 'b'], [9, 't'], [10, 'n'], [11, 'v'], [12, 'f'], [13, 'r']]);
+    const prefix = Buffer.from('{"status":"OK","tx_hashes":["', 'ascii');
+    const encoded = [];
+    for (const byte of hashBytes) {
+      if (escapeMap.has(byte)) encoded.push(0x5c, escapeMap.get(byte).charCodeAt(0));
+      else encoded.push(byte);
+    }
+    const suffix = Buffer.from('"]}', 'ascii');
+    try {
+      global.location = { hostname: 'localhost', origin: 'https://wallet.example' };
+      global.Worker = class {
+        postMessage(message) {
+          const callbackId = message[2];
+          queueMicrotask(() => this.onmessage({ data: [null, callbackId, { result: true }] }));
+        }
+      };
+      global.fetch = async url => {
+        assert(String(url).includes('path=%2Fget_transaction_pool_hashes.bin'), 'unexpected tx-pool RPC URL');
+        return new Response(Buffer.concat([prefix, Buffer.from(encoded), suffix]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/octet-stream' }
+        });
+      };
+      delete require.cache[require.resolve('../js/qwc-wallet-engine.js')];
+      const engine = require('../js/qwc-wallet-engine.js');
+      const scanner = await engine.createDaemonScanner();
+      assertEq((await scanner.getTxPoolHashes())[0], Buffer.from(hashBytes).toString('hex'));
+    } finally {
+      global.fetch = originalFetch;
+      global.Worker = originalWorker;
+      global.location = originalLocation;
+      delete require.cache[require.resolve('../js/qwc-wallet-engine.js')];
+    }
+  });
+
   await test('Bundled QWC wallet worker is bound to the Reset-1 mainnet genesis', () => {
     const buildInfo = fs.readFileSync(path.join(__dirname, '../vendor/qwertycoin-ts/BUILDINFO.txt'), 'utf8');
     const engine = fs.readFileSync(path.join(__dirname, '../js/qwc-wallet-engine.js'), 'utf8');

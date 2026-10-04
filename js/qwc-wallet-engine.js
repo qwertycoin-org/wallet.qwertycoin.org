@@ -91,7 +91,37 @@ const QwcWalletEngine = (() => {
     return { uri: getDefaultDaemonUri() };
   }
 
-  async function postDaemonPath(path, payload) {
+  function parseJonResponse(bytes) {
+    const source = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || 0);
+    let json = "";
+    let inString = false;
+    for (let index = 0; index < source.length; index++) {
+      const byte = source[index];
+      if (!inString) {
+        json += String.fromCharCode(byte);
+        if (byte === 0x22) inString = true;
+        continue;
+      }
+      if (byte === 0x22) {
+        json += '"';
+        inString = false;
+        continue;
+      }
+      if (byte === 0x5c) {
+        if (++index >= source.length) throw new Error("QWC daemon returned truncated JON data");
+        const escaped = source[index];
+        json += escaped === 0x76 ? "\\u000b" : `\\${String.fromCharCode(escaped)}`;
+        continue;
+      }
+      json += byte < 0x20
+        ? `\\u${byte.toString(16).padStart(4, "0")}`
+        : String.fromCharCode(byte);
+    }
+    if (inString) throw new Error("QWC daemon returned truncated JON data");
+    return JSON.parse(json);
+  }
+
+  async function postDaemonPath(path, payload, parseBinaryStrings = false) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 20000);
     try {
@@ -102,7 +132,9 @@ const QwcWalletEngine = (() => {
         signal: controller.signal
       });
       if (!response.ok) throw new Error(`QWC daemon request ${path} failed with HTTP ${response.status}`);
-      const body = await response.json();
+      const body = parseBinaryStrings
+        ? parseJonResponse(new Uint8Array(await response.arrayBuffer()))
+        : await response.json();
       if (!body || body.status !== "OK") throw new Error(`QWC daemon request ${path} returned an invalid response`);
       return body;
     } finally {
@@ -161,10 +193,17 @@ const QwcWalletEngine = (() => {
     if (!Array.isArray(hashes)) throw new Error("QWC daemon returned an invalid transaction-pool hash list");
     const unique = new Set();
     for (const hash of hashes) {
-      if (typeof hash !== "string" || !/^[0-9a-f]{64}$/i.test(hash)) {
+      if (typeof hash !== "string") {
         throw new Error("QWC daemon returned an invalid transaction-pool hash");
       }
-      unique.add(hash.toLowerCase());
+      if (/^[0-9a-f]{64}$/i.test(hash)) {
+        unique.add(hash.toLowerCase());
+        continue;
+      }
+      if (hash.length !== 32 || Array.from(hash).some(value => value.charCodeAt(0) > 0xff)) {
+        throw new Error("QWC daemon returned an invalid transaction-pool hash");
+      }
+      unique.add(Array.from(hash, value => value.charCodeAt(0).toString(16).padStart(2, "0")).join(""));
     }
     return Array.from(unique);
   }
@@ -243,7 +282,7 @@ const QwcWalletEngine = (() => {
       return {
         getHeight: () => invoke(daemonId, "daemonGetHeight", []),
         getTxPoolHashes: async () => {
-          const response = await postDaemonPath("/get_transaction_pool_hashes.bin", {});
+          const response = await postDaemonPath("/get_transaction_pool_hashes.bin", {}, true);
           return normalizeMempoolHashes(response.tx_hashes === undefined ? [] : response.tx_hashes);
         },
         getMempoolTransactions: async hashes => {
