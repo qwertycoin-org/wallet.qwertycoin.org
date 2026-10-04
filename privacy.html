@@ -34,14 +34,14 @@
 :root {
   --bg:#0a0a0a; --surface:#111113; --surface-2:#17171b; --border:rgba(255,255,255,0.06);
   --text:#eae8e4; --text-mid:#9a9894; --text-dim:#6e6c6a;
-  --xmr:#ff6600; --xmr-dim:rgba(255,102,0,0.12); --xmr-glow:rgba(255,102,0,0.25);
+  --qwc:#ff6600; --qwc-dim:rgba(255,102,0,0.12); --qwc-glow:rgba(255,102,0,0.25);
   --success:#22c55e; --radius:14px;
 }
 *{margin:0;padding:0;box-sizing:border-box}
 body{user-select:none;-webkit-user-select:none;cursor:default;background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;font-size:16px;line-height:1.65;-webkit-font-smoothing:antialiased;min-height:100dvh;display:flex;flex-direction:column}
 p,li,h1,h2,h3{user-select:text;-webkit-user-select:text;cursor:text}
-a{color:var(--xmr);text-decoration:none;border-bottom:1px solid rgba(255,102,0,0.3);cursor:pointer}
-a:hover{border-bottom-color:var(--xmr)}
+a{color:var(--qwc);text-decoration:none;border-bottom:1px solid rgba(255,102,0,0.3);cursor:pointer}
+a:hover{border-bottom-color:var(--qwc)}
 button,.btn,nav a{cursor:pointer}
 
 .ambient{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
@@ -55,7 +55,7 @@ nav{padding:20px 0;display:flex;align-items:center;justify-content:space-between
 .logo{display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit;border:0}
 .logo svg{width:30px;height:30px}
 .logo-text{font-size:1.05rem;font-weight:700;letter-spacing:-0.02em}
-.logo-text span{color:var(--xmr)}
+.logo-text span{color:var(--qwc)}
 .nav-links{display:flex;gap:6px}
 .nav-links a{color:var(--text-mid);font-size:.82rem;font-weight:500;padding:8px 14px;border:0;border-radius:100px;transition:all .25s;text-decoration:none}
 .nav-links a:hover{color:var(--text);background:var(--surface-2)}
@@ -67,15 +67,15 @@ h2{font-size:1.4rem;font-weight:700;letter-spacing:-0.02em;margin:36px 0 12px;co
 p{margin-bottom:14px;color:var(--text-mid)}
 ul{padding-left:22px;margin-bottom:14px;color:var(--text-mid)}
 li{margin-bottom:8px}
-.callout{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--xmr);border-radius:10px;padding:18px 22px;margin:24px 0;color:var(--text)}
-.callout strong{color:var(--xmr)}
+.callout{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--qwc);border-radius:10px;padding:18px 22px;margin:24px 0;color:var(--text)}
+.callout strong{color:var(--qwc)}
 
 footer{padding:32px 0;border-top:1px solid var(--border);color:var(--text-dim);font-size:.78rem;text-align:center}
 footer a{color:var(--text-mid);border:0}
 footer a:hover{color:var(--text)}
 .footer-row{display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-bottom:14px}
 </style>
-<link rel="stylesheet" href="/assets/wallet-ui.50dd4ba.css">
+<link rel="stylesheet" href="/assets/wallet-ui.d2fe472d.css">
 </head>
 <body class="wallet-app wallet-article">
 

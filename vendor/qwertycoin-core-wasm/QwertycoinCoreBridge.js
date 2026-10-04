@@ -1,13 +1,13 @@
-const MyMoneroCoreBridgeClass = require('./MyMoneroCoreBridgeClass')
-const MyMoneroBridge_utils = require('@mymonero/mymonero-bridge-utils')
+const QwertycoinCoreBridgeClass = require('./QwertycoinCoreBridgeClass')
+const QwertycoinBridgeUtils = require('@mymonero/mymonero-bridge-utils')
 //
 module.exports = function(options)
 {
 	options = options || {}
 
-	MyMoneroBridge_utils.update_options_for_fallback_to_asmjs(options)
+	QwertycoinBridgeUtils.update_options_for_fallback_to_asmjs(options)
 
-	const platform_info = MyMoneroBridge_utils.detect_platform();
+	const platform_info = QwertycoinBridgeUtils.detect_platform();
 	const ENVIRONMENT_IS_WEB = platform_info.ENVIRONMENT_IS_WEB;
 	const ENVIRONMENT_IS_WORKER = platform_info.ENVIRONMENT_IS_WORKER;
 	const ENVIRONMENT_IS_NODE = platform_info.ENVIRONMENT_IS_NODE;
@@ -34,7 +34,7 @@ module.exports = function(options)
 					base: filename
 				})
 			} else {
-				console.warn(`MyMoneroCoreBridge/locateFile() on node.js didn't find "monero_utils" (or possibly MyMoneroCoreBridge.js) itself in the expected location in the following path. The function may need to be expanded but it might in normal situations be likely to be another bug. ${pathTo_cryptonoteUtilsDir}`)
+				console.warn(`QwertycoinCoreBridge/locateFile() on node.js didn't find "monero_utils" (or possibly QwertycoinCoreBridge.js) itself in the expected location in the following path. The function may need to be expanded but it might in normal situations be likely to be another bug. ${pathTo_cryptonoteUtilsDir}`)
 			}
 		} else if (ENVIRONMENT_IS_WEB) {
 			var pathTo_cryptonoteUtilsDir;
@@ -58,12 +58,12 @@ module.exports = function(options)
 		
 		Module_template["locateFile"] = locateFile
 		
-		require(`./MyMoneroCoreCpp_WASM`)(Module_template).then(function(thisModule) 
+		require(`./qwertycoin-core-wasm`)(Module_template).then(function(thisModule)
 		{
-			const instance = new MyMoneroCoreBridgeClass(thisModule);
+			const instance = new QwertycoinCoreBridgeClass(thisModule);
 			resolve(instance);
 		}).catch(function(e) {
-			console.error("Error loading WASM_MyMoneroCoreCpp:", e);
+			console.error("Error loading Qwertycoin Core WASM:", e);
 			reject(e);
 		});
 	});

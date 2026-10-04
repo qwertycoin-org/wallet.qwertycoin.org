@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 /**
- * monero-keys.js
- * Monero Key Derivation Engine
+ * qwertycoin-keys.js
+ * Qwertycoin key derivation engine
  *
  * Converts seed bytes or mnemonic phrases into QWC wallet keys:
  *   - Private spend key (seed → sc_reduce32)
@@ -10,10 +10,10 @@
  *   - Public view key   (ed25519 basepoint × private view key)
  *   - QWC address       (base58 of varint prefix + pub_spend + pub_view + checksum)
  *
- * Depends on: keccak256.js, monero-ed25519.js, monero-wordlist.js
+ * Depends on: keccak256.js, qwertycoin-ed25519.js, qwertycoin-wordlist.js
  */
 
-const MoneroKeys = (function () {
+const QwertycoinKeys = (function () {
   'use strict';
 
   const MAINNET  = 0x14820c; // QWC v2 mainnet standard address prefix -> "QWC..."
@@ -34,10 +34,10 @@ const MoneroKeys = (function () {
       throw new Error(`Seed must be 32 bytes, got ${seedBytes.length}`);
     }
 
-    const privateSpendKey = MoneroEd25519.sc_reduce32(seedBytes);
-    const privateViewKey  = MoneroEd25519.sc_reduce32(Keccak256.hash(privateSpendKey));
-    const publicSpendKey  = MoneroEd25519.scalarmultBase(privateSpendKey);
-    const publicViewKey   = MoneroEd25519.scalarmultBase(privateViewKey);
+    const privateSpendKey = QwertycoinEd25519.sc_reduce32(seedBytes);
+    const privateViewKey  = QwertycoinEd25519.sc_reduce32(Keccak256.hash(privateSpendKey));
+    const publicSpendKey  = QwertycoinEd25519.scalarmultBase(privateSpendKey);
+    const publicViewKey   = QwertycoinEd25519.scalarmultBase(privateViewKey);
 
     let netByte;
     switch (network) {
@@ -73,22 +73,22 @@ const MoneroKeys = (function () {
     if (!Array.isArray(words) || (words.length !== 25 && words.length !== 13)) {
       return null;
     }
-    if (typeof MoneroWordList === 'undefined') return null;
+    if (typeof QwertycoinWordList === 'undefined') return null;
     const candidates = [
       'english','spanish','french','german','italian','portuguese',
       'russian','japanese','chinese_simplified','dutch','esperanto',
       'lojban','english_old',
     ];
     for (const lang of candidates) {
-      if (!MoneroWordList.isLoaded(lang)) continue;
+      if (!QwertycoinWordList.isLoaded(lang)) continue;
       try {
         // Every word must be in the wordlist AND the checksum must verify.
         let allKnown = true;
         for (const w of words) {
-          if (MoneroWordList.lookup(lang, w) < 0) { allKnown = false; break; }
+          if (QwertycoinWordList.lookup(lang, w) < 0) { allKnown = false; break; }
         }
         if (!allKnown) continue;
-        if (MoneroWordList.verifyChecksum(lang, words)) return lang;
+        if (QwertycoinWordList.verifyChecksum(lang, words)) return lang;
       } catch (e) { /* try next language */ }
     }
     return null;
@@ -113,48 +113,48 @@ const MoneroKeys = (function () {
     }
     lang = lang || 'english';
 
-    if (!MoneroWordList.isLoaded(lang)) {
+    if (!QwertycoinWordList.isLoaded(lang)) {
       throw new Error(
         `Word list for "${lang}" not loaded. ` +
-        `Call MoneroWordList.register('${lang}', words, prefixLen) first.`
+        `Call QwertycoinWordList.register('${lang}', words, prefixLen) first.`
       );
     }
     let seed;
 
     if (count === 25) {
-      // Standard Monero: 24 data + 1 checksum → 32-byte seed
-      if (!MoneroWordList.verifyChecksum(lang, words)) {
+      // Standard Qwertycoin: 24 data + 1 checksum → 32-byte seed
+      if (!QwertycoinWordList.verifyChecksum(lang, words)) {
         throw new Error(
           'Invalid mnemonic — checksum did not verify against any of the ' +
           '13 supported wordlists. Double-check that you copied every word ' +
           'correctly and that the order is right.'
         );
       }
-      seed = MoneroWordList.decodeWords(lang, words.slice(0, 24));
+      seed = QwertycoinWordList.decodeWords(lang, words.slice(0, 24));
 
     } else if (count === 13) {
-      // MyMonero: 12 data + 1 checksum → 16-byte partial → Keccak → 32 bytes
-      if (!MoneroWordList.verifyChecksum(lang, words)) {
+      // Legacy 13-word upstream format: 12 data + 1 checksum → 16-byte partial → Keccak → 32 bytes
+      if (!QwertycoinWordList.verifyChecksum(lang, words)) {
         throw new Error(
           'Invalid mnemonic — checksum did not verify against any of the ' +
           '13 supported wordlists. Double-check that you copied every word ' +
           'correctly and that the order is right.'
         );
       }
-      const partial = MoneroWordList.decodeWords(lang, words.slice(0, 12));
+      const partial = QwertycoinWordList.decodeWords(lang, words.slice(0, 12));
       seed = Keccak256.hash(partial);
 
     } else {
       throw new Error(
         `Unsupported word count for sync derivation: ${count}. ` +
         `12-word (BIP-39) and 16-word (Polyseed) seeds use async key ` +
-        `derivation — call MoneroKeys.deriveFromAnyMnemonic() instead.`
+        `derivation — call QwertycoinKeys.deriveFromAnyMnemonic() instead.`
       );
     }
 
     const result = deriveFromSeed(seed, network);
     result.wordCount = count;
-    result.seedFormat = (count === 13) ? 'mymonero' : 'standard';
+    result.seedFormat = (count === 13) ? 'legacy13' : 'standard';
     result.seedHex = bytesToHex(seed);
     result.mnemonic = words.join(' ');
     return result;
@@ -167,16 +167,16 @@ const MoneroKeys = (function () {
   function deriveFromSpendKey(spendKeyHex, network, lang) {
     const seedBytes = hexToBytes(spendKeyHex);
     const result = deriveFromSeed(seedBytes, network);
-    // The 25-word standard Monero mnemonic is a reversible encoding of the
+    // The 25-word standard Qwertycoin mnemonic is a reversible encoding of the
     // 32-byte spend key, so we can reconstruct it whenever the supplied wordlist
-    // is available. (This is NOT possible for BIP-39, MyMonero 13-word, or
+    // is available. (This is NOT possible for BIP-39, legacy 13-word, or
     // polyseed seeds — those go through one-way KDFs.)
     try {
       const wlLang = lang || 'english';
-      if (typeof MoneroWordList !== 'undefined' && MoneroWordList.isLoaded(wlLang)) {
-        const reduced = MoneroEd25519.sc_reduce32(seedBytes);
-        const dataWords = MoneroWordList.encodeBytes(wlLang, reduced);
-        const fullWords = MoneroWordList.appendChecksum(wlLang, dataWords);
+      if (typeof QwertycoinWordList !== 'undefined' && QwertycoinWordList.isLoaded(wlLang)) {
+        const reduced = QwertycoinEd25519.sc_reduce32(seedBytes);
+        const dataWords = QwertycoinWordList.encodeBytes(wlLang, reduced);
+        const fullWords = QwertycoinWordList.appendChecksum(wlLang, dataWords);
         result.mnemonic  = fullWords.join(' ');
         result.wordCount = 25;
       }
@@ -199,7 +199,7 @@ const MoneroKeys = (function () {
     raw[payloadLength + 1] = hash[1];
     raw[payloadLength + 2] = hash[2];
     raw[payloadLength + 3] = hash[3];
-    return MoneroEd25519.cnBase58Encode(raw);
+    return QwertycoinEd25519.cnBase58Encode(raw);
   }
 
   function encodeVarint(value) {
@@ -244,14 +244,14 @@ const MoneroKeys = (function () {
     crypto.getRandomValues(seedBytes);
 
     // Reduce to valid scalar (ensures it's a valid spend key)
-    const spendKey = MoneroEd25519.sc_reduce32(seedBytes);
+    const spendKey = QwertycoinEd25519.sc_reduce32(seedBytes);
 
     // Derive full wallet
     const keys = deriveFromSeed(spendKey, network);
 
     // Encode as 25-word mnemonic (24 data words + 1 checksum)
-    const dataWords = MoneroWordList.encodeBytes(lang, spendKey);
-    const fullWords = MoneroWordList.appendChecksum(lang, dataWords);
+    const dataWords = QwertycoinWordList.encodeBytes(lang, spendKey);
+    const fullWords = QwertycoinWordList.appendChecksum(lang, dataWords);
 
     keys.mnemonic = fullWords.join(' ');
     keys.wordCount = 25;
@@ -302,9 +302,9 @@ const MoneroKeys = (function () {
    * Universal async dispatcher: picks the right derivation path from
    * the word count.
    *   12 → BIP-39  (uses Bip39 module + SubtleCrypto)
-   *   13 → MyMonero legacy (sync, wrapped in a Promise)
+   *   13 → legacy upstream seed format (sync, wrapped in a Promise)
    *   16 → Polyseed (uses Polyseed module + SubtleCrypto)
-   *   25 → Standard Monero (sync, wrapped in a Promise)
+   *   25 → standard Qwertycoin (sync, wrapped in a Promise)
    */
   async function deriveFromAnyMnemonic(mnemonic, lang, network, passphrase) {
     const count = mnemonic.trim().split(/\s+/).length;
@@ -327,4 +327,4 @@ const MoneroKeys = (function () {
   };
 })();
 
-if (typeof module !== 'undefined' && module.exports) module.exports = MoneroKeys;
+if (typeof module !== 'undefined' && module.exports) module.exports = QwertycoinKeys;

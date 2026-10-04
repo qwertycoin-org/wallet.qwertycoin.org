@@ -9,15 +9,16 @@
   # Inline <script> blocks are forbidden; use external .js files.
   #
   # 'wasm-unsafe-eval' is needed for the vendored, CryptoNote-compatible
-  # MyMonero Core WebAssembly module that builds and signs Qwertycoin
-  # transactions client-side. The inherited upstream name is retained for
-  # compatibility and attribution.
+  # Qwertycoin Core WebAssembly module that builds and signs transactions
+  # client-side. Its upstream origin remains documented with the vendored
+  # artifact and preserved license.
   # 'unsafe-eval' is required because the Emscripten-generated JS glue code
-  # (MyMoneroCoreCpp_WASM.js) uses new Function() internally for error type
+  # (qwertycoin-core-wasm.js) uses new Function() internally for error type
   # registration. This is an Emscripten limitation — the WASM binary itself
   # only needs 'wasm-unsafe-eval', but the JS bootstrap won't load without
-  # 'unsafe-eval'. All scripts still must come from 'self', so eval() of
-  # attacker-controlled strings is not possible.
+  # 'unsafe-eval'. Restricting script URLs to 'self' narrows exposure, but
+  # 'unsafe-eval' still materially weakens CSP and does not make injected
+  # strings safe. Remove it when the pinned Emscripten glue permits that.
   #
   # We still allow 'unsafe-inline' for STYLES because the codebase has many
   # inline style="..." attributes (which would be a much larger refactor)
@@ -60,8 +61,16 @@
 /vendor/qwertycoin-ts/*
   Cache-Control: public, max-age=0, must-revalidate
 
+/vendor/libsodium/*
+  Cache-Control: public, max-age=0, must-revalidate
+
 /assets/*
   Cache-Control: public, max-age=0, must-revalidate
+
+# RPC responses are live chain data and must never be reused by an
+# intermediary or browser cache.
+/api/*
+  Cache-Control: no-store
 
 # Fonts are filename-hashed in fonts/fonts.css so a content change ALWAYS
 # changes the URL. Safe to cache for a year and tell the browser it's

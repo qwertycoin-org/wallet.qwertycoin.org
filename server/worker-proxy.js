@@ -1,4 +1,6 @@
-// Cloudflare Worker: monero-proxy.rosawands4.workers.dev
+// ARCHIVED LEGACY REFERENCE — not part of the current Qwertycoin Web Wallet
+// build or wallet-rpc.qwertycoin.org gateway. Do not deploy this Worker.
+// Historical Cloudflare Worker: monero-proxy.rosawands4.workers.dev
 //
 // Validates Turnstile token before forwarding requests to the VPS.
 // After a successful Turnstile check, issues a short-lived session

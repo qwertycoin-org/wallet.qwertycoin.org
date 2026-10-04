@@ -33,7 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   // ─── Advanced: custom QWC node URL ───
-  // Reads and writes the same localStorage key that js/monero-rpc.js uses,
+  // Reads and writes the same localStorage key that js/qwertycoin-rpc.js uses,
   // so whatever the user sets here on the verify page is automatically
   // picked up by the dashboard's compatibility RPC client. Keep the legacy
   // storage key so existing users do not lose their configured endpoint.
@@ -259,16 +259,16 @@ document.addEventListener('DOMContentLoaded', () => {
         // spend key here (would require base58 address decoding), so the
         // watch-only blob omits it — the dashboard hides spend-key-dependent
         // features (subaddress generator, send) when this is the case.
-        const viewBytes = MoneroKeys.hexToBytes(viewHex);
-        const reduced   = MoneroEd25519.sc_reduce32(viewBytes);
-        const pubView   = MoneroEd25519.scalarmultBase(reduced);
+        const viewBytes = QwertycoinKeys.hexToBytes(viewHex);
+        const reduced   = QwertycoinEd25519.sc_reduce32(viewBytes);
+        const pubView   = QwertycoinEd25519.scalarmultBase(reduced);
         const keys = {
           address:            addr,
           network:            'mainnet',
           privateSpendKeyHex: '',
-          privateViewKeyHex:  MoneroKeys.bytesToHex(reduced),
+          privateViewKeyHex:  QwertycoinKeys.bytesToHex(reduced),
           publicSpendKeyHex:  '',
-          publicViewKeyHex:   MoneroKeys.bytesToHex(pubView),
+          publicViewKeyHex:   QwertycoinKeys.bytesToHex(pubView),
           watchOnly:          true
         };
         showResults(keys);
@@ -299,7 +299,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Language is auto-detected by the compatibility key engine; we pass
         // null so the engine picks whichever wordlist actually matches.
         const network    = 'mainnet';
-        const keys = MoneroKeys.deriveFromMnemonic(mnemonic, null, network);
+        const keys = QwertycoinKeys.deriveFromMnemonic(mnemonic, null, network);
         const restoreHeight = Number($val('restore-height'));
         keys.restoreHeight = Number.isSafeInteger(restoreHeight) && restoreHeight > 0
           ? restoreHeight
@@ -328,7 +328,7 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const network = 'mainnet';
         const spendHex = (spendKeyInput && spendKeyInput.value || '').trim().toLowerCase();
-        const keys = MoneroKeys.deriveFromSpendKey(spendHex, network);
+        const keys = QwertycoinKeys.deriveFromSpendKey(spendHex, network);
         showResults(keys);
       } catch(e) {
         errorEl.textContent = 'Error: ' + e.message;
@@ -374,7 +374,7 @@ document.addEventListener('DOMContentLoaded', () => {
       openBlock.style.marginTop = '16px';
       openBlock.innerHTML =
         '<label style="display:block;font-size:.72rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">' +
-        'Session password <span style="text-transform:none;letter-spacing:0;color:var(--text-dim)">(optional · this tab only; closing it forgets the wallet)</span></label>' +
+        'Session password <span style="text-transform:none;letter-spacing:0;color:var(--text-dim)">(optional for wallet use · required for Messenger · this tab only)</span></label>' +
         '<input id="session-pw" type="password" autocomplete="new-password" placeholder="Leave empty for no encryption" ' +
         'style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;font-family:\'JetBrains Mono\',monospace;font-size:.78rem;color:var(--text);outline:none;margin-bottom:10px">' +
         '<button id="btn-open-wallet" class="btn-primary" style="background:#22c55e;box-shadow:0 4px 24px rgba(34,197,94,0.2)">' +
@@ -400,7 +400,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Preserve the freshly-created flag if set (from Generate New flow)
         if (k.createdAtCurrentTip) {
           vaultData.createdAtCurrentTip = true;
-          try { sessionStorage.setItem('monero-web-fresh-wallet', '1'); } catch (e) {}
+          try { sessionStorage.setItem('qwertycoin-web-fresh-wallet', '1'); } catch (e) {}
         }
         await WalletVault.store(vaultData, pw);
         window.location.href = '/dashboard';
@@ -432,7 +432,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       setTimeout(() => {
         try {
-          const wallet = MoneroKeys.generateWallet(
+          const wallet = QwertycoinKeys.generateWallet(
             $val('create-lang') || 'english',
             'mainnet'
           );
@@ -457,10 +457,10 @@ document.addEventListener('DOMContentLoaded', () => {
             openBlock.style.marginTop = '12px';
             openBlock.innerHTML =
               '<label style="display:block;font-size:.72rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">' +
-              'Session password <span style="text-transform:none;letter-spacing:0;color:var(--text-dim)">(optional · this tab only; closing it forgets the wallet)</span></label>' +
+              'Session password <span style="text-transform:none;letter-spacing:0;color:var(--text-dim)">(optional for wallet use · required for Messenger · this tab only)</span></label>' +
               '<input id="session-pw-create" type="password" autocomplete="new-password" placeholder="Leave empty for no encryption" ' +
               'style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;font-family:\'JetBrains Mono\',monospace;font-size:.78rem;color:var(--text);outline:none;margin-bottom:10px">' +
-              '<button id="btn-open-wallet-create" class="btn-primary" style="background:var(--xmr)">' +
+              '<button id="btn-open-wallet-create" class="btn-primary" style="background:var(--qwc)">' +
               '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg> Open Wallet Dashboard</button>';
             document.getElementById('create-result').appendChild(openBlock);
             document.getElementById('btn-open-wallet-create').addEventListener('click', async () => {
@@ -482,7 +482,7 @@ document.addEventListener('DOMContentLoaded', () => {
               // Signal the dashboard that this is a freshly-created wallet
               // so it skips historical scanning. Two signals for redundancy:
               // vault has createdAtCurrentTip=true, sessionStorage has this flag.
-              try { sessionStorage.setItem('monero-web-fresh-wallet', '1'); } catch (e) {}
+              try { sessionStorage.setItem('qwertycoin-web-fresh-wallet', '1'); } catch (e) {}
               window.location.href = '/dashboard';
             });
           }

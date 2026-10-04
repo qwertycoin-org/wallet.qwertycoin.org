@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 const DEFAULT_NODES = [
-  "https://explorer.qwertycoin.org/qwc-rpc"
+  "https://wallet-rpc.qwertycoin.org/api/v1/wallet-rpc"
 ];
+
+const OFFICIAL_WALLET_ORIGIN = "https://wallet.qwertycoin.org";
 
 const JSON_RPC_METHODS = new Set([
   "get_info",
@@ -23,7 +25,7 @@ const JSON_RPC_METHODS = new Set([
 const ROOT_RPC_PATHS = new Set([
   "/json_rpc",
   "/getblocks.bin",
-  "/getblocks_by_height.bin",
+  "/get_blocks_by_height.bin",
   "/gethashes.bin",
   "/get_o_indexes.bin",
   "/get_output_distribution.bin",
@@ -63,7 +65,8 @@ export function corsHeaders(request, contentType = "application/json") {
   return {
     ...BASE_CORS_HEADERS,
     "Access-Control-Allow-Origin": getAllowedOrigin(request),
-    "Content-Type": contentType
+    "Content-Type": contentType,
+    "Cache-Control": "no-store"
   };
 }
 
@@ -96,6 +99,12 @@ async function readResponseWithLimit(response) {
 
 export function isAllowedRootRpcPath(path) {
   return ROOT_RPC_PATHS.has(path);
+}
+
+function upstreamPath(path) {
+  // The dedicated wallet gateway still exposes Core's historical alias while
+  // qwertycoin-ts correctly requests the canonical route.
+  return path === "/get_blocks_by_height.bin" ? "/getblocks_by_height.bin" : path;
 }
 
 export async function proxyQwcRpc(context, path) {
@@ -132,12 +141,19 @@ export async function proxyQwcRpc(context, path) {
   const requestContentType = isJson
     ? request.headers.get("content-type") || "application/json"
     : "application/octet-stream";
+  const clientIp = request.headers.get("CF-Connecting-IP") || "unknown";
 
   for (const node of DEFAULT_NODES) {
     try {
-      const upstream = await fetch(node + path, {
+      const upstream = await fetch(node + upstreamPath(path), {
         method: "POST",
-        headers: { "Content-Type": requestContentType },
+        // The dedicated edge accepts only the official server-side wallet
+        // proxy. The browser never receives or calls this upstream directly.
+        headers: {
+          "Content-Type": requestContentType,
+          "Origin": OFFICIAL_WALLET_ORIGIN,
+          "X-QWC-Client-IP": clientIp
+        },
         body: path.endsWith(".bin") ? new Uint8Array(body) : body,
         signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)
       });

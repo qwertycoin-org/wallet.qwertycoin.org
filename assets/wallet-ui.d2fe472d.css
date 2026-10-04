@@ -1,4 +1,4 @@
-/* Qwertycoin Web Wallet visual system (asset revision 50dd4ba).
+/* Qwertycoin Web Wallet visual system.
    Presentation only: functional state classes and inline display controls remain
    owned by the existing wallet scripts. */
 
@@ -15,9 +15,9 @@
   --text: #141414;
   --text-mid: #3f3b35;
   --text-dim: #615d55;
-  --xmr: #ffaf00;
-  --xmr-dim: #ffe7a3;
-  --xmr-glow: rgba(20, 20, 20, 0.18);
+  --qwc: #ffaf00;
+  --qwc-dim: #ffe7a3;
+  --qwc-glow: rgba(20, 20, 20, 0.18);
   --primary: #ffaf00;
   --primary-dark: #e99f00;
   --violet: #7952ff;
@@ -189,7 +189,7 @@ body.wallet-app::after,
 
 .wallet-app .nav-links a.active,
 .wallet-app .nav-links a[aria-current="page"] {
-  box-shadow: inset 0 -3px var(--xmr);
+  box-shadow: inset 0 -3px var(--qwc);
 }
 
 .wallet-app .nav-toggle {
@@ -199,7 +199,7 @@ body.wallet-app::after,
   padding: 10px;
   border: 2px solid var(--border);
   border-radius: 0;
-  background: var(--xmr);
+  background: var(--qwc);
   box-shadow: 4px 4px 0 var(--border);
   color: var(--text);
   cursor: pointer;
@@ -343,7 +343,7 @@ body.wallet-app::after,
 
 .wallet-app .tab.active {
   color: var(--text);
-  background: var(--xmr);
+  background: var(--qwc);
   border-color: var(--border);
   box-shadow: 2px 2px 0 var(--border);
 }
@@ -422,7 +422,7 @@ body.wallet-app::after,
 .wallet-app #btn-open-wallet,
 .wallet-app #unlock-btn {
   color: var(--text) !important;
-  background: var(--xmr) !important;
+  background: var(--qwc) !important;
   border: 2px solid var(--border) !important;
   border-radius: var(--radius-sm) !important;
   box-shadow: var(--shadow-action) !important;
@@ -470,13 +470,13 @@ body.wallet-app::after,
 .wallet-app .send-prio-btn:hover,
 .wallet-app .copy-btn:hover,
 .wallet-app .copy-code:hover {
-  background: var(--xmr-dim) !important;
+  background: var(--qwc-dim) !important;
 }
 
 .wallet-app .wallet-age-btn.active,
 .wallet-app .send-prio-btn.active {
   color: var(--text) !important;
-  background: var(--xmr-dim) !important;
+  background: var(--qwc-dim) !important;
   border-color: var(--border) !important;
   box-shadow: 2px 2px 0 var(--border);
 }
@@ -505,12 +505,12 @@ body.wallet-app::after,
 }
 
 .wallet-app .wallet-age-btn:focus-visible {
-  outline: 3px solid var(--xmr);
+  outline: 3px solid var(--qwc);
   outline-offset: 2px;
 }
 
 .wallet-app .wallet-age-btn.active {
-  background: var(--xmr) !important;
+  background: var(--qwc) !important;
   box-shadow: 3px 3px 0 var(--border);
 }
 
@@ -578,7 +578,7 @@ body.wallet-app::after,
 }
 
 .wallet-dashboard .conn-dot.connecting {
-  background: var(--xmr);
+  background: var(--qwc);
 }
 
 .wallet-dashboard .conn-dot.disconnected {
@@ -629,7 +629,7 @@ body.wallet-app::after,
   overflow-wrap: anywhere;
 }
 
-.wallet-dashboard .balance-value .xmr-symbol {
+.wallet-dashboard .balance-value .qwc-symbol {
   color: #7a4d00;
   font-family: var(--font-sans);
   font-size: 0.92rem;
@@ -836,7 +836,7 @@ body.wallet-app::after,
 }
 
 .wallet-app #qr-scanner-video + div {
-  border-color: var(--xmr) !important;
+  border-color: var(--qwc) !important;
   border-radius: 4px !important;
 }
 
@@ -882,7 +882,7 @@ body.wallet-app::after,
 .wallet-article .callout {
   padding: 18px 20px;
   border: 1px solid var(--border-soft);
-  border-left: 5px solid var(--xmr);
+  border-left: 5px solid var(--qwc);
   border-radius: var(--radius-sm);
 }
 
@@ -946,7 +946,7 @@ body.wallet-app::after,
 
 .wallet-error .error-code {
   margin-bottom: 12px;
-  color: var(--xmr);
+  color: var(--qwc);
   font-family: var(--font-display);
   font-size: clamp(4rem, 14vw, 8rem);
   font-weight: 900;
@@ -985,7 +985,7 @@ body.wallet-app::after,
 
 .wallet-article .step-num {
   color: var(--text);
-  background: var(--xmr);
+  background: var(--qwc);
   border: 1px solid var(--border);
   border-radius: 4px;
   font-family: var(--font-display);

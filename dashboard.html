@@ -11,7 +11,7 @@
 <meta property="og:image" content="https://wallet.qwertycoin.org/assets/social-card.2f2114c74813.png">
 <meta property="og:image:secure_url" content="https://wallet.qwertycoin.org/assets/social-card.2f2114c74813.png">
 <meta property="og:image:type" content="image/png">
-<link rel="preload" href="js/mymonero-core/MyMoneroCoreCpp_WASM.wasm" as="fetch" crossorigin>
+<link rel="preload" href="vendor/qwertycoin-core-wasm/qwertycoin-core-wasm.wasm" as="fetch" crossorigin>
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Qwertycoin Web Wallet — non-custodial QWC wallet in your browser.">
@@ -32,7 +32,7 @@
   --bg:#071327; --surface:#0f274c; --surface-2:#173762; --surface-3:#f4f8fd;
   --border:rgba(217,232,251,0.18); --border-strong:rgba(255,255,255,0.32);
   --border-focus:rgba(255,175,0,0.56); --text:#ffffff; --text-dim:#a9bdd7; --text-mid:#d9e8fb;
-  --xmr:#ffaf00; --xmr-dim:rgba(255,175,0,0.14); --xmr-glow:rgba(255,175,0,0.24);
+  --qwc:#ffaf00; --qwc-dim:rgba(255,175,0,0.14); --qwc-glow:rgba(255,175,0,0.24);
   --primary:#1465b7; --primary-dark:#0b4f96; --success:#22c55e; --danger:#ef4444; --warning:#ffaf00; --radius-sm:8px;
   --font-sans:'Open Sans',ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
   --font-display:'Montserrat',ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
@@ -72,13 +72,13 @@ nav{min-height:86px;padding:16px 0;display:flex;align-items:center;justify-conte
 .wallet-header{padding:28px 0 18px;text-align:center}
 .wallet-address{font-family:'JetBrains Mono',monospace;font-size:.76rem;color:var(--text-mid);word-break:normal;overflow-x:auto;white-space:nowrap;line-height:1.5;padding:14px 16px;background:rgba(7,19,39,0.58);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:16px;user-select:all;cursor:pointer;position:relative}
 .wallet-address:hover{border-color:var(--border-strong)}
-.wallet-address .copy-toast{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--xmr);color:#201200;font-family:var(--font-display);font-size:.7rem;font-weight:800;padding:4px 12px;border-radius:100px;opacity:0;transition:opacity .2s}
+.wallet-address .copy-toast{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--qwc);color:#201200;font-family:var(--font-display);font-size:.7rem;font-weight:800;padding:4px 12px;border-radius:100px;opacity:0;transition:opacity .2s}
 .wallet-address .copy-toast.show{opacity:1}
 
 .balance-section{text-align:center;margin-bottom:24px}
 .balance-label{font-family:var(--font-display);font-size:.74rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px}
 .balance-value{font-family:var(--font-display);font-size:2.4rem;font-weight:800;letter-spacing:0;color:var(--text)}
-.balance-value .xmr-symbol{color:var(--xmr);font-size:1rem;font-weight:800;margin-left:6px}
+.balance-value .qwc-symbol{color:var(--qwc);font-size:1rem;font-weight:800;margin-left:6px}
 .balance-note{font-size:.7rem;color:var(--text-dim);margin-top:4px}
 .balance-breakdown{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--text-dim);margin-top:6px;line-height:1.45}
 .balance-breakdown .locked{color:var(--warning)}
@@ -87,7 +87,7 @@ nav{min-height:86px;padding:16px 0;display:flex;align-items:center;justify-conte
 .actions{display:flex;gap:10px;margin-bottom:24px}
 .action-btn{flex:1;padding:15px;background:rgba(7,19,39,0.58);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:var(--font-display);font-size:.85rem;font-weight:800;cursor:pointer;transition:all .25s;display:flex;align-items:center;justify-content:center;gap:8px}
 .action-btn:hover{background:var(--surface-2);border-color:var(--border-strong)}
-.action-btn.primary{background:var(--xmr);border-color:var(--xmr);color:#201200;box-shadow:0 10px 28px var(--xmr-glow)}
+.action-btn.primary{background:var(--qwc);border-color:var(--qwc);color:#201200;box-shadow:0 10px 28px var(--qwc-glow)}
 .action-btn.primary:hover{background:#ffc247}
 .action-btn svg{width:18px;height:18px}
 
@@ -113,7 +113,7 @@ nav{min-height:86px;padding:16px 0;display:flex;align-items:center;justify-conte
 .key-card .key-label{font-size:.68rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between}
 .key-card .key-value{font-family:'JetBrains Mono',monospace;font-size:.7rem;color:var(--text-mid);word-break:break-all;line-height:1.5}
 .key-card .key-value.hidden{filter:blur(6px);user-select:none}
-.key-toggle{font-size:.65rem;color:var(--xmr);cursor:pointer;font-family:var(--font-display)}
+.key-toggle{font-size:.65rem;color:var(--qwc);cursor:pointer;font-family:var(--font-display)}
 
 /* Disconnect */
 .disconnect-btn{width:100%;padding:12px;background:none;border:1px solid rgba(239,68,68,0.2);border-radius:var(--radius-sm);color:#fca5a5;font-family:var(--font-display);font-size:.8rem;font-weight:700;cursor:pointer;transition:all .25s;margin-bottom:24px}
@@ -124,7 +124,7 @@ footer p{font-size:.65rem;color:var(--text-dim)}
 
 /* Loading state */
 .loading{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 0;gap:16px}
-.loading .spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--xmr);border-radius:50%;animation:spin 1s linear infinite}
+.loading .spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--qwc);border-radius:50%;animation:spin 1s linear infinite}
 .loading p{font-size:.85rem;color:var(--text-dim)}
 
 /* ─── Modals ─── */
@@ -150,7 +150,7 @@ footer p{font-size:.65rem;color:var(--text-dim)}
 /* Send priority tier buttons */
 .send-prio-btn{background:var(--surface-2);border:1px solid var(--border);color:var(--text-dim);font-family:var(--font-display);font-size:.72rem;padding:8px 4px;border-radius:6px;cursor:pointer;transition:all .2s}
 .send-prio-btn:hover{color:var(--text);border-color:var(--border-strong)}
-.send-prio-btn.active{background:var(--xmr-dim);border-color:rgba(255,175,0,0.3);color:var(--xmr);font-weight:600}
+.send-prio-btn.active{background:var(--qwc-dim);border-color:rgba(255,175,0,0.3);color:var(--qwc);font-weight:600}
 .send-options{text-align:left;margin:12px 0}
 .send-option{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:8px}
 .send-option strong{display:block;font-size:.78rem;color:var(--text);margin-bottom:2px}
@@ -192,7 +192,8 @@ footer p{font-size:.65rem;color:var(--text-dim)}
   .conn-bar{font-size:.66rem}
 }
 </style>
-<link rel="stylesheet" href="/assets/wallet-ui.50dd4ba.css">
+<link rel="stylesheet" href="/assets/wallet-ui.d2fe472d.css">
+<link rel="stylesheet" href="/assets/qms-messenger.css?v=fdb5548a6e9e2607">
 </head>
 <body class="wallet-app wallet-dashboard">
 
@@ -245,19 +246,68 @@ footer p{font-size:.65rem;color:var(--text-dim)}
         </div>
       </div>
 
+      <div class="wallet-tabs fade-in" id="wallet-tabs" role="tablist" aria-label="Wallet sections">
+        <button class="wallet-tab active" id="wallet-tab-overview" type="button" role="tab" aria-selected="true">Wallet</button>
+        <button class="wallet-tab" id="wallet-tab-messenger" type="button" role="tab" aria-selected="false" hidden>Messenger</button>
+      </div>
+      <div id="qms-launch-status" class="qms-launch-status" role="status" aria-live="polite" hidden>
+        <span id="qms-launch-message"></span>
+        <div class="qms-launch-actions">
+          <button class="action-btn" id="qms-launch-retry" type="button" hidden>Retry Messenger</button>
+          <button class="action-btn danger" id="qms-launch-reset" type="button" hidden>Reset local Messenger data</button>
+        </div>
+      </div>
+
+      <section id="qms-section" class="qms-shell" role="tabpanel" aria-labelledby="wallet-tab-messenger" hidden>
+        <header class="qms-heading">
+          <div><span class="qms-kicker">QMS1 · Fast Profile · Experimental</span><h1>Messenger</h1></div>
+          <button class="action-btn" id="qms-manage-toggle" type="button">Manage contacts</button>
+        </header>
+        <p class="qms-security-note">Compact authenticated end-to-end encryption with libsodium sealed boxes and Ed25519 signatures. A short message normally needs one carrier transaction. QMS1/Fast has no forward secrecy or post-quantum protection. Messenger requires a non-empty Session password; messages use normal QWC transaction fees and appear after their carrier transactions are confirmed.</p>
+        <div id="qms-status" class="qms-status" aria-live="polite"></div>
+
+        <div id="qms-chat-view" class="qms-chat-layout">
+          <aside class="qms-contacts"><div class="qms-contacts-title"><span>Chats</span><input id="qms-contact-filter" type="search" maxlength="80" autocomplete="off" aria-label="Filter chats" placeholder="Filter chats"></div><div id="qms-contact-list"></div></aside>
+          <div class="qms-conversation">
+            <div class="qms-conversation-head"><button class="qms-mobile-back" id="qms-mobile-chat-back" type="button" aria-label="Back to chat list">← Chats</button><strong id="qms-chat-name">Select a contact</strong><span id="qms-chat-fingerprint"></span></div>
+            <div id="qms-message-list" class="qms-message-list" role="log" aria-live="polite"><div class="qms-empty">Import a personal invitation to begin.</div></div>
+            <div class="qms-compose">
+            <textarea id="qms-message-input" rows="3" maxlength="4096" aria-label="Message" placeholder="Write a message" disabled></textarea>
+            <p id="qms-compose-requirement" class="qms-compose-requirement" aria-live="polite"></p>
+            <div class="qms-compose-meta"><span id="qms-byte-count">0 / 4,096 UTF-8 bytes</span><button class="action-btn primary" id="qms-prepare" type="button" disabled>Encrypt &amp; review</button></div>
+            </div>
+            <div id="qms-review" class="qms-review" hidden>
+              <div><strong id="qms-review-count">0 transactions</strong><span id="qms-review-fee">Fee —</span></div>
+              <p id="qms-review-note">Review the complete carrier batch. Nothing is broadcast until you select Send encrypted message.</p>
+              <div><button class="action-btn primary" id="qms-send" type="button">Send encrypted message</button><button class="action-btn" id="qms-cancel" type="button">Cancel &amp; delete draft</button></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="qms-manage-view" class="qms-manage" hidden>
+          <button class="qms-back" id="qms-manage-back" type="button">← Back to chats</button>
+          <div class="qms-manage-grid">
+            <div class="key-card"><div class="key-label">Bootstrap / legacy invitation</div><p>Use this complete invitation only to establish a contact, and send it confidentially. After import, each contact receives a dedicated invitation below. The fingerprint must be compared through an independent trusted channel; a valid self-signature alone does not prove a person’s identity.</p><textarea id="qms-own-invitation" rows="7" aria-label="Complete personal invitation" readonly spellcheck="false"></textarea><div class="qms-invitation-actions"><button class="action-btn" id="qms-copy-invitation" type="button">Copy bootstrap invitation</button><button class="action-btn" id="qms-export-invitation" type="button">Export invitation file</button><button class="action-btn" id="qms-toggle-invitation-qr" type="button" aria-expanded="false">Show local QR</button></div><div id="qms-own-invitation-qr" class="qms-invitation-qr" hidden></div><div id="qms-own-fingerprint" class="qms-fingerprint"></div></div>
+            <div class="key-card"><div class="key-label">Import contact invitation</div><input id="qms-contact-name" type="text" maxlength="80" aria-label="Contact name" placeholder="Contact name"><textarea id="qms-contact-invitation" rows="7" aria-label="Complete contact invitation" autocomplete="off" spellcheck="false" placeholder="Complete 428-character invitation hex"></textarea><div class="qms-invitation-actions"><label class="action-btn" for="qms-contact-invitation-file">Choose invitation file</label><input id="qms-contact-invitation-file" type="file" accept="application/json,.json" hidden><button class="action-btn primary" id="qms-import-contact" type="button">Import invitation</button></div><p>Import and identity verification are separate. Sending remains blocked until you explicitly mark the complete fingerprint as verified.</p></div>
+            <div class="key-card qms-backup-card"><div class="key-label">Encrypted Messenger backup</div><p>Your wallet seed does not restore the separate Messenger identity, contacts or chat history. Export an encrypted backup and store it privately. Open transaction journals are always imported in locked recovery mode and are never sent automatically.</p><input id="qms-backup-password" type="password" minlength="12" maxlength="1024" autocomplete="new-password" aria-label="Messenger backup password" placeholder="Separate backup password (12+ characters)"><div class="qms-backup-actions"><button class="action-btn" id="qms-export-backup" type="button">Export encrypted backup</button><label class="action-btn" for="qms-backup-file">Choose backup file</label><input id="qms-backup-file" type="file" accept="application/json,.json" hidden><button class="action-btn primary" id="qms-import-backup" type="button" disabled>Import selected backup</button></div><p id="qms-backup-file-name" aria-live="polite">No backup file selected.</p><div class="key-label qms-password-heading">Change Session password</div><p>This atomically re-encrypts the wallet Session and rewraps the Messenger data key. The existing Messenger backup password is independent.</p><div class="qms-password-grid"><input id="qms-current-session-password" type="password" maxlength="1024" autocomplete="current-password" aria-label="Current Session password" placeholder="Current Session password"><input id="qms-new-session-password" type="password" minlength="12" maxlength="1024" autocomplete="new-password" aria-label="New Session password" placeholder="New Session password (12+ characters)"><button class="action-btn" id="qms-change-session-password" type="button">Change Session password</button></div></div>
+          </div>
+          <div class="key-card"><div class="key-label">Contacts</div><div id="qms-manage-list"></div></div>
+        </div>
+      </section>
+
       <!-- Balance -->
       <div class="balance-section fade-in">
         <div class="balance-label">Available Balance</div>
         <div class="balance-value">
-          <span id="balance-xmr">—</span>
-          <span class="xmr-symbol">QWC</span>
+          <span id="balance-qwc">—</span>
+          <span class="qwc-symbol">QWC</span>
         </div>
         <div id="balance-fiat" style="font-size:.85rem;color:var(--text-dim);margin-top:2px;font-family:'JetBrains Mono',monospace"></div>
         <div class="balance-breakdown" id="balance-breakdown"></div>
         <div class="balance-note" id="balance-note">Scanning blockchain...</div>
         <div id="scan-bar-wrap" style="display:none;margin:10px auto 0;max-width:280px">
           <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:100px;height:8px;overflow:hidden">
-            <div id="scan-bar-fill" style="height:100%;width:0%;background:var(--xmr);border-radius:100px;transition:width 1s ease-out"></div>
+            <div id="scan-bar-fill" style="height:100%;width:0%;background:var(--qwc);border-radius:100px;transition:width 1s ease-out"></div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:5px;font-size:.62rem;font-family:'JetBrains Mono',monospace;color:var(--text-dim)">
             <span id="scan-bar-pct">0%</span>
@@ -287,7 +337,7 @@ footer p{font-size:.65rem;color:var(--text-dim)}
         <div class="section-title">Network</div>
         <div class="network-card">
           <div class="network-row">
-            <span class="label">Node</span>
+            <span class="label">Gateway</span>
             <span class="value" id="net-node">—</span>
           </div>
           <div class="network-row">
@@ -321,7 +371,7 @@ footer p{font-size:.65rem;color:var(--text-dim)}
       <div class="keys-section fade-in" id="mnemonic-section" style="display:none">
         <div class="section-title">Seed Phrase</div>
         <div class="key-card" style="border-color:rgba(255,175,0,0.2);background:rgba(255,175,0,0.04)">
-          <div class="key-label" style="color:var(--xmr)">Mnemonic Seed <span class="key-toggle" id="toggle-mnemonic">Show</span></div>
+          <div class="key-label" style="color:var(--qwc)">Mnemonic Seed <span class="key-toggle" id="toggle-mnemonic">Show</span></div>
           <div class="key-value hidden" id="key-mnemonic" style="font-size:.82rem;line-height:2;word-spacing:.15em"></div>
         </div>
       </div>
@@ -403,7 +453,7 @@ footer p{font-size:.65rem;color:var(--text-dim)}
         <button class="modal-close" id="ratelimit-close">✕</button>
       </div>
       <div class="modal-body" style="text-align:center">
-        <svg width="48" height="48" fill="none" stroke="var(--xmr)" stroke-width="1.5" viewBox="0 0 24 24" style="margin-bottom:12px"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <svg width="48" height="48" fill="none" stroke="var(--qwc)" stroke-width="1.5" viewBox="0 0 24 24" style="margin-bottom:12px"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
         <p style="font-size:.95rem;margin-bottom:8px;font-weight:600">Daily wallet limit reached</p>
         <p style="font-size:.8rem;color:var(--text-dim);margin-bottom:20px">Too many new wallets have been registered today. Please try again tomorrow.</p>
         <button class="btn-primary" id="ratelimit-ok" style="width:100%">OK</button>
@@ -511,7 +561,7 @@ footer p{font-size:.65rem;color:var(--text-dim)}
             <input id="send-amount" type="text" inputmode="decimal" placeholder="0.0" autocomplete="off" style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.95rem;outline:none">
             <div style="display:flex;justify-content:space-between;font-size:.68rem;color:var(--text-dim);margin-top:6px">
               <span>Available: <span id="send-available">—</span> QWC</span>
-              <button type="button" id="send-max" style="background:transparent;border:0;color:var(--xmr);font-size:.68rem;cursor:pointer;padding:0">Send max</button>
+              <button type="button" id="send-max" style="background:transparent;border:0;color:var(--qwc);font-size:.68rem;cursor:pointer;padding:0">Send max</button>
             </div>
           </div>
 
@@ -548,11 +598,11 @@ footer p{font-size:.65rem;color:var(--text-dim)}
           <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:14px;font-family:'JetBrains Mono',monospace;font-size:.82rem">
             <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="color:var(--text-dim)">Amount</span><span id="confirm-amount" style="color:var(--text);font-weight:500">—</span></div>
             <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="color:var(--text-dim)">Fee</span><span id="confirm-fee" style="color:var(--text-mid)">—</span></div>
-            <div style="display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid var(--border)"><span style="color:var(--text-dim)">Total</span><span id="confirm-total" style="color:var(--xmr);font-weight:600">—</span></div>
+            <div style="display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid var(--border)"><span style="color:var(--text-dim)">Total</span><span id="confirm-total" style="color:var(--qwc);font-weight:600">—</span></div>
           </div>
 
           <div style="font-size:.7rem;color:var(--text-dim);line-height:1.5;margin-bottom:14px;padding:10px 12px;background:rgba(255,175,0,0.06);border:1px solid rgba(255,175,0,0.15);border-radius:8px">
-            <strong style="color:var(--xmr)">This is irreversible.</strong> Once broadcast, the transaction cannot be cancelled. Your spend key is used locally in this tab to sign the transaction; it is not sent to any server.
+            <strong style="color:var(--qwc)">This is irreversible.</strong> Once broadcast, the transaction cannot be cancelled. Your spend key is used locally in this tab to sign the transaction; it is not sent to any server.
           </div>
 
           <div style="display:flex;gap:8px">
@@ -598,13 +648,13 @@ footer p{font-size:.65rem;color:var(--text-dim)}
 <div id="unlock-overlay" style="display:none;position:fixed;inset:0;background:rgba(10,10,10,0.92);backdrop-filter:blur(8px);z-index:9999;align-items:center;justify-content:center;padding:24px">
   <div style="width:100%;max-width:380px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:28px">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
-      <svg width="22" height="22" fill="none" stroke="var(--xmr)" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      <svg width="22" height="22" fill="none" stroke="var(--qwc)" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
       <h2 style="font-size:1.05rem;font-weight:600;letter-spacing:-0.01em">Wallet locked</h2>
     </div>
     <p id="unlock-msg" style="color:var(--text-dim);font-size:.78rem;line-height:1.5;margin-bottom:16px">Enter your session password to unlock this tab.</p>
     <input id="unlock-pw" type="password" autocomplete="current-password" placeholder="Session password" style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.82rem;outline:none;margin-bottom:10px">
     <div id="unlock-error" style="display:none;color:#f87171;font-size:.74rem;margin-bottom:10px"></div>
-    <button id="unlock-btn" style="width:100%;background:var(--xmr);border:none;color:#201200;font-family:var(--font-display);font-size:.86rem;font-weight:800;padding:12px;border-radius:10px;cursor:pointer">Unlock</button>
+    <button id="unlock-btn" style="width:100%;background:var(--qwc);border:none;color:#201200;font-family:var(--font-display);font-size:.86rem;font-weight:800;padding:12px;border-radius:10px;cursor:pointer">Unlock</button>
     <button id="unlock-forget" style="width:100%;background:transparent;border:none;color:var(--text-dim);font-family:var(--font-display);font-size:.74rem;padding:10px;margin-top:6px;cursor:pointer">Forget wallet & start over</button>
   </div>
 </div>
@@ -612,25 +662,31 @@ footer p{font-size:.65rem;color:var(--text-dim)}
 <!-- Scripts -->
 <script src="/js/nav-menu.f152d12.js"></script>
 <script src="js/keccak256.js"></script>
-<script src="js/monero-ed25519.js"></script>
-<script src="js/monero-wordlist.js"></script>
-<script src="js/monero-keys.js"></script>
-<script src="js/monero-subaddress.js"></script>
+<script src="js/qwertycoin-ed25519.js"></script>
+<script src="js/qwertycoin-wordlist.js"></script>
+<script src="js/qwertycoin-keys.js"></script>
+<script src="js/qwertycoin-subaddress.js"></script>
 <script src="js/qrcodegen.js"></script>
 <script src="js/jsqr.js"></script>
 <script src="js/qr-scanner.js"></script>
-<script src="js/wallet-vault.js"></script>
+<script src="js/wallet-vault.js?v=ec7a828b1cd56b46"></script>
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 <div id="turnstile-box"></div>
 <script src="js/lws-client.js"></script>
-<script src="js/mymonero-core/MyMoneroCoreCpp_WASM.js"></script>
-<script src="js/mymonero-loader.js"></script>
-<script src="js/monero-send.js"></script>
-<script src="js/monero-english-wordlist.js"></script>
-<script src="js/monero-rpc.js"></script>
-<script src="js/qwc-wallet-engine.js"></script>
+<script src="vendor/qwertycoin-core-wasm/qwertycoin-core-wasm.js"></script>
+<script src="js/qwertycoin-core-loader.js"></script>
+<script src="js/qwertycoin-send.js"></script>
+<script src="js/qwertycoin-english-wordlist.js"></script>
+<script src="js/qwertycoin-rpc.js?v=b13f78cc3fd363e1"></script>
+<script src="js/qwc-wallet-engine.js?v=13f5988f58be9b58"></script>
 <script src="js/message-signing.js"></script>
+<script src="vendor/libsodium/libsodium-sumo.js?v=a3d0b7eb2c24ba6b"></script>
+<script src="vendor/libsodium/libsodium-wrappers.js?v=4e2c5442899321d7"></script>
+<script src="js/qms-kdf.js?v=02a7aefd8e5bbd95"></script>
+<script src="js/qms-protocol.js?v=7bea05fe7ac1f3ef"></script>
+<script src="js/qms-store.js?v=085417233029958a"></script>
+<script src="js/qms-messenger.js?v=fa0e95628ad33c2f"></script>
 
-<script src="js/dashboard-page.js"></script>
+<script src="js/dashboard-page.js?v=35248449bd741160"></script>
 </body>
 </html>

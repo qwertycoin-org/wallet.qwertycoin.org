@@ -1,12 +1,13 @@
 'use strict';
 
 const assert = require('assert');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
-const sharedCss = '/assets/wallet-ui.50dd4ba.css';
+const sharedCss = '/assets/wallet-ui.d2fe472d.css';
 const sharedNavigation = '/js/nav-menu.f152d12.js';
 const socialCard = '/assets/social-card.2f2114c74813.png';
 let passed = 0;
@@ -19,6 +20,11 @@ function test(name, fn) {
 
 function linked(html, value) {
   assert(html.includes(value), `missing ${value}`);
+}
+
+function versioned(file) {
+  const digest = crypto.createHash('sha256').update(fs.readFileSync(path.join(root, file))).digest('hex').slice(0, 16);
+  return `${file}?v=${digest}`;
 }
 
 console.log('\n  Qwertycoin Web Wallet — presentation contract\n');
@@ -196,12 +202,40 @@ test('functional wallet anchors remain present', () => {
 
   const dashboard = read('dashboard.html');
   for (const id of [
-    'dashboard', 'wallet-address', 'balance-xmr', 'btn-send', 'btn-receive', 'btn-sign-verify',
+    'dashboard', 'wallet-address', 'balance-qwc', 'btn-send', 'btn-receive', 'btn-sign-verify',
     'receive-modal', 'send-modal', 'send-step-form', 'send-step-confirm',
     'send-step-result', 'message-signing-modal', 'message-signing-input',
     'message-verify-address', 'message-verify-signature', 'pool-challenge-input',
-    'pool-challenge-confirm', 'pool-challenge-signature', 'unlock-overlay', 'btn-export', 'btn-disconnect',
+    'pool-challenge-confirm', 'pool-challenge-signature', 'wallet-tab-messenger',
+    'qms-launch-status', 'qms-launch-message', 'qms-launch-retry', 'qms-launch-reset',
+    'qms-section', 'qms-contact-list', 'qms-message-list', 'qms-message-input',
+    'qms-compose-requirement', 'qms-prepare', 'qms-send', 'qms-cancel', 'qms-manage-view',
+    'unlock-overlay', 'btn-export', 'btn-disconnect',
   ]) linked(dashboard, `id="${id}"`);
+
+  const dashboardController = read('js/dashboard-page.js');
+  linked(dashboardController, 'Messenger could not start:');
+  linked(dashboardController, 'qmsOpenRequested');
+  linked(dashboardController, 'qmsLaunchRetry.addEventListener');
+  linked(dashboardController, 'qmsLaunchReset.addEventListener');
+  linked(dashboardController, 'QmsStore.reset(walletKeys)');
+  linked(dashboardController, 'Wallet keys and QWC funds are not affected');
+  linked(dashboardController, 'setQmsSpendBlocked(false)');
+});
+
+test('critical Messenger assets use content-derived cache keys', () => {
+  const dashboard = read('dashboard.html');
+  const verify = read('verify.html');
+  for (const file of [
+    'assets/qms-messenger.css', 'js/wallet-vault.js', 'js/qwc-wallet-engine.js',
+    'vendor/libsodium/libsodium-sumo.js', 'vendor/libsodium/libsodium-wrappers.js',
+    'js/qms-kdf.js', 'js/qms-protocol.js', 'js/qms-store.js',
+    'js/qms-messenger.js', 'js/dashboard-page.js',
+  ]) linked(dashboard, versioned(file));
+  for (const file of [
+    'vendor/libsodium/libsodium-sumo.js', 'vendor/libsodium/libsodium-wrappers.js',
+    'js/qms-kdf.js', 'js/wallet-vault.js',
+  ]) linked(verify, versioned(file));
 });
 
 
@@ -278,9 +312,15 @@ test('asset build, manifest and cache policy cover the new local presentation fi
   linked(build, '"assets/*.css"');
   linked(build, '"fonts/LICENSES.md"');
   linked(build, '"js/*.js"');
+  linked(build, '"vendor/libsodium/*"');
   linked(headers, '/assets/*');
+  linked(headers, '/api/*');
+  linked(headers, 'Cache-Control: no-store');
   linked(headers, '/js/*');
+  linked(headers, '/vendor/libsodium/*');
   linked(manifest, '  js/message-signing.js');
+  linked(manifest, '  js/qms-messenger.js');
+  linked(manifest, '  vendor/libsodium/libsodium-sumo.js');
   linked(manifest, '  404.html');
   assert(!manifest.includes('  index.html'), 'retired landing page remains in the manifest');
   assert(!manifest.includes('  js/index-page.js'), 'retired landing script remains in the manifest');
@@ -319,12 +359,12 @@ test('seed import exposes only the canonical 25-word Qwertycoin format', () => {
   linked(verify, "I don't know");
   linked(controller, "25: { name:'Qwertycoin Standard'");
   linked(controller, 'wordCount !== 25');
-  linked(controller, 'MoneroKeys.deriveFromMnemonic(mnemonic, null, network)');
+  linked(controller, 'QwertycoinKeys.deriveFromMnemonic(mnemonic, null, network)');
   linked(controller, "const NODE_KEY = 'qwertycoin-web-node-url'");
   linked(controller, 'const QWC_SECS_PER_BLOCK = 120');
   linked(controller, 'const QWC_RESTORE_SAFETY_BLOCKS = QWC_BLOCKS_PER_DAY');
   linked(controller, "method: 'get_info'");
-  linked(controller, '(optional · this tab only; closing it forgets the wallet)');
+  linked(controller, '(optional for wallet use · required for Messenger · this tab only)');
   linked(controller, 'estimateQwcRestoreHeight(tipHeight, ageDays)');
   linked(controller, 'setSelectedWalletAge(btn)');
   linked(controller, "setSelectedWalletAge(height === 0 ? genesisButton : null)");
@@ -364,13 +404,61 @@ test('public pages and payment QR use Qwertycoin-facing names and endpoints', ()
   linked(read('js/dashboard-page.js'), 'https://explorer.qwertycoin.org/tx/');
 });
 
+test('runtime assets and project-owned JavaScript APIs use Qwertycoin names', () => {
+  const manifest = read('MANIFEST.txt');
+  const brandedAssets = [
+    'js/qwertycoin-ed25519.js',
+    'js/qwertycoin-english-wordlist.js',
+    'js/qwertycoin-keys.js',
+    'js/qwertycoin-rpc.js',
+    'js/qwertycoin-send.js',
+    'js/qwertycoin-subaddress.js',
+    'js/qwertycoin-wordlist.js',
+    'js/qwertycoin-wordlists-all.js',
+    'js/qwertycoin-core-loader.js',
+    'vendor/qwertycoin-core-wasm/qwertycoin-core-wasm.js',
+    'vendor/qwertycoin-core-wasm/qwertycoin-core-wasm.wasm',
+    'vendor/qwertycoin-ts/qwertycoin.js',
+    'vendor/qwertycoin-ts/qwertycoin.worker.js',
+  ];
+  for (const file of brandedAssets) {
+    assert(fs.existsSync(path.join(root, file)), `${file}: branded runtime asset is missing`);
+    linked(manifest, `  ${file}`);
+  }
+
+  const retiredAssets = [
+    'js/monero-rpc.js',
+    'js/monero-keys.js',
+    'js/mymonero-loader.js',
+    'vendor/qwertycoin-ts/monero.js',
+    'vendor/qwertycoin-ts/monero.worker.js',
+  ];
+  for (const file of retiredAssets) {
+    assert(!fs.existsSync(path.join(root, file)), `${file}: legacy runtime asset remains`);
+    assert(!manifest.includes(`  ${file}`), `${file}: legacy runtime asset remains in manifest`);
+  }
+
+  const firstPartyRuntime = [
+    'js/qwertycoin-ed25519.js',
+    'js/qwertycoin-wordlist.js',
+    'js/qwertycoin-keys.js',
+    'js/qwertycoin-subaddress.js',
+    'js/qwertycoin-rpc.js',
+    'js/qwertycoin-send.js',
+    'js/qwertycoin-core-loader.js',
+  ].map(read).join('\n');
+  for (const symbol of ['MoneroEd25519', 'MoneroWordList', 'MoneroKeys', 'MoneroSubaddress', 'MoneroRPC', 'MoneroSend', 'MoneroCore']) {
+    assert(!firstPartyRuntime.includes(symbol), `legacy project-owned JavaScript symbol remains: ${symbol}`);
+  }
+});
+
 test('upstream copyright and license files remain byte-identical', () => {
   const crypto = require('crypto');
   const expected = {
     'LICENSE': 'b58a4a825d432d14c2cd68ebd53a2ce4902a94f64d194d292ac9764a9a70fd12',
     'fonts/LICENSES.md': '8c81763fcb09a26583fb2c793264a4a6f4ae9facd3d98224df49710b86716782',
-    'js/mymonero-core/LICENSE.txt': 'c7c911457cac352c3d79c43cde1dc26a2c0355234e737060cac7a786647ac87f',
-    'vendor/qwertycoin-ts/monero.worker.js.LICENSE.txt': 'b56b6cbccbd5a0370d840ea4000f0267499febfdf00897d50e948aceb71d5d87',
+    'vendor/qwertycoin-core-wasm/LICENSE.txt': 'c7c911457cac352c3d79c43cde1dc26a2c0355234e737060cac7a786647ac87f',
+    'vendor/qwertycoin-ts/qwertycoin.worker.js.LICENSE.txt': 'b56b6cbccbd5a0370d840ea4000f0267499febfdf00897d50e948aceb71d5d87',
   };
   for (const [file, digest] of Object.entries(expected)) {
     const actual = crypto.createHash('sha256').update(fs.readFileSync(path.join(root, file))).digest('hex');

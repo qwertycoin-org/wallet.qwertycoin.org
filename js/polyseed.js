@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * polyseed.js — Polyseed (16-word) decoder for Monero
+ * polyseed.js — Polyseed (16-word) decoder for Qwertycoin
  *
  * Implements the polyseed specification by tevador:
  *   https://github.com/tevador/polyseed
@@ -13,7 +13,7 @@
  *
  * Verification: Horner-evaluate the polynomial at x=2 in GF(2^11) with
  * primitive polynomial of polyseed (encoded by polyseed_mul2_table). The
- * result must be zero. Coin (POLYSEED_MONERO=0) is XORed into coeff[1].
+ * result must be zero. The inherited compatibility coin value 0 is XORed into coeff[1].
  *
  * Key derivation:
  *   PBKDF2-SHA256(
@@ -43,7 +43,7 @@ const Polyseed = (function () {
   const FEATURE_BITS = 5;
   const POLY_NUM_CHECK_DIGITS = 1;
   const DATA_WORDS = NUM_WORDS - POLY_NUM_CHECK_DIGITS;
-  const COIN_MONERO = 0;
+  const COIN_QWERTYCOIN_COMPAT = 0;
   // Polyseed feature bit 4 (value 16) marks a passphrase-encrypted seed.
   // Mirrors ENCRYPTED_MASK / is_encrypted() from polyseed's src/features.h.
   const ENCRYPTED_MASK = 16;
@@ -158,9 +158,9 @@ const Polyseed = (function () {
       coeff[i] = idx & GF_MASK;
     }
 
-    // Domain-separate by coin (Monero = 0, so this is a no-op but kept
+    // Domain-separate by coin (Qwertycoin compatibility value = 0, so this is a no-op but kept
     // explicit so that switching to a different coin requires only this line)
-    coeff[POLY_NUM_CHECK_DIGITS] ^= COIN_MONERO;
+    coeff[POLY_NUM_CHECK_DIGITS] ^= COIN_QWERTYCOIN_COMPAT;
 
     if (gfPolyEval(coeff) !== 0) {
       throw new Error('polyseed: invalid checksum');
@@ -205,13 +205,13 @@ const Polyseed = (function () {
   }
 
   /**
-   * Derive the 32-byte Monero spend-key seed from a polyseed phrase.
+   * Derive the 32-byte Qwertycoin spend-key seed from a polyseed phrase.
    * Returns a Promise<Uint8Array> because PBKDF2-SHA256 runs through
    * SubtleCrypto, which is async.
    */
   async function deriveSeed(phrase) {
     const data = decode(phrase);
-    const salt = buildSalt(data.birthday, data.features, COIN_MONERO);
+    const salt = buildSalt(data.birthday, data.features, COIN_QWERTYCOIN_COMPAT);
 
     const baseKey = await crypto.subtle.importKey(
       'raw', data.secret, { name: 'PBKDF2' }, false, ['deriveBits']

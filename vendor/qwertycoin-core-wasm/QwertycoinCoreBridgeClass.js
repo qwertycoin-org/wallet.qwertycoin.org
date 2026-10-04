@@ -3,8 +3,8 @@
 const JSBigInt = require("@mymonero/mymonero-bigint").BigInteger;
 const nettype_utils = require("@mymonero/mymonero-nettype");
 //
-const MyMoneroCoreBridgeEssentialsClass = require('./MyMoneroCoreBridgeEssentialsClass')
-const MyMoneroBridge_utils = require('@mymonero/mymonero-bridge-utils')
+const QwertycoinCoreBridgeEssentialsClass = require('./QwertycoinCoreBridgeEssentialsClass')
+const QwertycoinBridgeUtils = require('@mymonero/mymonero-bridge-utils')
 //
 function bridge_sanitized__spendable_out(raw__out)
 {
@@ -22,7 +22,7 @@ function bridge_sanitized__spendable_out(raw__out)
 	return sanitary__output;
 }
 //
-class MyMoneroCoreBridgeClass extends MyMoneroCoreBridgeEssentialsClass
+class QwertycoinCoreBridgeClass extends QwertycoinCoreBridgeEssentialsClass
 {
 	constructor(this_Module)
 	{
@@ -107,7 +107,7 @@ class MyMoneroCoreBridgeClass extends MyMoneroCoreBridgeEssentialsClass
 		self._cb_handlers__send_funds[self.__key_for_fromCpp__send_funds__get_unspent_outs(task_id)] = function(req_params)
 		{
 			// convert bridge-strings to native primitive types
-			req_params.use_dust = MyMoneroBridge_utils.ret_val_boolstring_to_bool(req_params.use_dust)
+			req_params.use_dust = QwertycoinBridgeUtils.ret_val_boolstring_to_bool(req_params.use_dust)
 			req_params.mixin = parseInt(req_params.mixin)
 			//
 			fn_args.get_unspent_outs_fn(req_params, function(err_msg, res)
@@ -326,4 +326,4 @@ class MyMoneroCoreBridgeClass extends MyMoneroCoreBridgeEssentialsClass
 		}
 }
 //
-module.exports = MyMoneroCoreBridgeClass;
+module.exports = QwertycoinCoreBridgeClass;

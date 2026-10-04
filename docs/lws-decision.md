@@ -117,14 +117,13 @@ wallet on a tight timeline.
    `docs/lws-api.md`.
 4. **Wire the dashboard's balance + history panels** to call
    `lws-client.js`. Until then they show `—`.
-5. **Vendor `mymonero-core-js`** under `js/mymonero-core/`. **Done**
+5. **Vendor the pinned upstream transaction core** under
+   `vendor/qwertycoin-core-wasm/`. **Done**
    2026-04-09. The 5 source files are checked into the repo at
-   `js/mymonero-core/` along with the BSD-3-Clause `LICENSE.txt` and
-   a README explaining provenance, status, and the recommended
-   browser-compat path for whoever wires it up next. The files
-   ship to users via Cloudflare Pages but are not yet called from
-   the dashboard — that happens in step 6.
-6. **Write `js/send.js`** — the wrapper the Send button calls. Builds
+   `vendor/qwertycoin-core-wasm/` along with the BSD-3-Clause `LICENSE.txt` and
+   a README explaining provenance, status, and the browser integration.
+   The branded WASM artifact is loaded by the dashboard.
+6. **Write `js/qwertycoin-send.js`** — the wrapper the Send button calls. Builds
    the tx via mymonero-core-js, signs it, broadcasts via the existing
    `/api/proxy` Cloudflare Function.
 7. **Replace the dashboard's "send coming soon" placeholder** with the

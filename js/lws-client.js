@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 /**
- * lws-client.js — Browser client for monero-lws (light-wallet server)
+ * lws-client.js — Compatibility client for the legacy upstream light-wallet server
  *
- * Wraps the small set of HTTP endpoints monero-web's dashboard needs to
+ * Wraps the small set of HTTP endpoints the Qwertycoin dashboard historically used to
  * display balance, transaction history, and (eventually) construct send
  * transactions. The actual server lives on our Hetzner VPS at
  *   disabled for QWC v2; dashboard sync uses qwertycoin-ts + QWC RPC.
@@ -435,7 +435,7 @@ const LwsClient = (function () {
    * Format QWC atomic units with no trailing zeros.
    * 1 QWC = 1e8 atomic units. Accepts BigInt, string, or number.
    */
-  function formatXmr (atomic) {
+  function formatQwc (atomic) {
     let n;
     if (typeof atomic === 'bigint') n = atomic;
     else if (typeof atomic === 'string') n = BigInt(atomic);
@@ -492,7 +492,7 @@ const LwsClient = (function () {
     }
 
     if (path === '/get_address_info') {
-      // Fake balance: 1.234 XMR received, 0 spent
+      // Fake balance: 1.234 QWC received, 0 spent
       return {
         locked_funds:         '0',
         total_received:       '1234567890000',
@@ -596,7 +596,7 @@ const LwsClient = (function () {
     submitRawTx,
     availableBalance,
     scanProgress,
-    formatXmr,
+    formatQwc,
     pingLogin,
     prewarm,
     setBaseUrl,

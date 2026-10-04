@@ -1,10 +1,10 @@
 
-var MyMoneroClient = (() => {
+var QwertycoinCoreWasmFactory = (() => {
   var _scriptDir = typeof document !== 'undefined' && document.currentScript ? document.currentScript.src : undefined;
   if (typeof __filename !== 'undefined') _scriptDir = _scriptDir || __filename;
   return (
-function(MyMoneroClient) {
-  MyMoneroClient = MyMoneroClient || {};
+function(QwertycoinCoreWasmFactory) {
+  QwertycoinCoreWasmFactory = QwertycoinCoreWasmFactory || {};
 
 
 
@@ -23,7 +23,7 @@ function(MyMoneroClient) {
 // after the generated code, you will need to define   var Module = {};
 // before the code. Then that object will be used in the code, and you
 // can continue to use Module afterwards as well.
-var Module = typeof MyMoneroClient != 'undefined' ? MyMoneroClient : {};
+var Module = typeof QwertycoinCoreWasmFactory != 'undefined' ? QwertycoinCoreWasmFactory : {};
 
 // See https://caniuse.com/mdn-javascript_builtins_object_assign
 
@@ -1010,7 +1010,7 @@ function createExportWrapper(name, fixedasm) {
 }
 
 var wasmBinaryFile;
-  wasmBinaryFile = 'MyMoneroCoreCpp_WASM.wasm';
+  wasmBinaryFile = 'qwertycoin-core-wasm.wasm';
   if (!isDataURI(wasmBinaryFile)) {
     wasmBinaryFile = locateFile(wasmBinaryFile);
   }
@@ -6874,13 +6874,13 @@ run();
 
 
 
-  return MyMoneroClient.ready
+  return QwertycoinCoreWasmFactory.ready
 }
 );
 })();
 if (typeof exports === 'object' && typeof module === 'object')
-  module.exports = MyMoneroClient;
+  module.exports = QwertycoinCoreWasmFactory;
 else if (typeof define === 'function' && define['amd'])
-  define([], function() { return MyMoneroClient; });
+  define([], function() { return QwertycoinCoreWasmFactory; });
 else if (typeof exports === 'object')
-  exports["MyMoneroClient"] = MyMoneroClient;
+  exports["QwertycoinCoreWasmFactory"] = QwertycoinCoreWasmFactory;

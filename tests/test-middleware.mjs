@@ -38,4 +38,7 @@ assert.equal(wallet.headers.get('cache-control'), 'public, max-age=0, must-reval
 const font = await run('/fonts/example.woff2', { status: 200 });
 assert.equal(font.headers.get('cache-control'), 'public, max-age=31536000, immutable');
 
+const api = await run('/api/proxy', { method: 'POST', status: 200 });
+assert.equal(api.headers.get('cache-control'), 'no-store');
+
 console.log('  ok   middleware 404 preservation and cache policy');

@@ -10,7 +10,8 @@
 //
 // What this does:
 //   • For 404 responses → preserve the status and prevent indexing
-//   • For HTML, JS, JSON, MANIFEST.txt, /api/* → max-age=0, must-revalidate
+//   • For /api/* → no-store (live chain data)
+//   • For HTML, JS, JSON and MANIFEST.txt → max-age=0, must-revalidate
 //     (browser asks Cloudflare on every reload; Cloudflare returns 304 via
 //      ETag if unchanged — cheap)
 //   • For /fonts/* → keep the long immutable cache (filename-hashed)
@@ -44,6 +45,14 @@ export async function onRequest (context) {
     return r;
   }
 
+  // Never cache RPC responses. They are live chain data and may also contain
+  // submission results that must not be replayed by an intermediary.
+  if (path.startsWith('/api/')) {
+    const r = new Response(response.body, response);
+    r.headers.set('Cache-Control', 'no-store');
+    return r;
+  }
+
   // Force revalidation on everything that can change between deploys:
   // HTML pages (clean URLs and .html), all JS, JSON, the manifest, and
   // the API proxy responses.
@@ -52,7 +61,6 @@ export async function onRequest (context) {
     path.endsWith('.js')   ||
     path.endsWith('.json') ||
     path === '/MANIFEST.txt' ||
-    path.startsWith('/api/') ||
     // Clean URLs (no extension) — every Pages route that resolves to an
     // HTML file. The catch-all is "any path that doesn't have an extension".
     !/\.[a-z0-9]+$/i.test(path);
