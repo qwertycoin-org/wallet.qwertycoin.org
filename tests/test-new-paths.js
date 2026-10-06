@@ -443,6 +443,7 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
 
   await test('Dashboard QWC history sums wallet transfers and miner outputs', () => {
     const dashboard = fs.readFileSync(path.join(__dirname, '../js/dashboard-page.js'), 'utf8');
+    const qmsHistory = fs.readFileSync(path.join(__dirname, '../js/qms-transaction-history.js'), 'utf8');
 
     assert(dashboard.includes('function getQwcTxDisplayAmount'), 'history amount normalizer missing');
     assert(dashboard.includes('tx.incomingTransfers || tx.incoming_transfers'), 'incoming transfer amounts are not summed');
@@ -454,6 +455,12 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
     assert(dashboard.includes('tx.isMinerTx === true || tx.is_miner_tx === true'), 'miner tx outputs are not treated as received funds');
     assert(dashboard.includes('https://explorer.qwertycoin.org/tx/'), 'QWC history explorer links are missing');
     assert(dashboard.includes('qwcBindTransactionDetails(listEl)'), 'QWC history rows are not clickable');
+    assert(dashboard.includes('controller.transactionHistoryGroups()'), 'Messenger carrier hashes are not loaded from encrypted QMS state');
+    assert(dashboard.includes('QmsTransactionHistory.buildItems'), 'Messenger history classification does not use the exact-hash grouping contract');
+    assert(dashboard.includes('Outgoing Messenger message'), 'Messenger transactions are not labelled in history details');
+    assert(qmsHistory.includes("filter === 'payments'"), 'payment-only history filter is missing');
+    assert(qmsHistory.includes("filter !== 'messenger'"), 'Messenger-only history filter is missing');
+    assert(!dashboard.includes('txDisplay.amount === 1n'), 'one-atomic transactions must never be guessed to be Messenger carriers');
     assert(!dashboard.includes("tx.incomingAmount || tx.outgoingAmount || tx.amount || '0'"), 'old flat amount fallback still controls QWC history rendering');
   });
 

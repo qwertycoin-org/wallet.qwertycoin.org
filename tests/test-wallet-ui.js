@@ -214,6 +214,8 @@ test('functional wallet anchors remain present', () => {
   ]) linked(dashboard, `id="${id}"`);
 
   const dashboardController = read('js/dashboard-page.js');
+  for (const filter of ['payments', 'messenger', 'all']) linked(dashboard, `data-tx-filter="${filter}"`);
+  linked(dashboard, 'aria-label="Filter recent transactions"');
   linked(dashboardController, 'Messenger could not start:');
   linked(dashboardController, 'qmsOpenRequested');
   linked(dashboardController, 'qmsLaunchRetry.addEventListener');
@@ -230,7 +232,7 @@ test('critical Messenger assets use content-derived cache keys', () => {
     'assets/qms-messenger.css', 'js/wallet-vault.js', 'js/qwc-wallet-engine.js',
     'vendor/libsodium/libsodium-sumo.js', 'vendor/libsodium/libsodium-wrappers.js',
     'js/qms-kdf.js', 'js/qms-protocol.js', 'js/qms-store.js',
-    'js/qms-messenger.js', 'js/dashboard-page.js',
+    'js/qms-messenger.js', 'js/qms-transaction-history.js', 'js/dashboard-page.js',
   ]) linked(dashboard, versioned(file));
   for (const file of [
     'vendor/libsodium/libsodium-sumo.js', 'vendor/libsodium/libsodium-wrappers.js',

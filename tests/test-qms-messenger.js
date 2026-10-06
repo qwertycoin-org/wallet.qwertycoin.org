@@ -116,6 +116,35 @@ async function test(name, fn) {
   const bobInvite = qms.createInvitation(bob);
   const malloryInvite = qms.createInvitation(mallory);
 
+  await test('outgoing history groups expose only exact Messenger carrier hashes', async () => {
+    const firstHash = 'ab'.repeat(32);
+    const secondHash = 'cd'.repeat(32);
+    const groups = messenger.testing.outgoingTransactionHistoryGroups({
+      messages: [{ id: 'message-1', direction: 'out', status: 'sent', createdAt: '2026-10-06T17:00:00.000Z', text: 'must stay private' }],
+      plans: [{
+        id: 'message-1',
+        contactId: 'private-contact',
+        status: 'broadcast',
+        createdAt: '2026-10-06T16:59:00.000Z',
+        txs: [
+          { hash: firstHash.toUpperCase(), fee: '7', status: 'broadcast' },
+          { hash: secondHash, fee: '11', status: 'confirmed' },
+          { hash: 'not-a-transaction-hash', fee: '1000', status: 'confirmed' }
+        ]
+      }]
+    });
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(groups)), [{
+      messageId: 'message-1',
+      createdAt: '2026-10-06T17:00:00.000Z',
+      status: 'sent',
+      transactionCount: 2,
+      transactionHashes: [firstHash, secondHash],
+      totalFeeAtomic: '18'
+    }]);
+    assert(!JSON.stringify(groups).includes('must stay private'));
+    assert(!JSON.stringify(groups).includes('private-contact'));
+  });
+
   await test('signed personal invitations have the desktop-compatible encoding', async () => {
     const encoded = qms.encodeInvitation(aliceInvite);
     assert.strictEqual(encoded.length, 214);

@@ -100,6 +100,12 @@ nav{min-height:86px;padding:16px 0;display:flex;align-items:center;justify-conte
 /* Network status */
 .network-section{margin-bottom:24px}
 .section-title{font-family:var(--font-display);font-size:.82rem;font-weight:800;color:var(--text-mid);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em}
+.tx-section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.tx-section-heading .section-title{margin-bottom:0}
+.tx-filter{display:flex;gap:4px;padding:3px;background:var(--surface);border:1px solid var(--border);border-radius:100px}
+.tx-filter-button{border:0;background:transparent;color:var(--text-dim);font-family:var(--font-display);font-size:.65rem;font-weight:700;padding:5px 9px;border-radius:100px;cursor:pointer}
+.tx-filter-button[aria-pressed="true"]{background:var(--surface-2);color:var(--text);box-shadow:0 0 0 1px var(--border-strong)}
+.tx-kind-badge{display:inline-flex;align-items:center;padding:2px 7px;border:1px solid rgba(255,175,0,.28);border-radius:100px;color:var(--qwc);font-family:var(--font-display);font-size:.6rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase}
 .network-card{background:rgba(7,19,39,0.58);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px}
 .network-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:.78rem}
 .network-row:not(:last-child){border-bottom:1px solid var(--border)}
@@ -181,6 +187,9 @@ footer p{font-size:.65rem;color:var(--text-dim)}
   .info-card{padding:12px}
   .keys-section{margin-bottom:18px}
   .key-card{padding:12px}
+  .tx-section-heading{align-items:stretch;flex-direction:column;gap:8px}
+  .tx-filter{width:100%}
+  .tx-filter-button{flex:1}
   .modal{padding:20px;max-width:calc(100vw - 32px)}
   #qr-code svg,#qr-code img{max-width:100%;height:auto !important}
   #unlock-overlay > div{padding:22px 18px;max-width:calc(100vw - 32px)}
@@ -361,7 +370,14 @@ footer p{font-size:.65rem;color:var(--text-dim)}
 
       <!-- Transactions -->
       <div class="keys-section fade-in">
-        <div class="section-title">Recent transactions</div>
+        <div class="tx-section-heading">
+          <div class="section-title">Recent transactions</div>
+          <div class="tx-filter" role="group" aria-label="Filter recent transactions">
+            <button class="tx-filter-button" type="button" data-tx-filter="payments" aria-pressed="false">Payments</button>
+            <button class="tx-filter-button" type="button" data-tx-filter="messenger" aria-pressed="false">Messenger</button>
+            <button class="tx-filter-button" type="button" data-tx-filter="all" aria-pressed="true">All</button>
+          </div>
+        </div>
         <div id="tx-list">
           <div class="key-card" style="text-align:center;color:var(--text-dim);font-size:.75rem;padding:18px">Loading…</div>
         </div>
@@ -685,8 +701,9 @@ footer p{font-size:.65rem;color:var(--text-dim)}
 <script src="js/qms-kdf.js?v=02a7aefd8e5bbd95"></script>
 <script src="js/qms-protocol.js?v=7bea05fe7ac1f3ef"></script>
 <script src="js/qms-store.js?v=085417233029958a"></script>
-<script src="js/qms-messenger.js?v=fa0e95628ad33c2f"></script>
+<script src="js/qms-messenger.js?v=954828ee63f858c8"></script>
+<script src="js/qms-transaction-history.js?v=6eafa0cb2d0e91fd"></script>
 
-<script src="js/dashboard-page.js?v=35248449bd741160"></script>
+<script src="js/dashboard-page.js?v=71bd24ead011ebad"></script>
 </body>
 </html>

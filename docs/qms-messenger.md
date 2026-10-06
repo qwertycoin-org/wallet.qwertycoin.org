@@ -76,6 +76,22 @@ The browser verifies that the vendored wallet/WASM builder preserved every
 planned fragment byte. Each prepared carrier journals its signed payload,
 transaction ID, fee and reserved key images before relay.
 
+## Transaction history
+
+The normal wallet history classifies outgoing Messenger carriers only by the
+exact transaction hashes in the encrypted outbox journal. It never guesses
+from the one-atomic-unit amount: a legitimate one-atomic payment must remain a
+normal payment. All carrier transactions for one message are grouped into one
+**Outgoing message** row with a Messenger badge, carrier count, confirmation
+state and summed network fee. The detail panel retains every individual hash
+and Explorer link.
+
+The history filter offers **Payments**, **Messenger** and **All** and stores only
+that display preference locally. Filtering changes neither wallet accounting
+nor the canonical transaction history. The displayed `0.00000001 QWC` carrier
+amount is a self-transfer used to carry authenticated QMS data; the actual
+network fees are recorded and displayed separately.
+
 ## Outbox and recovery
 
 The durable outbox uses these internal states:

@@ -457,7 +457,32 @@ document.addEventListener('DOMContentLoaded', async () => {
   let qwcMessageWalletGeneration = 0;
   let qwcLastSyncHeight = 0;
   let qwcLastAvailableDisplay = '—';
+  let qwcLastHistoryBlocks = [];
+  let qmsHistoryGroups = [];
+  const qwcHistoryFilterKey = 'qwertycoin-web-history-filter-' + walletKeys.address.slice(0, 12);
+  let qwcHistoryFilter = 'all';
   var _keyImageCache = {}; // tx_pub_key:out_index → real key_image
+
+  try {
+    const storedHistoryFilter = localStorage.getItem(qwcHistoryFilterKey);
+    if (['payments', 'messenger', 'all'].includes(storedHistoryFilter)) qwcHistoryFilter = storedHistoryFilter;
+  } catch (_) {}
+
+  function updateQwcHistoryFilterButtons () {
+    document.querySelectorAll('[data-tx-filter]').forEach(function (button) {
+      button.setAttribute('aria-pressed', String(button.dataset.txFilter === qwcHistoryFilter));
+    });
+  }
+
+  document.querySelectorAll('[data-tx-filter]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      qwcHistoryFilter = button.dataset.txFilter;
+      try { localStorage.setItem(qwcHistoryFilterKey, qwcHistoryFilter); } catch (_) {}
+      updateQwcHistoryFilterButtons();
+      renderQwcHistory(qwcLastHistoryBlocks);
+    });
+  });
+  updateQwcHistoryFilterButtons();
 
   function qwcAtomicToDisplay (value) {
     var atomic = BigInt(String(value || '0'));
@@ -1058,21 +1083,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   const requestedSigningTool = new URLSearchParams(window.location.search).get('tool');
   if (requestedSigningTool === 'pool-challenge') openMessageSigning('pool');
 
-  function renderQwcHistory (blocks) {
-    const listEl = document.getElementById('tx-list');
-    if (!listEl) return;
-    var rows = [];
-    for (const block of blocks || []) {
-      for (const tx of block.txs || []) rows.push({ block: block, tx: tx });
-    }
-    if (rows.length === 0) {
-      listEl.innerHTML = '<div class="key-card" style="text-align:center;color:var(--text-dim);font-size:.75rem;padding:18px">No transactions yet. Receive some QWC and it will show up here after sync.</div>';
-      return;
-    }
-    rows.sort(function (a, b) {
-      return ((b.block && b.block.height) || 0) - ((a.block && a.block.height) || 0);
-    });
-    listEl.innerHTML = rows.map(function (item) {
+  function qwcHistoryHash (tx) {
+    var value = tx && (tx.hash || tx.id || '');
+    return /^[0-9a-f]{64}$/i.test(value) ? value.toLowerCase() : '';
+  }
+
+  function qwcRenderTransactionHistoryRow (item) {
       var tx = item.tx || {};
       var block = item.block || {};
       var hash = tx.hash || tx.id || '';
@@ -1118,7 +1134,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         detailRows += '<tr><td colspan="2" style="padding:8px 0 0 0"><a href="' + escapeHtml(explorerUrl) + '" target="_blank" rel="noopener noreferrer" style="color:var(--qwc);font-size:.72rem;text-decoration:none">View on QWC Explorer ↗</a></td></tr>';
       }
 
-      return '<div class="key-card" style="margin-bottom:6px;padding:0;overflow:hidden">' +
+      return '<div class="key-card" data-history-kind="payment" style="margin-bottom:6px;padding:0;overflow:hidden">' +
         '<div class="tx-row" style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;cursor:pointer">' +
           '<div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1">' +
             '<span style="font-size:1.1rem;color:' + color + ';font-weight:700;flex-shrink:0">' + arrow + '</span>' +
@@ -1133,7 +1149,89 @@ document.addEventListener('DOMContentLoaded', async () => {
           '<table style="width:100%;font-size:.72rem;font-family:\'JetBrains Mono\',monospace;border-collapse:collapse;margin-top:10px">' + detailRows + '</table>' +
         '</div>' +
       '</div>';
-    }).join('');
+  }
+
+  function qwcRenderMessengerHistoryGroup (group, matchedRows) {
+    var count = Number(group.transactionCount || group.transactionHashes.length || 0);
+    var onChain = matchedRows.filter(function (item) {
+      return item.block && typeof item.block.height === 'number' && item.block.height > 0;
+    });
+    var minimumConfirmations = onChain.length
+      ? Math.min.apply(null, onChain.map(function (item) {
+          return qwcLastSyncHeight > 0 ? Math.max(0, qwcLastSyncHeight - item.block.height + 1) : 0;
+        }))
+      : 0;
+    var status;
+    if (onChain.length < count) {
+      status = '<span style="color:var(--warning)">' + onChain.length + ' / ' + count + ' carriers confirmed</span>';
+    } else if (minimumConfirmations < 10) {
+      status = '<span style="color:var(--warning)">' + minimumConfirmations + ' / 10 confs</span>';
+    } else {
+      status = '<span style="color:var(--success)">confirmed</span>';
+    }
+    var when = group.createdAt ? new Date(group.createdAt).toLocaleString() : '—';
+    var fee = qwcAtomicToBigInt(group.totalFeeAtomic);
+    var feeDisplay = fee > 0n ? qwcAtomicToDisplay(fee) + ' QWC' : '—';
+    var detailRows = '';
+    detailRows += '<tr><td style="color:var(--text-dim);padding:4px 12px 4px 0;white-space:nowrap">Type</td><td style="padding:4px 0">Outgoing Messenger message</td></tr>';
+    detailRows += '<tr><td style="color:var(--text-dim);padding:4px 12px 4px 0">Date</td><td style="padding:4px 0">' + escapeHtml(when) + '</td></tr>';
+    detailRows += '<tr><td style="color:var(--text-dim);padding:4px 12px 4px 0">Carrier transactions</td><td style="padding:4px 0">' + count + '</td></tr>';
+    detailRows += '<tr><td style="color:var(--text-dim);padding:4px 12px 4px 0">Carrier amount</td><td style="padding:4px 0">0.00000001 QWC each · self-transfer</td></tr>';
+    detailRows += '<tr><td style="color:var(--text-dim);padding:4px 12px 4px 0">Total network fee</td><td style="padding:4px 0">' + feeDisplay + '</td></tr>';
+    for (const hash of group.transactionHashes || []) {
+      var explorerUrl = 'https://explorer.qwertycoin.org/tx/' + encodeURIComponent(hash);
+      detailRows += '<tr><td style="color:var(--text-dim);padding:4px 12px 4px 0">Transaction ID</td><td style="padding:4px 0;word-break:break-all"><span class="tx-detail-copy" data-copy="' + escapeHtml(hash) + '" style="cursor:pointer" title="Click to copy">' + escapeHtml(hash) + '</span> <a href="' + escapeHtml(explorerUrl) + '" target="_blank" rel="noopener noreferrer" style="color:var(--qwc);text-decoration:none" aria-label="View Messenger carrier on QWC Explorer">↗</a></td></tr>';
+    }
+    return '<div class="key-card" data-history-kind="messenger" style="margin-bottom:6px;padding:0;overflow:hidden">' +
+      '<div class="tx-row" style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;cursor:pointer">' +
+        '<div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1">' +
+          '<span style="font-size:1.05rem;color:var(--qwc);font-weight:700;flex-shrink:0">✉</span>' +
+          '<div style="min-width:0">' +
+            '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><span style="font-size:.82rem;font-weight:600;color:var(--text)">Outgoing message</span><span class="tx-kind-badge">Messenger</span></div>' +
+            '<div style="font-size:.65rem;color:var(--text-dim);margin-top:2px">' + count + ' carrier transaction' + (count === 1 ? '' : 's') + ' · ' + status + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div style="font-family:\'JetBrains Mono\',monospace;font-size:.62rem;color:var(--text-dim);text-align:right">fee<br>' + escapeHtml(feeDisplay) + '</div>' +
+      '</div>' +
+      '<div class="tx-detail" style="display:none;padding:0 14px 14px;border-top:1px solid var(--border)">' +
+        '<table style="width:100%;font-size:.72rem;font-family:\'JetBrains Mono\',monospace;border-collapse:collapse;margin-top:10px">' + detailRows + '</table>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function renderQwcHistory (blocks) {
+    const listEl = document.getElementById('tx-list');
+    if (!listEl) return;
+    qwcLastHistoryBlocks = Array.isArray(blocks) ? blocks : [];
+    if (qmsController && qmsController.transactionHistoryGroups) {
+      qmsHistoryGroups = qmsController.transactionHistoryGroups();
+    }
+    var rows = [];
+    for (const block of qwcLastHistoryBlocks) {
+      for (const tx of block.txs || []) rows.push({ block: block, tx: tx });
+    }
+    if (rows.length === 0) {
+      listEl.innerHTML = '<div class="key-card" style="text-align:center;color:var(--text-dim);font-size:.75rem;padding:18px">No transactions yet. Receive some QWC and it will show up here after sync.</div>';
+      return;
+    }
+    rows.sort(function (a, b) {
+      return ((b.block && b.block.height) || 0) - ((a.block && a.block.height) || 0);
+    });
+
+    var items = QmsTransactionHistory.buildItems(rows, qmsHistoryGroups, qwcHistoryFilter, function (row) {
+      return qwcHistoryHash(row && row.tx);
+    });
+    var output = items.map(function (item) {
+      return item.kind === 'messenger'
+        ? qwcRenderMessengerHistoryGroup(item.group, item.matchedRows)
+        : qwcRenderTransactionHistoryRow(item.row);
+    });
+    if (!output.length) {
+      const label = qwcHistoryFilter === 'messenger' ? 'Messenger transactions' : 'payment transactions';
+      listEl.innerHTML = '<div class="key-card" style="text-align:center;color:var(--text-dim);font-size:.75rem;padding:18px">No ' + label + ' match this filter.</div>';
+      return;
+    }
+    listEl.innerHTML = output.join('');
     qwcBindTransactionDetails(listEl);
   }
 
@@ -2104,6 +2202,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       qmsMountAbort = null;
       qmsController = controller;
+      qmsHistoryGroups = controller.transactionHistoryGroups ? controller.transactionHistoryGroups() : [];
+      renderQwcHistory(qwcLastHistoryBlocks);
       qmsTab.title = '';
       setQmsLaunchStatus('', '', false);
       if (qmsOpenRequested) {
