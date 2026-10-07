@@ -216,6 +216,9 @@ test('functional wallet anchors remain present', () => {
   const dashboardController = read('js/dashboard-page.js');
   for (const filter of ['payments', 'messenger', 'all']) linked(dashboard, `data-tx-filter="${filter}"`);
   linked(dashboard, 'aria-label="Filter recent transactions"');
+  linked(dashboard, '.tx-filter-button:hover:not([aria-pressed="true"])');
+  linked(dashboard, '.tx-filter-button[aria-pressed="true"]{background:var(--qwc);color:#141414;box-shadow:none}');
+  linked(dashboard, 'grid-template-columns:repeat(3,minmax(0,1fr))');
   linked(dashboardController, 'Messenger could not start:');
   linked(dashboardController, 'qmsOpenRequested');
   linked(dashboardController, 'qmsLaunchRetry.addEventListener');
