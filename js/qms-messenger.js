@@ -45,6 +45,30 @@ const QmsMessenger = (() => {
   function allKeyImages(tx) { return (tx.inputs || []).map(input => input && input.keyImage && input.keyImage.hex).filter(Boolean); }
   function statusLabel(status) { return STATUS_LABELS[status] || String(status || 'Unknown'); }
   function activePlan(state) { return state.plans.find(plan => ACTIVE_PLAN_STATUSES.has(plan.status)) || null; }
+  function outgoingTransactionHistoryGroups(state) {
+    const messages = new Map((state.messages || []).map(message => [message.id, message]));
+    const groups = [];
+    for (const plan of state.plans || []) {
+      if (!plan || typeof plan.id !== 'string') continue;
+      const transactions = (plan.txs || []).filter(tx => tx && typeof tx.hash === 'string' && /^[0-9a-f]{64}$/i.test(tx.hash));
+      if (!transactions.length) continue;
+      let totalFee = 0n;
+      for (const tx of transactions) {
+        const fee = String(tx.fee || 0);
+        if (/^\d+$/.test(fee)) totalFee += BigInt(fee);
+      }
+      const message = messages.get(plan.id);
+      groups.push({
+        messageId: plan.id,
+        createdAt: (message && message.createdAt) || plan.createdAt || '',
+        status: (message && message.status) || plan.status || 'unknown',
+        transactionCount: transactions.length,
+        transactionHashes: transactions.map(tx => tx.hash.toLowerCase()),
+        totalFeeAtomic: totalFee.toString()
+      });
+    }
+    return groups;
+  }
   function createOperationMutex() {
     let current = null;
     return {
@@ -1434,11 +1458,12 @@ const QmsMessenger = (() => {
       },
       scan,
       scanMempool,
+      transactionHistoryGroups() { return outgoingTransactionHistoryGroups(state); },
       resumeScan() { nextScanAt = 0; scheduleMempoolScan(0); return scan(); }
     };
   }
 
-  return { mount, testing: { normalizeState, activePlan, acceptFragment, pendingInboxFromTransactions, retryCompleteReassemblies, evictStaleInboundState, resetDeferredRescan, rollbackForReorg, validateBlockSequence, findCommonCheckpoint, removeDraft, recomputePlanStatus, releasePlanInputs, createOperationMutex, beginBroadcastAttempt, completeBroadcastAttempt, markBroadcastUnknown, relayPlan, statusLabel } };
+  return { mount, testing: { normalizeState, activePlan, outgoingTransactionHistoryGroups, acceptFragment, pendingInboxFromTransactions, retryCompleteReassemblies, evictStaleInboundState, resetDeferredRescan, rollbackForReorg, validateBlockSequence, findCommonCheckpoint, removeDraft, recomputePlanStatus, releasePlanInputs, createOperationMutex, beginBroadcastAttempt, completeBroadcastAttempt, markBroadcastUnknown, relayPlan, statusLabel } };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = QmsMessenger;

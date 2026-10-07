@@ -443,17 +443,31 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
 
   await test('Dashboard QWC history sums wallet transfers and miner outputs', () => {
     const dashboard = fs.readFileSync(path.join(__dirname, '../js/dashboard-page.js'), 'utf8');
+    const qmsHistory = fs.readFileSync(path.join(__dirname, '../js/qms-transaction-history.js'), 'utf8');
 
     assert(dashboard.includes('function getQwcTxDisplayAmount'), 'history amount normalizer missing');
     assert(dashboard.includes('tx.incomingTransfers || tx.incoming_transfers'), 'incoming transfer amounts are not summed');
     assert(dashboard.includes('tx.outgoingTransfer || tx.outgoing_transfer'), 'outgoing transfer amount is not read');
     assert(dashboard.includes('transfer.destinations || transfer.recipients'), 'outgoing destination amounts are not summed');
-    assert(dashboard.includes('function qwcGetSelfTransferAmount'), 'self-transfer output fallback is missing');
+    assert(dashboard.includes('function qwcGetSelfTransferAmount'), 'self-transfer handling is missing');
+    assert(dashboard.includes('Their order') && dashboard.includes('return 0n;'),
+      'ambiguous wallet-owned outputs must not be guessed from array order');
     assert(dashboard.includes('qwcMergeWalletOutputDetails'), 'wallet output details are not merged into history txs');
     assert(dashboard.includes('outputSum - changeAmount'), 'outgoing output/change fallback is missing');
     assert(dashboard.includes('tx.isMinerTx === true || tx.is_miner_tx === true'), 'miner tx outputs are not treated as received funds');
     assert(dashboard.includes('https://explorer.qwertycoin.org/tx/'), 'QWC history explorer links are missing');
     assert(dashboard.includes('qwcBindTransactionDetails(listEl)'), 'QWC history rows are not clickable');
+    assert(dashboard.includes('controller.transactionHistoryGroups()'), 'Messenger carrier hashes are not loaded from encrypted QMS state');
+    assert(dashboard.includes('qwcRefreshChainQmsHistory'), 'restored wallets do not recover Messenger carriers from confirmed blocks');
+    assert(dashboard.includes('QmsProtocol.decodeSegments'), 'historical Messenger classification does not validate the QMS fragment structure');
+    assert(dashboard.includes('qwcAtomicToBigInt(output && output.amount) === 1n'), 'historical Messenger candidates do not require the one-atomic self-transfer output');
+    assert(dashboard.includes('QmsTransactionHistory.buildItems'), 'Messenger history classification does not use the exact-hash grouping contract');
+    assert(qmsHistory.includes('function buildChainGroups'), 'on-chain Messenger history grouping is missing');
+    assert(qmsHistory.includes('function mergeGroups'), 'local and on-chain Messenger history groups are not merged');
+    assert(dashboard.includes('Outgoing Messenger message'), 'Messenger transactions are not labelled in history details');
+    assert(qmsHistory.includes("filter === 'payments'"), 'payment-only history filter is missing');
+    assert(qmsHistory.includes("filter !== 'messenger'"), 'Messenger-only history filter is missing');
+    assert(!dashboard.includes('txDisplay.amount === 1n'), 'one-atomic transactions must never be guessed to be Messenger carriers');
     assert(!dashboard.includes("tx.incomingAmount || tx.outgoingAmount || tx.amount || '0'"), 'old flat amount fallback still controls QWC history rendering');
   });
 

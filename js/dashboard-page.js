@@ -457,7 +457,35 @@ document.addEventListener('DOMContentLoaded', async () => {
   let qwcMessageWalletGeneration = 0;
   let qwcLastSyncHeight = 0;
   let qwcLastAvailableDisplay = '—';
+  let qwcLastHistoryBlocks = [];
+  let qmsHistoryGroups = [];
+  let qmsChainHistoryGroups = [];
+  let qmsChainHistoryFingerprint = '';
+  let qwcHistoryScannerPromise = null;
+  const qwcHistoryFilterKey = 'qwertycoin-web-history-filter-' + walletKeys.address.slice(0, 12);
+  let qwcHistoryFilter = 'all';
   var _keyImageCache = {}; // tx_pub_key:out_index → real key_image
+
+  try {
+    const storedHistoryFilter = localStorage.getItem(qwcHistoryFilterKey);
+    if (['payments', 'messenger', 'all'].includes(storedHistoryFilter)) qwcHistoryFilter = storedHistoryFilter;
+  } catch (_) {}
+
+  function updateQwcHistoryFilterButtons () {
+    document.querySelectorAll('[data-tx-filter]').forEach(function (button) {
+      button.setAttribute('aria-pressed', String(button.dataset.txFilter === qwcHistoryFilter));
+    });
+  }
+
+  document.querySelectorAll('[data-tx-filter]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      qwcHistoryFilter = button.dataset.txFilter;
+      try { localStorage.setItem(qwcHistoryFilterKey, qwcHistoryFilter); } catch (_) {}
+      updateQwcHistoryFilterButtons();
+      renderQwcHistory(qwcLastHistoryBlocks);
+    });
+  });
+  updateQwcHistoryFilterButtons();
 
   function qwcAtomicToDisplay (value) {
     var atomic = BigInt(String(value || '0'));
@@ -522,14 +550,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function qwcGetSelfTransferAmount (tx, transfer) {
-    var outputs = tx.outputs || [];
-    if (!transfer || outputs.length < 2) return 0n;
+    if (!transfer) return 0n;
     if (!qwcHasWalletAddress(transfer.addresses)) return 0n;
 
-    // For restored self-transfers qwertycoin-ts reports outgoingTransfer.amount
-    // as 0, but getOutputs() still exposes the wallet-owned recipient output
-    // before the change output.
-    return qwcAtomicToBigInt(outputs[0] && outputs[0].amount);
+    // A restored self-transfer can expose both the recipient output and change
+    // as wallet-owned outputs without identifying which is which. Their order
+    // is not stable, so guessing from outputs[0] can misreport almost the full
+    // wallet balance as sent. Keep the amount unknown instead.
+    return 0n;
   }
 
   function qwcGetOutgoingAmount (tx) {
@@ -537,6 +565,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (outgoing === 0n) outgoing = qwcAtomicToBigInt(tx.total_sent);
 
     var transfer = tx.outgoingTransfer || tx.outgoing_transfer;
+    var selfTransfer = !!transfer && qwcHasWalletAddress(transfer.addresses);
     if (transfer) {
       if (outgoing === 0n) outgoing = qwcAtomicToBigInt(transfer.amount);
       if (outgoing === 0n) outgoing = qwcSumAmounts(transfer.destinations || transfer.recipients);
@@ -544,7 +573,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (outgoing === 0n) outgoing = qwcGetSelfTransferAmount(tx, transfer);
 
-    if (outgoing === 0n) {
+    if (outgoing === 0n && !selfTransfer) {
       var outputSum = qwcAtomicToBigInt(tx.outputSum || tx.output_sum);
       var changeAmount = qwcAtomicToBigInt(tx.changeAmount || tx.change_amount);
       if (outputSum > changeAmount) outgoing = outputSum - changeAmount;
@@ -561,19 +590,25 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     var outgoing = qwcGetOutgoingAmount(tx);
 
-    if (incoming > 0n) return { amount: incoming, outgoing: false };
+    if (incoming > 0n) return { amount: incoming, outgoing: false, selfTransfer: false };
     if (outgoing > 0n || tx.isOutgoing === true || tx.is_outgoing === true) {
-      return { amount: outgoing, outgoing: true };
+      var transfer = tx.outgoingTransfer || tx.outgoing_transfer;
+      return {
+        amount: outgoing,
+        outgoing: true,
+        selfTransfer: outgoing === 0n && !!transfer && qwcHasWalletAddress(transfer.addresses)
+      };
     }
 
     var outputAmount = qwcSumAmounts(tx.outputs);
     if (outputAmount > 0n && (tx.isIncoming === true || tx.is_incoming === true || tx.isMinerTx === true || tx.is_miner_tx === true)) {
-      return { amount: outputAmount, outgoing: false };
+      return { amount: outputAmount, outgoing: false, selfTransfer: false };
     }
 
     return {
       amount: qwcAtomicToBigInt(tx.amount || tx.outputSum || tx.output_sum),
-      outgoing: tx.isOutgoing === true || tx.is_outgoing === true
+      outgoing: tx.isOutgoing === true || tx.is_outgoing === true,
+      selfTransfer: false
     };
   }
 
@@ -1058,26 +1093,106 @@ document.addEventListener('DOMContentLoaded', async () => {
   const requestedSigningTool = new URLSearchParams(window.location.search).get('tool');
   if (requestedSigningTool === 'pool-challenge') openMessageSigning('pool');
 
-  function renderQwcHistory (blocks) {
-    const listEl = document.getElementById('tx-list');
-    if (!listEl) return;
+  function qwcHistoryHash (tx) {
+    var value = tx && (tx.hash || tx.id || '');
+    return /^[0-9a-f]{64}$/i.test(value) ? value.toLowerCase() : '';
+  }
+
+  function qwcIsChainQmsCandidate (row) {
+    var tx = row && row.tx;
+    var block = row && row.block;
+    if (!tx || !block || !Number.isSafeInteger(Number(block.height)) || Number(block.height) <= 0) return false;
+    if (tx.isOutgoing !== true && tx.is_outgoing !== true) return false;
+    var transfer = tx.outgoingTransfer || tx.outgoing_transfer;
+    if (!transfer || !qwcHasWalletAddress(transfer.addresses)) return false;
+    var atomicOutputs = (tx.outputs || []).filter(function (output) {
+      return qwcAtomicToBigInt(output && output.amount) === 1n;
+    });
+    return atomicOutputs.length === 1 && !!qwcHistoryHash(tx);
+  }
+
+  function qwcDecodeChainQmsExtra (extra) {
+    var segments = QmsProtocol.extractSegmentsFromExtra(new Uint8Array(extra || []));
+    if (!segments.length) throw new Error('transaction has no QMS carrier segments');
+    var fragment = QmsProtocol.decodeSegments(segments);
+    return {
+      messageId: QmsProtocol.hex(fragment.messageId),
+      index: fragment.index,
+      count: fragment.count
+    };
+  }
+
+  function qwcHistoryTimestamp (row) {
+    var value = row && row.tx && row.tx.timestamp;
+    if (!value) value = row && row.block && (row.block.timestamp || row.block.time);
+    value = Number(value || 0);
+    if (!Number.isFinite(value) || value <= 0) return 0;
+    return value < 10000000000 ? value * 1000 : value;
+  }
+
+  function qwcBlockTransactions (block) {
+    var transactions = [];
+    if (block && block.minerTx) transactions.push(block.minerTx);
+    return transactions.concat(block && Array.isArray(block.txs) ? block.txs : []);
+  }
+
+  async function qwcRefreshChainQmsHistory (blocks) {
     var rows = [];
     for (const block of blocks || []) {
       for (const tx of block.txs || []) rows.push({ block: block, tx: tx });
     }
-    if (rows.length === 0) {
-      listEl.innerHTML = '<div class="key-card" style="text-align:center;color:var(--text-dim);font-size:.75rem;padding:18px">No transactions yet. Receive some QWC and it will show up here after sync.</div>';
+    var candidates = rows.filter(qwcIsChainQmsCandidate);
+    var fingerprint = candidates.map(function (row) {
+      return Number(row.block.height) + ':' + qwcHistoryHash(row.tx);
+    }).sort().join('|');
+    if (fingerprint === qmsChainHistoryFingerprint) return;
+    if (!fingerprint) {
+      qmsChainHistoryGroups = [];
+      qmsChainHistoryFingerprint = '';
       return;
     }
-    rows.sort(function (a, b) {
-      return ((b.block && b.block.height) || 0) - ((a.block && a.block.height) || 0);
-    });
-    listEl.innerHTML = rows.map(function (item) {
+
+    try {
+      await QmsProtocol.ready();
+      if (!qwcHistoryScannerPromise) qwcHistoryScannerPromise = QwcWalletEngine.createDaemonScanner();
+      var scanner = await qwcHistoryScannerPromise;
+      var requestedHashes = new Set(candidates.map(function (row) { return qwcHistoryHash(row.tx); }));
+      var heights = Array.from(new Set(candidates.map(function (row) { return Number(row.block.height); }))).sort(function (a, b) { return a - b; });
+      var transactions = [];
+      for (const height of heights) {
+        var chainBlocks = await scanner.getBlocksByRange(height, height);
+        for (const chainBlock of chainBlocks || []) {
+          for (const transaction of qwcBlockTransactions(chainBlock)) {
+            var hash = qwcHistoryHash(transaction);
+            if (requestedHashes.has(hash) && Array.isArray(transaction.extra)) {
+              transactions.push({ hash: hash, extra: transaction.extra });
+            }
+          }
+        }
+      }
+      qmsChainHistoryGroups = QmsTransactionHistory.buildChainGroups(rows, transactions, {
+        hashOf: function (row) { return qwcHistoryHash(row && row.tx); },
+        eligible: qwcIsChainQmsCandidate,
+        decodeExtra: qwcDecodeChainQmsExtra,
+        timestampOf: qwcHistoryTimestamp
+      });
+      qmsChainHistoryFingerprint = fingerprint;
+    } catch (error) {
+      console.warn('[qwc] historical Messenger classification unavailable:', error);
+    }
+  }
+
+  function qwcCombinedQmsHistoryGroups () {
+    return QmsTransactionHistory.mergeGroups(qmsHistoryGroups, qmsChainHistoryGroups);
+  }
+
+  function qwcRenderTransactionHistoryRow (item) {
       var tx = item.tx || {};
       var block = item.block || {};
       var hash = tx.hash || tx.id || '';
       var txDisplay = getQwcTxDisplayAmount(tx);
       var outgoing = txDisplay.outgoing;
+      var selfTransfer = txDisplay.selfTransfer === true;
       var display = qwcAtomicToDisplay(txDisplay.amount);
       var arrow = outgoing ? '↑' : '↓';
       var sign = outgoing ? '−' : '+';
@@ -1104,7 +1219,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       detailRows += '<tr><td style="color:var(--text-dim);padding:4px 12px 4px 0;white-space:nowrap">Transaction ID</td><td style="padding:4px 0;word-break:break-all"><span class="tx-detail-copy" data-copy="' + escapeHtml(hash) + '" style="cursor:pointer" title="Click to copy">' + escapeHtml(hash || 'unknown') + '</span></td></tr>';
       detailRows += '<tr><td style="color:var(--text-dim);padding:4px 12px 4px 0">Date</td><td style="padding:4px 0">' + escapeHtml(when) + '</td></tr>';
       detailRows += '<tr><td style="color:var(--text-dim);padding:4px 12px 4px 0">Height</td><td style="padding:4px 0">' + height + '</td></tr>';
-      detailRows += '<tr><td style="color:var(--text-dim);padding:4px 12px 4px 0">Amount</td><td style="padding:4px 0;font-weight:600;color:' + color + '">' + sign + display + ' QWC</td></tr>';
+      detailRows += '<tr><td style="color:var(--text-dim);padding:4px 12px 4px 0">Amount</td><td style="padding:4px 0;font-weight:600;color:' + color + '">' + (selfTransfer ? 'Self-transfer · fee only' : sign + display + ' QWC') + '</td></tr>';
       detailRows += '<tr><td style="color:var(--text-dim);padding:4px 12px 4px 0">Fee</td><td style="padding:4px 0">' + feeDisplay + (feeDisplay !== '—' ? ' QWC' : '') + '</td></tr>';
       detailRows += '<tr><td style="color:var(--text-dim);padding:4px 12px 4px 0">Confirmations</td><td style="padding:4px 0">' + confirmationsDisplay + '</td></tr>';
       detailRows += '<tr><td style="color:var(--text-dim);padding:4px 12px 4px 0">Direction</td><td style="padding:4px 0">' + (outgoing ? 'Sent' : 'Received') + '</td></tr>';
@@ -1118,12 +1233,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         detailRows += '<tr><td colspan="2" style="padding:8px 0 0 0"><a href="' + escapeHtml(explorerUrl) + '" target="_blank" rel="noopener noreferrer" style="color:var(--qwc);font-size:.72rem;text-decoration:none">View on QWC Explorer ↗</a></td></tr>';
       }
 
-      return '<div class="key-card" style="margin-bottom:6px;padding:0;overflow:hidden">' +
+      return '<div class="key-card" data-history-kind="payment" style="margin-bottom:6px;padding:0;overflow:hidden">' +
         '<div class="tx-row" style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;cursor:pointer">' +
           '<div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1">' +
             '<span style="font-size:1.1rem;color:' + color + ';font-weight:700;flex-shrink:0">' + arrow + '</span>' +
             '<div style="min-width:0">' +
-              '<div style="font-size:.82rem;font-weight:600;color:var(--text);font-family:\'JetBrains Mono\',monospace">' + sign + display + ' <span style="color:var(--text-dim);font-size:.7rem;font-weight:400">QWC</span></div>' +
+              '<div style="font-size:.82rem;font-weight:600;color:var(--text);font-family:\'JetBrains Mono\',monospace">' + (selfTransfer ? 'Self-transfer <span style="color:var(--text-dim);font-size:.7rem;font-weight:400">fee only</span>' : sign + display + ' <span style="color:var(--text-dim);font-size:.7rem;font-weight:400">QWC</span>') + '</div>' +
               '<div style="font-size:.65rem;color:var(--text-dim);margin-top:2px">height ' + height + ' · ' + status + '</div>' +
             '</div>' +
           '</div>' +
@@ -1133,7 +1248,91 @@ document.addEventListener('DOMContentLoaded', async () => {
           '<table style="width:100%;font-size:.72rem;font-family:\'JetBrains Mono\',monospace;border-collapse:collapse;margin-top:10px">' + detailRows + '</table>' +
         '</div>' +
       '</div>';
-    }).join('');
+  }
+
+  function qwcRenderMessengerHistoryGroup (group, matchedRows) {
+    var hashes = matchedRows.map(function (item) { return qwcHistoryHash(item && item.tx); }).filter(Boolean);
+    var count = hashes.length;
+    var onChain = matchedRows.filter(function (item) {
+      return item.block && typeof item.block.height === 'number' && item.block.height > 0;
+    });
+    var minimumConfirmations = onChain.length
+      ? Math.min.apply(null, onChain.map(function (item) {
+          return qwcLastSyncHeight > 0 ? Math.max(0, qwcLastSyncHeight - item.block.height + 1) : 0;
+        }))
+      : 0;
+    var status;
+    if (minimumConfirmations < 10) {
+      status = '<span style="color:var(--warning)">' + minimumConfirmations + ' / 10 confs</span>';
+    } else {
+      status = '<span style="color:var(--success)">confirmed</span>';
+    }
+    var when = group.createdAt ? new Date(group.createdAt).toLocaleString() : '—';
+    var fee = matchedRows.reduce(function (sum, item) {
+      var tx = item && item.tx;
+      return sum + qwcAtomicToBigInt(tx && (tx.fee || tx.feeAmount || tx.fee_amount));
+    }, 0n);
+    var feeDisplay = fee > 0n ? qwcAtomicToDisplay(fee) + ' QWC' : '—';
+    var detailRows = '';
+    detailRows += '<tr><td style="color:var(--text-dim);padding:4px 12px 4px 0;white-space:nowrap">Type</td><td style="padding:4px 0">Outgoing Messenger message</td></tr>';
+    detailRows += '<tr><td style="color:var(--text-dim);padding:4px 12px 4px 0">Date</td><td style="padding:4px 0">' + escapeHtml(when) + '</td></tr>';
+    detailRows += '<tr><td style="color:var(--text-dim);padding:4px 12px 4px 0">Carrier transactions</td><td style="padding:4px 0">' + count + '</td></tr>';
+    detailRows += '<tr><td style="color:var(--text-dim);padding:4px 12px 4px 0">Carrier amount</td><td style="padding:4px 0">0.00000001 QWC each · self-transfer</td></tr>';
+    detailRows += '<tr><td style="color:var(--text-dim);padding:4px 12px 4px 0">Total network fee</td><td style="padding:4px 0">' + feeDisplay + '</td></tr>';
+    for (const hash of hashes) {
+      var explorerUrl = 'https://explorer.qwertycoin.org/tx/' + encodeURIComponent(hash);
+      detailRows += '<tr><td style="color:var(--text-dim);padding:4px 12px 4px 0">Transaction ID</td><td style="padding:4px 0;word-break:break-all"><span class="tx-detail-copy" data-copy="' + escapeHtml(hash) + '" style="cursor:pointer" title="Click to copy">' + escapeHtml(hash) + '</span> <a href="' + escapeHtml(explorerUrl) + '" target="_blank" rel="noopener noreferrer" style="color:var(--qwc);text-decoration:none" aria-label="View Messenger carrier on QWC Explorer">↗</a></td></tr>';
+    }
+    return '<div class="key-card" data-history-kind="messenger" style="margin-bottom:6px;padding:0;overflow:hidden">' +
+      '<div class="tx-row" style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;cursor:pointer">' +
+        '<div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1">' +
+          '<span style="font-size:1.05rem;color:var(--qwc);font-weight:700;flex-shrink:0">✉</span>' +
+          '<div style="min-width:0">' +
+            '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><span style="font-size:.82rem;font-weight:600;color:var(--text)">Outgoing message</span><span class="tx-kind-badge">Messenger</span></div>' +
+            '<div style="font-size:.65rem;color:var(--text-dim);margin-top:2px">' + count + ' carrier transaction' + (count === 1 ? '' : 's') + ' · ' + status + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div style="font-family:\'JetBrains Mono\',monospace;font-size:.62rem;color:var(--text-dim);text-align:right">fee<br>' + escapeHtml(feeDisplay) + '</div>' +
+      '</div>' +
+      '<div class="tx-detail" style="display:none;padding:0 14px 14px;border-top:1px solid var(--border)">' +
+        '<table style="width:100%;font-size:.72rem;font-family:\'JetBrains Mono\',monospace;border-collapse:collapse;margin-top:10px">' + detailRows + '</table>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function renderQwcHistory (blocks) {
+    const listEl = document.getElementById('tx-list');
+    if (!listEl) return;
+    qwcLastHistoryBlocks = Array.isArray(blocks) ? blocks : [];
+    if (qmsController && qmsController.transactionHistoryGroups) {
+      qmsHistoryGroups = qmsController.transactionHistoryGroups();
+    }
+    var rows = [];
+    for (const block of qwcLastHistoryBlocks) {
+      for (const tx of block.txs || []) rows.push({ block: block, tx: tx });
+    }
+    if (rows.length === 0) {
+      listEl.innerHTML = '<div class="key-card" style="text-align:center;color:var(--text-dim);font-size:.75rem;padding:18px">No transactions yet. Receive some QWC and it will show up here after sync.</div>';
+      return;
+    }
+    rows.sort(function (a, b) {
+      return ((b.block && b.block.height) || 0) - ((a.block && a.block.height) || 0);
+    });
+
+    var items = QmsTransactionHistory.buildItems(rows, qwcCombinedQmsHistoryGroups(), qwcHistoryFilter, function (row) {
+      return qwcHistoryHash(row && row.tx);
+    });
+    var output = items.map(function (item) {
+      return item.kind === 'messenger'
+        ? qwcRenderMessengerHistoryGroup(item.group, item.matchedRows)
+        : qwcRenderTransactionHistoryRow(item.row);
+    });
+    if (!output.length) {
+      const label = qwcHistoryFilter === 'messenger' ? 'Messenger transactions' : 'payment transactions';
+      listEl.innerHTML = '<div class="key-card" style="text-align:center;color:var(--text-dim);font-size:.75rem;padding:18px">No ' + label + ' match this filter.</div>';
+      return;
+    }
+    listEl.innerHTML = output.join('');
     qwcBindTransactionDetails(listEl);
   }
 
@@ -1333,6 +1532,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('net-height').textContent = daemonHeight ? daemonHeight.toLocaleString() : '—';
         noteEl.textContent = 'Up to date · wallet height ' + (walletHeight ? walletHeight.toLocaleString() : '—');
         if (scanWrap) scanWrap.style.display = 'none';
+        renderQwcHistory(historyBlocks);
+        await qwcRefreshChainQmsHistory(historyBlocks);
         renderQwcHistory(historyBlocks);
         scanningActive = false;
       } catch (e) {
@@ -2104,6 +2305,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       qmsMountAbort = null;
       qmsController = controller;
+      qmsHistoryGroups = controller.transactionHistoryGroups ? controller.transactionHistoryGroups() : [];
+      renderQwcHistory(qwcLastHistoryBlocks);
       qmsTab.title = '';
       setQmsLaunchStatus('', '', false);
       if (qmsOpenRequested) {
