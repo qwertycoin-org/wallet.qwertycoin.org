@@ -84,7 +84,7 @@ case "${1:-}" in
 
     echo "Wrote ${manifest_file} (${#files[@]} files)"
     echo "First 5 entries:"
-    grep -v '^#' "${manifest_file}" | head -5
+    awk '!/^#/ { print; if (++count == 5) exit }' "${manifest_file}"
     ;;
   *)
     echo "Usage: $0 [--write|--check]"
