@@ -74,6 +74,26 @@ function assertEq(actual, expected, msg) {
   }
 }
 
+function legacyBrowserCrc32(str) {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < str.length; i++) {
+    crc ^= str.charCodeAt(i);
+    for (let j = 0; j < 8; j++) {
+      crc = (crc >>> 1) ^ (0xEDB88320 & (-(crc & 1)));
+    }
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+function legacyGermanPhrase(canonicalPhrase) {
+  const dataWords = canonicalPhrase.trim().split(/\s+/).slice(0, 24);
+  const checksumInput = dataWords
+    .map(word => word.toLowerCase().substring(0, 4))
+    .join('');
+  const checksumIndex = legacyBrowserCrc32(checksumInput) % dataWords.length;
+  return [...dataWords, dataWords[checksumIndex]].join(' ');
+}
+
 // ── Tests ───────────────────────────────────────────────────────────
 (async () => {
 console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
@@ -183,14 +203,14 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
     assert(threw, '(0,0) should throw');
   });
 
-  // 13-language round-trip — guards against the wordlist regression we
+  // 12-language round-trip — guards against the wordlist regression we
   // had earlier where the all-languages JS file was malformed and only the
   // English wordlist actually loaded in the browser. If any of these break,
   // a real seed in that language can't be imported.
   const ALL_LANGUAGES = [
     'english',  'spanish',  'french',     'german',
     'italian',  'portuguese', 'russian', 'japanese',
-    'chinese_simplified', 'dutch', 'esperanto', 'lojban', 'english_old',
+    'chinese_simplified', 'dutch', 'esperanto', 'lojban',
   ];
   for (const lang of ALL_LANGUAGES) {
     await test(`25-word round-trip — ${lang}`, () => {
@@ -203,6 +223,40 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
       assertEq(k.privateViewKeyHex,  w.privateViewKeyHex,  'view key');
     });
   }
+
+  await test('legacy English cannot generate a Core-incompatible 25-word seed', () => {
+    let threw = false;
+    try {
+      QwertycoinKeys.generateWallet('english_old', 'mainnet');
+    } catch (error) {
+      threw = /Unsupported 25-word seed language/.test(error.message);
+    }
+    assert(threw, 'legacy English generation must fail closed');
+  });
+
+  await test('retired browser-only German checksum migrates to the same wallet', () => {
+    let canonical;
+    let legacy;
+    let expected;
+    for (let byte = 1; byte < 256; byte++) {
+      expected = QwertycoinKeys.deriveFromSpendKey(
+        byte.toString(16).padStart(2, '0').repeat(32),
+        'mainnet',
+        'german'
+      );
+      canonical = expected.mnemonic;
+      legacy = legacyGermanPhrase(canonical);
+      if (legacy !== canonical) break;
+    }
+
+    assert(legacy !== canonical, 'fixture must distinguish old and canonical checksum words');
+    const migrated = QwertycoinKeys.deriveFromMnemonic(legacy, null, 'mainnet');
+    assertEq(migrated.address, expected.address, 'address');
+    assertEq(migrated.privateSpendKeyHex, expected.privateSpendKeyHex, 'spend key');
+    assertEq(migrated.mnemonic, canonical, 'corrected canonical phrase');
+    assert(migrated.mnemonicMigratedFromLegacyBrowserChecksum,
+      'legacy browser checksum must be surfaced to the UI');
+  });
 
   // Network selection
   await test('Stagenet derivation produces a 5… address', () => {

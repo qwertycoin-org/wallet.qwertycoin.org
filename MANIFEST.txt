@@ -1,5 +1,5 @@
 # Qwertycoin Web Wallet build manifest
-# Generated 2026-10-08T09:34:17Z from commit b62ac71
+# Generated 2026-10-08T10:28:58Z from commit 3d12c64
 #
 # Verify the live deployment matches a specific git tag with:
 #   git checkout v0.1.0
@@ -59,13 +59,13 @@ aec4ee5dbcca8078bd6be5d5bcd3ff52e40a93471cec04bda748123507cb22fb  js/qms-kdf-wor
 393da85e2dc5e0ff7078a3fd594067dade492fe26f1903dcfb417f2e820a2bd3  js/qwertycoin-core-loader.js
 8fa509a28d35b4ab1077ebf9b52f8e9e51af594577deeef3e536639aa2d82b4f  js/qwertycoin-ed25519.js
 47ac834b57a510fdad1e99b1ce59b5fd42a502f16249f4f3c5df47c322848382  js/qwertycoin-english-wordlist.js
-0be6169ed5edc0e29f99e384dbe90b3e35c93e9ec1c2d720229fa1a32f52da55  js/qwertycoin-keys.js
+9697100e8d82260ecd050486fe535e3e792b2500a6fcc974d1baa7186861dd4b  js/qwertycoin-keys.js
 b13f78cc3fd363e17268cc6207d04d330824e1cb7b7ad6f091b8703d6d3f0195  js/qwertycoin-rpc.js
 aace16f7b9ea5fa7dd984f78d473a3885ec4969185ef776c815962c65027a8cf  js/qwertycoin-send.js
 396d7052deaead6e339d6cec527bd4c159ca812ba9431570dd1d4d29cce21e5e  js/qwertycoin-subaddress.js
-e0768711d4c7e8d69772e0cc8ec8f4124b68d8abcfca8dbf6f133064fac3ad2c  js/qwertycoin-wordlist.js
+5199556dc0c3815df4839cc50f0f90f3607ae9a71469b4e2f7467ce569b4a571  js/qwertycoin-wordlist.js
 998d821eb11fe432f2bd195d35bca1be9269684cbf3ac6ee73b18c3d9202a6c9  js/qwertycoin-wordlists-all.js
-ef57db45849dd9e798a9047845857f5a703db359fe6876904a1dca48ee289a00  js/verify-page.js
+5dfe78e2f96a574e228ecd81088ee853fbddbb7d31de676bf3c9a691f1d47f01  js/verify-page.js
 ec7a828b1cd56b46afec258ec714c20b57dbd5200bae6aaf7da23a817501db9a  js/wallet-vault.js
 472ea3c05ac620848241f02d576e0a238dd31d9aadd5a2fe895895765bae46df  privacy.html
 a888ceabc6a6c89d98854f6e77591b542041620340cfdb75ccfd3636a2c6c314  self-host.html
@@ -84,4 +84,4 @@ bf22b13d1187c01fe962b65098e47c9fbd29555eef224e91adeaf30c3d4fc155  vendor/qwertyc
 65b20e67c11d6b42ce3c3431dd40fa3d966540b23cdcc931930a05761a8a9e26  vendor/qwertycoin-ts/qwertycoin.js
 d8121227e81fe7d0320a6ba66d1ada829de3ab7c1785cda1555821831624ac95  vendor/qwertycoin-ts/qwertycoin.worker.js
 b56b6cbccbd5a0370d840ea4000f0267499febfdf00897d50e948aceb71d5d87  vendor/qwertycoin-ts/qwertycoin.worker.js.LICENSE.txt
-780f1cfed229ec667aef220d70e23ade66dd1c272a6c4ddf62239a8c83886a52  verify.html
+8f892957369164ff185c7fc46177280ea3a33f4e2b222c4ddacec31f82544fd0  verify.html

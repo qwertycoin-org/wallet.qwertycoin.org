@@ -23,6 +23,17 @@ and uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   signing.
 
 ### Fixed
+- Made all 12 Core seed languages interoperable with Qwertycoin Core, CLI and
+  GUI by calculating checksums from canonical word-list prefixes as UTF-8
+  bytes. The previous browser-only checksum was
+  self-consistent but rejected canonical German and other non-English seeds.
+- Rejected the historical `EnglishOld` list for 25-word generation; Core does
+  not expose it as a current output language, and the browser-only encoding was
+  not wallet-compatible.
+- Added a bounded migration path for non-English phrases created by older Web
+  Wallet releases: the exact retired browser checksum is recognized, the same
+  wallet keys are derived, and the corrected Core-compatible backup phrase is
+  shown with an explicit warning.
 - Removed the retired landing page and its script, made `/verify` the only
   wallet entry point, and restored real branded HTTP 404 responses for unknown
   pages instead of Cloudflare Pages serving the old landing page as an SPA.

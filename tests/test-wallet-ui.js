@@ -197,8 +197,11 @@ test('functional wallet anchors remain present', () => {
   for (const id of [
     'tab-seed', 'tab-keys', 'tab-watch', 'tab-create', 'seed-input',
     'restore-height', 'adv-node-url', 'btn-derive-seed', 'btn-derive-key',
-    'btn-derive-watch', 'btn-create',
+    'btn-derive-watch', 'btn-create', 'res-mnemonic-migration',
   ]) linked(verify, `id="${id}"`);
+
+  const verifyController = read('js/verify-page.js');
+  linked(verifyController, 'keys.mnemonicMigratedFromLegacyBrowserChecksum');
 
   const dashboard = read('dashboard.html');
   for (const id of [

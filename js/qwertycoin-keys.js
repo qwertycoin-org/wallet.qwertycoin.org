@@ -19,6 +19,20 @@ const QwertycoinKeys = (function () {
   const MAINNET  = 0x14820c; // QWC v2 mainnet standard address prefix -> "QWC..."
   const TESTNET  = 0x35;  // '9...' or 'A...'
   const STAGENET = 0x18;  // '5...'
+  const CURRENT_MNEMONIC_LANGUAGES = new Set([
+    'english', 'spanish', 'french', 'german', 'italian', 'portuguese',
+    'russian', 'japanese', 'chinese_simplified', 'dutch', 'esperanto',
+    'lojban'
+  ]);
+
+  function assertCurrentMnemonicLanguage(lang) {
+    if (!CURRENT_MNEMONIC_LANGUAGES.has(lang)) {
+      throw new Error(
+        `Unsupported 25-word seed language: "${lang}". ` +
+        'Use one of the 12 languages offered by Qwertycoin Core, CLI and GUI.'
+      );
+    }
+  }
 
   /**
    * Derive all keys from a raw 32-byte seed (private spend key material)
@@ -77,7 +91,7 @@ const QwertycoinKeys = (function () {
     const candidates = [
       'english','spanish','french','german','italian','portuguese',
       'russian','japanese','chinese_simplified','dutch','esperanto',
-      'lojban','english_old',
+      'lojban',
     ];
     for (const lang of candidates) {
       if (!QwertycoinWordList.isLoaded(lang)) continue;
@@ -94,11 +108,29 @@ const QwertycoinKeys = (function () {
     return null;
   }
 
+  function detectLegacyBrowserLanguage(words) {
+    if (!Array.isArray(words) || words.length !== 25) return null;
+    if (typeof QwertycoinWordList === 'undefined') return null;
+    for (const lang of CURRENT_MNEMONIC_LANGUAGES) {
+      if (!QwertycoinWordList.isLoaded(lang)) continue;
+      try {
+        if (QwertycoinWordList.verifyLegacyBrowserChecksum(lang, words)) {
+          return lang;
+        }
+      } catch (e) { /* try next language */ }
+    }
+    return null;
+  }
+
   function deriveFromMnemonic(mnemonic, lang, network) {
     network = network || 'mainnet';
 
-    const words = mnemonic.trim().toLowerCase().split(/\s+/);
+    // Preserve the phrase exactly as entered for the Core/WASM restore path.
+    // Word lookup is case-insensitive, while checksum calculation resolves
+    // every word back to the canonical word-list spelling.
+    const words = mnemonic.trim().split(/\s+/);
     const count = words.length;
+    let migratedLegacyBrowserChecksum = false;
 
     // Auto-detect the language if possible. This protects users from picking
     // the wrong language in the dropdown and getting a confusing "invalid
@@ -107,11 +139,21 @@ const QwertycoinKeys = (function () {
       const detected = detectLanguage(words);
       if (detected) {
         lang = detected;
+      } else if (count === 25) {
+        const legacyDetected = detectLegacyBrowserLanguage(words);
+        if (legacyDetected) {
+          lang = legacyDetected;
+          migratedLegacyBrowserChecksum = true;
+        } else if (!lang) {
+          lang = 'english';
+        }
       } else if (!lang) {
         lang = 'english';
       }
     }
     lang = lang || 'english';
+
+    if (count === 25) assertCurrentMnemonicLanguage(lang);
 
     if (!QwertycoinWordList.isLoaded(lang)) {
       throw new Error(
@@ -123,13 +165,17 @@ const QwertycoinKeys = (function () {
 
     if (count === 25) {
       // Standard Qwertycoin: 24 data + 1 checksum → 32-byte seed
-      if (!QwertycoinWordList.verifyChecksum(lang, words)) {
+      const canonicalChecksum = QwertycoinWordList.verifyChecksum(lang, words);
+      const legacyBrowserChecksum = !canonicalChecksum &&
+        QwertycoinWordList.verifyLegacyBrowserChecksum(lang, words);
+      if (!canonicalChecksum && !legacyBrowserChecksum) {
         throw new Error(
           'Invalid mnemonic — checksum did not verify against any of the ' +
-          '13 supported wordlists. Double-check that you copied every word ' +
+          '12 supported wordlists. Double-check that you copied every word ' +
           'correctly and that the order is right.'
         );
       }
+      migratedLegacyBrowserChecksum = legacyBrowserChecksum;
       seed = QwertycoinWordList.decodeWords(lang, words.slice(0, 24));
 
     } else if (count === 13) {
@@ -137,7 +183,7 @@ const QwertycoinKeys = (function () {
       if (!QwertycoinWordList.verifyChecksum(lang, words)) {
         throw new Error(
           'Invalid mnemonic — checksum did not verify against any of the ' +
-          '13 supported wordlists. Double-check that you copied every word ' +
+          '12 supported wordlists. Double-check that you copied every word ' +
           'correctly and that the order is right.'
         );
       }
@@ -156,7 +202,15 @@ const QwertycoinKeys = (function () {
     result.wordCount = count;
     result.seedFormat = (count === 13) ? 'legacy13' : 'standard';
     result.seedHex = bytesToHex(seed);
-    result.mnemonic = words.join(' ');
+    if (migratedLegacyBrowserChecksum) {
+      const canonicalDataWords = QwertycoinWordList.encodeBytes(lang, seed);
+      result.mnemonic = QwertycoinWordList
+        .appendChecksum(lang, canonicalDataWords)
+        .join(' ');
+      result.mnemonicMigratedFromLegacyBrowserChecksum = true;
+    } else {
+      result.mnemonic = words.join(' ');
+    }
     return result;
   }
 
@@ -171,8 +225,9 @@ const QwertycoinKeys = (function () {
     // 32-byte spend key, so we can reconstruct it whenever the supplied wordlist
     // is available. (This is NOT possible for BIP-39, legacy 13-word, or
     // polyseed seeds — those go through one-way KDFs.)
+    const wlLang = lang || 'english';
+    assertCurrentMnemonicLanguage(wlLang);
     try {
-      const wlLang = lang || 'english';
       if (typeof QwertycoinWordList !== 'undefined' && QwertycoinWordList.isLoaded(wlLang)) {
         const reduced = QwertycoinEd25519.sc_reduce32(seedBytes);
         const dataWords = QwertycoinWordList.encodeBytes(wlLang, reduced);
@@ -238,6 +293,7 @@ const QwertycoinKeys = (function () {
   function generateWallet(lang, network) {
     lang = lang || 'english';
     network = network || 'mainnet';
+    assertCurrentMnemonicLanguage(lang);
 
     // Generate 32 random bytes
     const seedBytes = new Uint8Array(32);
