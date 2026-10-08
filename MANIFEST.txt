@@ -1,5 +1,5 @@
 # Qwertycoin Web Wallet build manifest
-# Generated 2026-10-07T05:49:15Z from commit ace68af
+# Generated 2026-10-08T09:34:17Z from commit b62ac71
 #
 # Verify the live deployment matches a specific git tag with:
 #   git checkout v0.1.0
@@ -43,7 +43,7 @@ a0bf069d19922a0df40c278c40bc82a8edc55658b587d1bb5a09b5a06ec98244  js/bip39-wordl
 3ddae75f3a9048d84e246d46331c858284aca19bee98bdad99304ddb0966fa01  js/dashboard-page.js
 ca17e7555699565d53195a7404306ac7b9399704d80fa379b61355e5f9b19b20  js/jsqr.js
 b780f029e218e4b7c7142cfdb2161f8fb30248da8f9c022619812bc9180e7d69  js/keccak256.js
-95e2b1355325899b4d5af0aac17b92c1e83ac169af9524bbcaed0085244b3bd9  js/lws-client.js
+6d3824be071efaee0703a750b327a51f0db40cd9cee73b18f0dcedad6cf2177d  js/lws-client.js
 267d43d9066d431f642dafd23ba92f512f7ec79658537bbd681aae3d1437dec6  js/message-signing.js
 d3e46c16c1385373afef97db2750f1edf87f33f12bbe710ec515bd5b12d737c0  js/nav-menu.f152d12.js
 5534bf1cf3d1355fab00b6f1efe8dff7ffc1e3bd6099000a63b842e1ab8b9498  js/polyseed.js

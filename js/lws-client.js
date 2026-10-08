@@ -78,7 +78,7 @@ const LwsClient = (function () {
   var _turnstileToken = '';
   var _turnstileReady = false;
   var _sessionToken = '';
-  var TURNSTILE_SITE_KEY = '0x4AAAAAAEkKWLZIa61TTy18';
+  var TURNSTILE_SITE_KEY = '0x4AAAAAAFRJjCr-TOlv5VRx';
 
   function initTurnstile () {
     if (MOCK || typeof turnstile === 'undefined') return;

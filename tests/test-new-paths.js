@@ -373,7 +373,7 @@ console.log('\n  Qwertycoin Web Wallet — compatibility and wallet paths\n');
     assert(proxy.includes('/send_raw_transaction'), 'send RPC path missing');
     assert(proxy.includes('get_output_histogram'), 'output histogram RPC missing');
     assert(!proxy.includes('xmr-node.cakewallet.com'), 'legacy Monero public node should not be used');
-    assert(lws.includes('0x4AAAAAAEkKWLZIa61TTy18'), 'Turnstile site key missing');
+    assert(lws.includes('0x4AAAAAAFRJjCr-TOlv5VRx'), 'Turnstile site key missing');
   });
 
   await test('Messenger decodes every byte of a non-empty binary tx-pool hash response', async () => {
