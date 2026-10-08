@@ -349,6 +349,7 @@ footer p{font-size:.7rem;color:var(--text-dim)}
             <div class="result-label" style="color:var(--qwc)">Recovered 25-word Mnemonic <button class="copy-btn" data-target="res-mnemonic">Copy</button></div>
             <div class="result-value" id="res-mnemonic" style="font-size:.78rem;line-height:1.9;color:var(--text);word-spacing:.15em"></div>
             <div style="font-size:.7rem;color:var(--text-dim);margin-top:8px;line-height:1.5">The standard 25-word QWC phrase is a reversible encoding of your spend key — write this down for backup.</div>
+            <div id="res-mnemonic-migration" role="alert" style="display:none;font-size:.72rem;color:var(--qwc);margin-top:10px;line-height:1.55"><strong>Backup update required.</strong> Your phrase used the checksum from an older Web Wallet. The corrected Core-compatible phrase is shown above and opens the same address. Verify the address, then replace the old backup with this corrected phrase.</div>
           </div>
           <div class="result-card">
             <div class="result-label">Qwertycoin Address <button class="copy-btn" data-target="res-address">Copy</button></div>

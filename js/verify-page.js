@@ -349,6 +349,12 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       mnemCard.style.display = 'none';
     }
+    const migrationWarning = document.getElementById('res-mnemonic-migration');
+    if (migrationWarning) {
+      migrationWarning.style.display = keys.mnemonicMigratedFromLegacyBrowserChecksum
+        ? 'block'
+        : 'none';
+    }
     document.getElementById('res-address').textContent = keys.address;
     document.getElementById('res-spend').textContent = keys.privateSpendKeyHex;
     document.getElementById('res-view').textContent = keys.privateViewKeyHex;
