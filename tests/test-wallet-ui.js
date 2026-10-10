@@ -412,6 +412,26 @@ test('public pages and payment QR use Qwertycoin-facing names and endpoints', ()
   linked(read('js/dashboard-page.js'), 'https://explorer.qwertycoin.org/tx/');
 });
 
+test('privacy policy covers the native app and Apple review disclosures', () => {
+  const privacy = read('privacy.html');
+  for (const disclosure of [
+    'official Qwertycoin iOS app',
+    'Information we do not collect',
+    'Information sent over the network',
+    'Retention and deletion',
+    'Third parties and data protection',
+    'Children\'s privacy',
+    'info@qwertycoin.org',
+    'encrypted message payloads cannot be edited or deleted',
+    'Qwertycoin Wallet does not currently operate a remote push-notification service',
+  ]) linked(privacy, disclosure);
+
+  linked(privacy, '<link rel="canonical" href="https://wallet.qwertycoin.org/privacy">');
+  linked(privacy, 'Your seed phrase and private keys are not included.');
+  assert(!privacy.includes('We do not collect personal data.'),
+    'policy must not hide necessary node, pool, CDN and support processing');
+});
+
 test('runtime assets and project-owned JavaScript APIs use Qwertycoin names', () => {
   const manifest = read('MANIFEST.txt');
   const brandedAssets = [

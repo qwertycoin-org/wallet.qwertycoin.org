@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta property="og:title" content="Privacy — Qwertycoin Web Wallet">
-<meta property="og:description" content="How the Qwertycoin Web Wallet handles keys, browser storage, RPC traffic and third-party infrastructure.">
+<meta property="og:title" content="Privacy Policy — Qwertycoin Wallet">
+<meta property="og:description" content="How the Qwertycoin iOS app and Web Wallet handle keys, local storage, network traffic and third-party infrastructure.">
 <meta property="og:url" content="https://wallet.qwertycoin.org/privacy">
 <meta property="og:type" content="website">
 <meta property="og:image" content="https://wallet.qwertycoin.org/assets/social-card.2f2114c74813.png">
@@ -16,8 +16,8 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://wallet.qwertycoin.org/assets/social-card.2f2114c74813.png">
 <meta name="twitter:image:alt" content="Qwertycoin Web Wallet — non-custodial QWC wallet in your browser.">
-<title>Privacy — Qwertycoin Web Wallet</title>
-<meta name="description" content="Privacy information for the official Qwertycoin Web Wallet.">
+<title>Privacy Policy — Qwertycoin Wallet</title>
+<meta name="description" content="Privacy policy for the official Qwertycoin iOS app and Web Wallet.">
 <link rel="canonical" href="https://wallet.qwertycoin.org/privacy">
 <meta name="robots" content="index, follow">
 
@@ -105,82 +105,88 @@ footer a:hover{color:var(--text)}
 
 <main>
   <div class="container">
-    <h1>Privacy</h1>
-    <p class="lead">The Qwertycoin Web Wallet is non-custodial. Your seed and private keys are processed in your browser, while network requests pass through Qwertycoin RPC infrastructure or a node you configure.</p>
+    <h1>Privacy Policy</h1>
+    <p class="lead">Last updated: 10 October 2026</p>
 
     <div class="callout">
-      <strong>The short version:</strong> your 25-word seed phrase, private spend key and private view key remain in your browser tab. The browser scanner sends blockchain queries—not private keys—to the restricted QWC RPC gateway. There are no accounts, advertising trackers or email signups.
+      <strong>The short version:</strong> Qwertycoin Wallet is non-custodial. We do not create user accounts, sell personal data, run advertising, or use analytics or tracking SDKs. Your seed phrase and private keys are processed and stored locally and are never sent to Qwertycoin infrastructure. Limited network data is necessarily processed when you connect to nodes, the official pool, the explorer, or the Web Wallet infrastructure.
     </div>
 
-    <h2>What we do not collect</h2>
+    <h2>Scope and contact</h2>
+    <p>This policy applies to the official Qwertycoin iOS app and the Qwertycoin Web Wallet at <code>wallet.qwertycoin.org</code>, together referred to as “Qwertycoin Wallet”. It explains what information the wallet processes, how it is used, where it is stored, and how you can request deletion of information under our control.</p>
+    <p>Qwertycoin Wallet is provided by the Qwertycoin Project. Privacy questions and deletion requests can be sent to <a href="mailto:info@qwertycoin.org">info@qwertycoin.org</a>.</p>
+
+    <h2>Information we do not collect</h2>
     <ul>
-      <li><strong>Your seed phrase</strong> — never transmitted, never logged, never leaves your browser tab. All key derivation runs locally inside your tab using JavaScript that you can read in DevTools.</li>
-      <li><strong>Your private spend key</strong> — stays in your browser tab. Used locally to sign transactions. Never transmitted to any server.</li>
-      <li><strong>Your private view key</strong> — used by the browser scanner and never transmitted to the RPC gateway.</li>
-      <li><strong>Analytics IDs</strong> — the wallet contains no analytics or advertising tracker.</li>
-      <li><strong>Email addresses</strong> — there is no signup, no newsletter, no waitlist.</li>
-      <li><strong>IP addresses</strong> — Cloudflare (our CDN) sees the IP that requests each page, like every web host on the planet does, but we have no logging on top of that and never inspect Cloudflare's analytics for individual visitors.</li>
+      <li><strong>Seed phrases and private keys:</strong> your seed phrase, private spend key and private view key are not transmitted to Qwertycoin infrastructure.</li>
+      <li><strong>Accounts and contact details:</strong> the wallet has no account registration and does not request your name, email address or phone number.</li>
+      <li><strong>Advertising and analytics identifiers:</strong> the wallet contains no advertising, behavioral analytics, cross-app tracking or third-party tracking SDK.</li>
+      <li><strong>Contacts:</strong> the wallet does not request access to your device contacts.</li>
+      <li><strong>Precise location for remote use:</strong> if you enable Trusted Locations in the iOS app, the location is evaluated and stored on your device and is not sent to Qwertycoin infrastructure.</li>
     </ul>
 
-    <h2>What the wallet does send over the network</h2>
-
-    <h3>1. Blockchain scanning requests</h3>
-    <p>The dashboard scans the Qwertycoin chain in your browser and sends restricted RPC requests through same-origin endpoints such as <code>/qwc-rpc</code> and <code>/gethashes.bin</code>:</p>
+    <h2>Information stored on your device</h2>
+    <h3>iOS app</h3>
+    <p>The iOS app stores wallet files and cache data, encrypted wallet credentials in the iOS Keychain, preferences, locally maintained Messenger contacts and history, optional trusted-location zones, and diagnostic logs on your device. This information is used only to provide wallet, security, Messenger, hardware-wallet, widget and troubleshooting features.</p>
     <ul>
-      <li><code>get_info</code> and <code>get_block_count</code> — current network height and connection state.</li>
-      <li><code>get_fee_estimate</code> — the recommended transaction fee.</li>
-    </ul>
-    <p>These requests can reveal network-access patterns to the endpoint operator, but do not include your seed or private keys.</p>
-
-    <h3>2. Transaction broadcast</h3>
-    <p>When you send QWC, the wallet constructs and signs the transaction inside your browser. Only the completed signed transaction is submitted to the restricted RPC gateway for broadcast.</p>
-    <div class="callout">
-      <strong>What the RPC gateway can see:</strong>
-      <ul style="margin-top:8px;margin-bottom:0">
-        <li>Restricted blockchain queries sent by your browser</li>
-        <li>Your <strong>signed transaction</strong> when you choose to broadcast QWC</li>
-        <li>Standard request metadata such as IP address and user agent at the CDN edge</li>
-      </ul>
-    </div>
-    <div class="callout" style="border-left-color:#22c55e;margin-top:12px">
-      <strong>What it does NOT see:</strong>
-      <ul style="margin-top:8px;margin-bottom:0">
-        <li>Your <strong>private spend key</strong> or <strong>private view key</strong></li>
-        <li>Your <strong>seed phrase</strong> — never sent.</li>
-        <li>Your <strong>session password</strong> — used client-side only.</li>
-      </ul>
-    </div>
-    <p>You can point the wallet at your own restricted <code>qwertycoind</code> RPC endpoint or follow the <a href="/self-host">self-hosting guide</a> to control this network path yourself.</p>
-
-    <h2>What Cloudflare can see</h2>
-    <p><code>wallet.qwertycoin.org</code> is hosted on Cloudflare Pages and sits behind Cloudflare's CDN. As with any CDN, Cloudflare's edge servers see:</p>
-    <ul>
-      <li>The HTTP requests for the static files (HTML, JS, fonts, images)</li>
-      <li>The HTTP requests for the restricted Qwertycoin RPC endpoints</li>
-      <li>Visitor IP addresses and standard request metadata</li>
-    </ul>
-    <p>None of the information that flows through Cloudflare contains your seed, your keys, or your wallet contents. It is exactly the same set of information any visit to any website on the public internet exposes.</p>
-    <p>If your threat model requires hiding that you visited <code>wallet.qwertycoin.org</code>, use a suitable privacy network or self-host the wallet and RPC endpoint.</p>
-
-    <h2>Sessions and storage</h2>
-    <p>When you derive a wallet, the resulting keys are stored in your browser's <code>sessionStorage</code> — which means they live only in the current tab and are wiped automatically when you close it. You can also set an optional <strong>session password</strong>; if you do, your keys are AES-GCM encrypted in <code>sessionStorage</code> using a key derived from that password (PBKDF2-SHA256, 250 000 iterations) and decrypted only on demand.</p>
-    <p>The wallet has an idle auto-lock that fires after 10 minutes of inactivity. With a session password set, locking only wipes the in-memory keys — you can re-unlock by re-entering the password without re-deriving from your seed. Without a password, locking wipes everything and bounces you back to the seed entry screen.</p>
-
-    <h2>Third parties</h2>
-    <p>The application assets and fonts are self-hosted. Cloudflare Turnstile may load from <code>challenges.cloudflare.com</code> as an abuse-control step for transaction submission. Specifically:</p>
-    <ul>
-      <li><strong>No Google Analytics, Plausible, Fathom, or any other analytics service</strong></li>
-      <li><strong>No Google Fonts</strong> — fonts are self-hosted at <code>/fonts/</code></li>
-      <li><strong>No external QR generator</strong> — the QR code in the receive modal is rendered by a vendored pure-JavaScript library</li>
-      <li><strong>No CDN-hosted libraries</strong> — every script comes from our own origin</li>
-      <li><strong>Cloudflare Turnstile</strong> — used only where configured to protect transaction submission from abuse</li>
+      <li><strong>Camera:</strong> used only when you choose to scan a QR code. QR content is processed on the device.</li>
+      <li><strong>Face ID:</strong> authentication is handled by iOS. The app does not receive or store biometric data.</li>
+      <li><strong>Photos:</strong> the app writes a receive QR image to your photo library only when you ask it to.</li>
+      <li><strong>Location:</strong> optional Trusted Locations are processed locally to control or warn about wallet synchronization.</li>
+      <li><strong>Bluetooth:</strong> used to communicate with a supported hardware wallet when you enable that feature.</li>
+      <li><strong>Notifications:</strong> local notifications may be used for wallet security or locally configured alerts. Qwertycoin Wallet does not currently operate a remote push-notification service.</li>
     </ul>
 
-    <h2>For the curious</h2>
-    <p>Everything described here can be verified in the <a href="https://github.com/qwertycoin-org/wallet.qwertycoin.org" target="_blank" rel="noopener">public source repository</a> or in your browser's DevTools network panel. The disclosure policy is in <a href="https://github.com/qwertycoin-org/wallet.qwertycoin.org/blob/master/SECURITY.md" target="_blank" rel="noopener">SECURITY.md</a>.</p>
+    <h3>Web Wallet</h3>
+    <p>The Web Wallet derives and uses wallet keys inside your browser tab. Wallet session data is stored in browser <code>sessionStorage</code> and is removed when the tab is closed. If you set a session password, key material in <code>sessionStorage</code> is encrypted with AES-GCM using a key derived locally with PBKDF2-SHA256. The password is not sent to a server.</p>
 
-    <h2>Changes to this page</h2>
-    <p>If anything on this page changes, the change will be visible in the git history of <code>privacy.html</code> in the public repository. There is no other notification mechanism because there is no mailing list and no user accounts.</p>
+    <h2>Information sent over the network</h2>
+    <h3>Blockchain synchronization and transactions</h3>
+    <p>The wallet connects to a Qwertycoin node selected by you or to the default Qwertycoin mobile/Web Wallet gateway. Nodes receive blockchain requests and, when you choose to send QWC, the completed signed transaction. Node and gateway operators can necessarily process your IP address, connection time, request metadata and the signed transaction. Your seed phrase and private keys are not included.</p>
+    <p>You can choose a custom node. A custom or third-party node is operated under its own privacy practices. The Web Wallet can also be <a href="/self-host">self-hosted</a> with your own restricted node.</p>
+
+    <h3>Official pool and explorer</h3>
+    <p>If you open the official-pool view in the iOS app, the selected public Qwertycoin address is sent to <code>pool.qwertycoin.org</code> to retrieve public mining and payout statistics. The pool also processes shares, payout history and public address information provided by miners. The network-status views request public pool, blockchain and EPoSE information from Qwertycoin services. These requests include standard network metadata such as IP address, timestamp and user agent.</p>
+
+    <h3>Messenger and blockchain records</h3>
+    <p>Qwertycoin Messenger messages are encrypted locally and carried by signed Qwertycoin transactions. The encrypted payload and transaction metadata are relayed to the decentralized Qwertycoin network and become part of its distributed records. Qwertycoin infrastructure does not receive plaintext messages or Messenger private keys. Because blockchain records are replicated by independent participants, confirmed transaction data and encrypted message payloads cannot be edited or deleted by the Qwertycoin Project.</p>
+
+    <h3>Sign, Verify and pool challenges</h3>
+    <p>Message signing, signature verification and validation of pool payout challenges take place locally. The wallet does not transmit the message, challenge, signature or private spend key merely because you use these tools. A signature leaves your device only if you choose to copy, share or submit it.</p>
+
+    <h3>Diagnostic information you choose to share</h3>
+    <p>The iOS app keeps a bounded diagnostic log locally. If you explicitly share it, the export can contain the device model, iOS and app version, node URLs, sync progress, wallet-engine errors and sanitized hardware-wallet session outcomes. It is designed not to contain seed phrases, private keys, PINs, node passwords, wallet addresses, balances, raw hardware-wallet payloads or nearby Bluetooth device names. The destination you select in the iOS share sheet receives the exported file under that service's privacy practices.</p>
+
+    <h2>Web hosting and abuse protection</h2>
+    <p><code>wallet.qwertycoin.org</code> is hosted on Cloudflare Pages and delivered through Cloudflare's network. Cloudflare necessarily processes requests for static files and restricted RPC endpoints, including IP addresses and standard HTTP metadata. Cloudflare Turnstile may be used as an abuse-control step for transaction submission. The Web Wallet has no additional advertising or analytics tracker, uses self-hosted fonts and application assets, and generates QR codes locally.</p>
+
+    <h2>How information is used</h2>
+    <p>Information described above is used only to provide the requested wallet or network function, secure and rate-limit the service, diagnose faults, prevent abuse, respond to support requests and comply with applicable law. It is not sold, used for advertising or used to build behavioral profiles.</p>
+
+    <h2>Retention and deletion</h2>
+    <ul>
+      <li><strong>On-device data:</strong> remains on your device until you remove the relevant wallet data or uninstall the app. The iOS app provides controls to remove wallets. Browser session data is removed when the Web Wallet tab is closed.</li>
+      <li><strong>Diagnostic data:</strong> remains on your device unless you choose to share it. Information voluntarily sent to Qwertycoin support is retained only as long as necessary to resolve the request, investigate a security issue or meet a legal obligation, and can be deleted on request where permitted.</li>
+      <li><strong>Infrastructure data:</strong> official services and their infrastructure providers may temporarily retain standard network and security records for service delivery, rate limiting, abuse prevention and incident response. These records are not used for advertising or user profiling and are deleted or de-identified when no longer operationally or legally necessary.</li>
+      <li><strong>Pool records:</strong> off-chain support or operational records under our control can be deleted on request where this does not conflict with security, accounting or legal obligations.</li>
+      <li><strong>Blockchain data:</strong> confirmed transactions, including encrypted Messenger payloads and public pool payouts, are replicated by the decentralized network and cannot be deleted by us.</li>
+    </ul>
+    <p>To request access to or deletion of information under our control, email <a href="mailto:info@qwertycoin.org">info@qwertycoin.org</a>. You can stop optional local processing by disabling the relevant feature or permission in iOS Settings. You can stop using official endpoints by selecting a custom node or self-hosting the Web Wallet.</p>
+
+    <h2>Third parties and data protection</h2>
+    <p>Network requests may be processed by Apple platform services, Cloudflare, Qwertycoin nodes, the official pool and explorer, a hardware-wallet provider, or a service you select through the iOS share sheet. Independent node operators and services you choose are responsible for their own practices. Third parties engaged by the Qwertycoin Project to process information are required to protect it consistently with this policy and applicable law.</p>
+
+    <h2>Children's privacy</h2>
+    <p>Qwertycoin Wallet is not directed to children and is not listed in the App Store Kids Category. We do not knowingly collect personal information from children. A parent or guardian who believes a child has provided personal information under our control can contact us to request deletion.</p>
+
+    <h2>Security</h2>
+    <p>We use technical and organizational safeguards appropriate to the information we process. No system is completely secure. Protect your seed phrase and private keys, verify the official domain and app publisher, and do not place personal or sensitive information in blockchain transactions or Messenger messages.</p>
+
+    <h2>Changes to this policy</h2>
+    <p>We may update this policy when wallet features, infrastructure or legal requirements change. The revision date at the top will be updated, and Web Wallet changes remain visible in the public git history of <code>privacy.html</code>.</p>
+
+    <h2>Source and security reports</h2>
+    <p>The Web Wallet implementation can be reviewed in the <a href="https://github.com/qwertycoin-org/wallet.qwertycoin.org" target="_blank" rel="noopener">public source repository</a>. Security reports should follow <a href="https://github.com/qwertycoin-org/wallet.qwertycoin.org/blob/master/SECURITY.md" target="_blank" rel="noopener">SECURITY.md</a> rather than being posted publicly.</p>
   </div>
 </main>
 

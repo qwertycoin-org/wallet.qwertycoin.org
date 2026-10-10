@@ -1,5 +1,5 @@
 # Qwertycoin Web Wallet build manifest
-# Generated 2026-10-08T10:28:58Z from commit 3d12c64
+# Generated 2026-10-10T08:05:51Z from commit 8298b51
 #
 # Verify the live deployment matches a specific git tag with:
 #   git checkout v0.1.0
@@ -67,7 +67,7 @@ aace16f7b9ea5fa7dd984f78d473a3885ec4969185ef776c815962c65027a8cf  js/qwertycoin-
 998d821eb11fe432f2bd195d35bca1be9269684cbf3ac6ee73b18c3d9202a6c9  js/qwertycoin-wordlists-all.js
 5dfe78e2f96a574e228ecd81088ee853fbddbb7d31de676bf3c9a691f1d47f01  js/verify-page.js
 ec7a828b1cd56b46afec258ec714c20b57dbd5200bae6aaf7da23a817501db9a  js/wallet-vault.js
-472ea3c05ac620848241f02d576e0a238dd31d9aadd5a2fe895895765bae46df  privacy.html
+73bc68057fba0c13ffb22912d9e6c6cab6a7052a51a731499cb06f143e8a6bfa  privacy.html
 a888ceabc6a6c89d98854f6e77591b542041620340cfdb75ccfd3636a2c6c314  self-host.html
 ca640caf3cd05b49cd2489124d49239623a2a7910f4e7603327f0fcd0fd311ca  vendor/libsodium/BUILDINFO.txt
 ce7b8ba14db085aadb72359226ccf7273225db31dad653242a7726a10dabbbd4  vendor/libsodium/LICENSE.libsodium-wrappers-sumo

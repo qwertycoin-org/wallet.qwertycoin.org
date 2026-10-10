@@ -7,6 +7,10 @@ and uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Changed
+- Expanded `/privacy` into the shared Qwertycoin Wallet privacy policy for
+  the native iOS app and Web Wallet, including device permissions, network
+  processing, third parties, retention, deletion requests and immutable
+  blockchain records required for accurate App Store disclosure.
 - Renamed all project-owned browser modules, worker/WASM entry points,
   JavaScript globals, CSS identifiers, storage namespaces and public build
   artifacts to Qwertycoin terminology. Existing tab-scoped vaults and
