@@ -8,6 +8,8 @@
  *
  * Public API:
  *   QwertycoinSend.validateAddress(addr)        → { valid, reason, subaddress, integrated }
+ *   QwertycoinSend.createWalletTxConfig(...)    → qwertycoin-ts transaction config
+ *   QwertycoinSend.summarizeWalletTxPreview(...) → exact recipient / fee / total amounts
  *   QwertycoinSend.estimateFee(keys, to, amt, prio)  → { fee_qwc, fee_atomic, per_byte }
  *   QwertycoinSend.send(keys, to, amt, prio, pid, preview) → Promise<{ tx_hash }>
  *
@@ -60,6 +62,62 @@ const QwertycoinSend = (function () {
     if (frac === 0n) return whole.toString();
     var fracStr = frac.toString().padStart(8, '0').replace(/0+$/, '');
     return whole.toString() + '.' + fracStr;
+  }
+
+  // ── qwertycoin-ts transaction helpers ───────────────────────────
+
+  function createWalletTxConfig (toAddress, amountAtomic, paymentId, priority, subtractFee) {
+    var amount = BigInt(String(amountAtomic));
+    if (amount <= 0n) throw new Error('Amount must be greater than zero');
+
+    var config = {
+      accountIndex: 0,
+      destinations: [{ address: toAddress, amount: amount.toString() }],
+      priority: priority || 2,
+      relay: false,
+      canSplit: false,
+    };
+    if (paymentId) config.paymentId = paymentId;
+    if (subtractFee) config.subtractFeeFrom = [0];
+    return config;
+  }
+
+  function summarizeWalletTxPreview (preview, requestedAmountAtomic, subtractFee) {
+    if (!preview || !Array.isArray(preview.txs) || preview.txs.length !== 1) {
+      throw new Error('Transaction review must return exactly one transaction');
+    }
+
+    var requestedAmount = BigInt(String(requestedAmountAtomic));
+    var tx = preview.txs[0] || {};
+    var fee = BigInt(String(tx.fee || '0'));
+    if (fee <= 0n) throw new Error('Transaction review returned an invalid fee');
+
+    var recipientAmount = requestedAmount;
+    if (subtractFee) {
+      if (fee >= requestedAmount) throw new Error('The available balance does not cover the network fee');
+
+      var transfer = tx.outgoingTransfer || tx.outgoing_transfer;
+      var destinations = transfer && (transfer.destinations || transfer.recipients);
+      if (!Array.isArray(destinations) || destinations.length !== 1 || destinations[0].amount === undefined) {
+        throw new Error('Send max review did not return exactly one recipient amount');
+      }
+
+      recipientAmount = BigInt(String(destinations[0].amount));
+      var expectedRecipientAmount = requestedAmount - fee;
+      if (recipientAmount !== expectedRecipientAmount) {
+        throw new Error('Send max review returned an unexpected recipient amount');
+      }
+      if (tx.changeAmount !== undefined && BigInt(String(tx.changeAmount)) !== 0n) {
+        throw new Error('Send max review unexpectedly created change');
+      }
+    }
+
+    return {
+      tx: tx,
+      amount_atomic: recipientAmount,
+      fee_atomic: fee,
+      total_atomic: recipientAmount + fee,
+    };
   }
 
   // ── Fee estimation ────────────────────────────────────────────────
@@ -303,7 +361,13 @@ const QwertycoinSend = (function () {
     };
   }
 
-  return { validateAddress: validateAddress, estimateFee: estimateFee, send: send };
+  return {
+    validateAddress: validateAddress,
+    createWalletTxConfig: createWalletTxConfig,
+    summarizeWalletTxPreview: summarizeWalletTxPreview,
+    estimateFee: estimateFee,
+    send: send,
+  };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = QwertycoinSend;

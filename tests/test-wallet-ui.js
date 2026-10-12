@@ -235,7 +235,7 @@ test('critical Messenger assets use content-derived cache keys', () => {
   const dashboard = read('dashboard.html');
   const verify = read('verify.html');
   for (const file of [
-    'assets/qms-messenger.css', 'js/wallet-vault.js', 'js/qwc-wallet-engine.js',
+    'assets/qms-messenger.css', 'js/wallet-vault.js', 'js/qwertycoin-send.js', 'js/qwc-wallet-engine.js',
     'vendor/libsodium/libsodium-sumo.js', 'vendor/libsodium/libsodium-wrappers.js',
     'js/qms-kdf.js', 'js/qms-protocol.js', 'js/qms-store.js',
     'js/qms-messenger.js', 'js/qms-transaction-history.js', 'js/dashboard-page.js',

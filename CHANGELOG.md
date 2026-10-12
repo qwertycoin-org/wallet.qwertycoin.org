@@ -27,6 +27,9 @@ and uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   signing.
 
 ### Fixed
+- Made **Send max** construct an exact wallet transaction with the network fee
+  subtracted from its sole recipient. The UI now shows the resulting net amount
+  and rejects inconsistent, split or change-producing maximum-send previews.
 - Made all 12 Core seed languages interoperable with Qwertycoin Core, CLI and
   GUI by calculating checksums from canonical word-list prefixes as UTF-8
   bytes. The previous browser-only checksum was

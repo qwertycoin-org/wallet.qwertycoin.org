@@ -1,5 +1,5 @@
 # Qwertycoin Web Wallet build manifest
-# Generated 2026-10-10T08:05:51Z from commit 8298b51
+# Generated 2026-10-12T06:55:49Z from commit 390763e
 #
 # Verify the live deployment matches a specific git tag with:
 #   git checkout v0.1.0
@@ -22,7 +22,7 @@ fdb5548a6e9e260709611d0f5c43146d348048564926fd8162d9ecb7f084670a  assets/qms-mes
 2f2114c74813e11b739fb7d0293f0244db10d13a63cbdb4a21b4c7e9c2768681  assets/social-card.png
 6e761de434fb98032c3a3b562e04e7d1b2fbd7a5d392db15bfbab0f1854468aa  assets/social-card.svg
 d2fe472d440c6774db73975b6248c005bb6be67ad4fc0e5f63eaaf8101a19413  assets/wallet-ui.d2fe472d.css
-f8b0314d14853910131f686450519eea1affb30d1a268c714d2dd3bf53e8559b  dashboard.html
+81d3e12ba1f4fc819135a6f5f7da498a78f2f4dda796785d56ce4421ac5af3db  dashboard.html
 49845fb6edd4109c5f9aa61feaf105f9125f5c10c00e7d1c6726b0c2f5594ec9  favicon.ico
 a81550eef33de480531b7220d41a0ddc46129b36c1b6d2875d170de441d5da66  favicon.svg
 e17cfd15fb96909d64095015f958207063a0c07191da3512df7d560a781aebdf  fonts/028edbf56089.woff2
@@ -40,7 +40,7 @@ db5ff4db83e580426280e9337a58dc57d3a83784a1b03ad80914651594441d52  fonts/c8b23d7b
 f9a06e79cd3a2a20951c0f0e28f66dd0e6d3fda73911d640a2125c8fcb78f21a  fonts/inter-latin-600.f9a06e79cd3a.woff2
 a0bf069d19922a0df40c278c40bc82a8edc55658b587d1bb5a09b5a06ec98244  js/bip39-wordlist.js
 41ed7ed1e70c8bedccb14f85b9b64b349169f946751c583621fd2abf725f6aaa  js/bip39.js
-3ddae75f3a9048d84e246d46331c858284aca19bee98bdad99304ddb0966fa01  js/dashboard-page.js
+b52e4b0a8777830d9bbb06f4ea585ac75105538923307389d38101b4b4973916  js/dashboard-page.js
 ca17e7555699565d53195a7404306ac7b9399704d80fa379b61355e5f9b19b20  js/jsqr.js
 b780f029e218e4b7c7142cfdb2161f8fb30248da8f9c022619812bc9180e7d69  js/keccak256.js
 6d3824be071efaee0703a750b327a51f0db40cd9cee73b18f0dcedad6cf2177d  js/lws-client.js
@@ -61,7 +61,7 @@ aec4ee5dbcca8078bd6be5d5bcd3ff52e40a93471cec04bda748123507cb22fb  js/qms-kdf-wor
 47ac834b57a510fdad1e99b1ce59b5fd42a502f16249f4f3c5df47c322848382  js/qwertycoin-english-wordlist.js
 9697100e8d82260ecd050486fe535e3e792b2500a6fcc974d1baa7186861dd4b  js/qwertycoin-keys.js
 b13f78cc3fd363e17268cc6207d04d330824e1cb7b7ad6f091b8703d6d3f0195  js/qwertycoin-rpc.js
-aace16f7b9ea5fa7dd984f78d473a3885ec4969185ef776c815962c65027a8cf  js/qwertycoin-send.js
+cbe77bf9b98c2cf3cb29ac55c3b560ad78ca753c97a2e748dba07a6a1f87ea98  js/qwertycoin-send.js
 396d7052deaead6e339d6cec527bd4c159ca812ba9431570dd1d4d29cce21e5e  js/qwertycoin-subaddress.js
 5199556dc0c3815df4839cc50f0f90f3607ae9a71469b4e2f7467ce569b4a571  js/qwertycoin-wordlist.js
 998d821eb11fe432f2bd195d35bca1be9269684cbf3ac6ee73b18c3d9202a6c9  js/qwertycoin-wordlists-all.js
