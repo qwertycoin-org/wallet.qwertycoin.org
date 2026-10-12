@@ -1904,6 +1904,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   // #send-modal; we toggle their visibility on transition.
   let sendPreview = null;      // cached fee estimate from Review step
   let sendPriority = 2;
+  let sendMaxRequested = false;
+  let sendMaxCalculation = 0;
 
   function sendShowStep (step) {
     ['form', 'confirm', 'result'].forEach(s => {
@@ -1918,6 +1920,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
   function sendResetForm () {
+    sendMaxCalculation += 1;
+    if (sendMaxRequested) {
+      const amountEl = document.getElementById('send-amount');
+      if (amountEl) amountEl.value = '';
+    }
+    sendMaxRequested = false;
     sendPreview = null;
     const errEl = document.getElementById('send-error');
     if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
@@ -1952,6 +1960,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       document.querySelectorAll('.send-prio-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       sendPriority = parseInt(btn.dataset.priority, 10) || 2;
+      invalidateSendMaximum(true);
+      refreshSendReviewState();
     });
   });
 
@@ -1960,6 +1970,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   const sendToHintEl = document.getElementById('send-to-hint');
   const sendAmountEl = document.getElementById('send-amount');
   const sendReviewBtn = document.getElementById('send-review');
+  const sendMaxBtn = document.getElementById('send-max');
+  const sendPidEl = document.getElementById('send-pid');
+
+  function invalidateSendMaximum (clearAmount) {
+    sendMaxCalculation += 1;
+    sendPreview = null;
+    if (!sendMaxRequested) return;
+    sendMaxRequested = false;
+    if (clearAmount) sendAmountEl.value = '';
+  }
+
   function refreshSendReviewState () {
     const addr = (sendToEl.value || '').trim();
     const amt  = (sendAmountEl.value || '').trim();
@@ -1983,15 +2004,86 @@ document.addEventListener('DOMContentLoaded', async () => {
     const pidGroup = document.getElementById('send-pid-group');
     if (pidGroup) pidGroup.style.display = (v.valid && !v.subaddress && !v.integrated) ? '' : 'none';
   }
-  sendToEl.addEventListener('input', refreshSendReviewState);
-  sendAmountEl.addEventListener('input', refreshSendReviewState);
+  sendToEl.addEventListener('input', () => {
+    invalidateSendMaximum(true);
+    refreshSendReviewState();
+  });
+  sendAmountEl.addEventListener('input', () => {
+    invalidateSendMaximum(false);
+    refreshSendReviewState();
+  });
+  sendPidEl.addEventListener('input', () => {
+    invalidateSendMaximum(true);
+    refreshSendReviewState();
+  });
 
-  // Send max — fills amount with the currently spendable balance
-  document.getElementById('send-max').addEventListener('click', () => {
-    const bal = qwcLastAvailableDisplay || document.getElementById('send-available').textContent;
-    if (bal && bal !== '—') {
-      sendAmountEl.value = bal;
+  // Send max — ask the wallet core to construct a real transaction with the
+  // fee subtracted from its sole destination. This is the only reliable way
+  // to know the maximum because the fee depends on the selected inputs and
+  // final transaction weight.
+  sendMaxBtn.addEventListener('click', async () => {
+    const errEl = document.getElementById('send-error');
+    const calculation = ++sendMaxCalculation;
+    const originalLabel = sendMaxBtn.textContent;
+    sendMaxRequested = false;
+    sendPreview = null;
+    errEl.style.display = 'none';
+    sendMaxBtn.disabled = true;
+    sendMaxBtn.textContent = 'Calculating…';
+
+    try {
+      if (qmsSpendBlocked) throw new Error('Resolve the prepared Messenger transaction before creating another wallet spend');
+
+      const toAddress = (sendToEl.value || '').trim();
+      const addressValidation = QwertycoinSend.validateAddress(toAddress);
+      if (!addressValidation.valid) throw new Error('Enter a valid recipient address before using Send max');
+
+      const paymentId = (sendPidEl.value || '').trim().toLowerCase();
+      if (paymentId && !/^(?:[0-9a-f]{16}|[0-9a-f]{64})$/.test(paymentId)) {
+        throw new Error('Payment ID must be 16 or 64 hex characters');
+      }
+
+      const availableDisplay = qwcLastAvailableDisplay || document.getElementById('send-available').textContent;
+      if (!availableDisplay || availableDisplay === '—') throw new Error('The available balance is not ready yet');
+      const availableAtomic = qwcDisplayToAtomic(availableDisplay);
+      let maximumAtomic;
+
+      if (typeof QwcWalletEngine !== 'undefined') {
+        const wallet = await getQwcWallet();
+        if (wallet.reconnectDaemon) await wallet.reconnectDaemon();
+        await wallet.sync(getQwcRestoreHeight());
+        const preview = await wallet.createTx(QwertycoinSend.createWalletTxConfig(
+          toAddress, availableAtomic, paymentId || undefined, sendPriority, true
+        ));
+        const summary = QwertycoinSend.summarizeWalletTxPreview(preview, availableAtomic, true);
+        if (!preview.signedTxHex && !summary.tx.metadata) {
+          throw new Error('Transaction review did not return relayable transaction data');
+        }
+        maximumAtomic = summary.amount_atomic;
+      } else {
+        const estimate = await QwertycoinSend.estimateFee(
+          walletKeys, toAddress, availableDisplay, sendPriority
+        );
+        const feeAtomic = BigInt(String(estimate.fee_atomic || '0'));
+        if (feeAtomic <= 0n || feeAtomic >= availableAtomic) {
+          throw new Error('The available balance does not cover the network fee');
+        }
+        maximumAtomic = availableAtomic - feeAtomic;
+      }
+
+      if (calculation !== sendMaxCalculation) return;
+      sendAmountEl.value = qwcAtomicToDisplay(maximumAtomic);
+      sendMaxRequested = true;
       refreshSendReviewState();
+    } catch (e) {
+      if (calculation !== sendMaxCalculation) return;
+      sendMaxRequested = false;
+      errEl.textContent = e.message || 'Could not calculate the maximum send amount';
+      errEl.style.display = 'block';
+      refreshSendReviewState();
+    } finally {
+      sendMaxBtn.disabled = false;
+      sendMaxBtn.textContent = originalLabel;
     }
   });
 
@@ -2018,27 +2110,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (paymentIdNormalized && !/^(?:[0-9a-f]{16}|[0-9a-f]{64})$/.test(paymentIdNormalized)) {
           throw new Error('Payment ID must be 16 or 64 hex characters');
         }
-        const amountAtomic = qwcDisplayToAtomic(qwcAmount);
+        const amountAtomic = sendMaxRequested
+          ? qwcDisplayToAtomic(qwcLastAvailableDisplay)
+          : qwcDisplayToAtomic(qwcAmount);
         if (wallet.reconnectDaemon) await wallet.reconnectDaemon();
         await wallet.sync(getQwcRestoreHeight());
-        sendPreview = await wallet.createTx({
-          accountIndex: 0,
-          destinations: [{ address: toAddress, amount: amountAtomic.toString() }],
-          paymentId: paymentIdNormalized || undefined,
-          priority: sendPriority,
-          relay: false,
-          canSplit: false
-        });
-        const tx = sendPreview && sendPreview.txs && sendPreview.txs[0] ? sendPreview.txs[0] : {};
-        const feeAtomic = BigInt(String(tx.fee || '0'));
+        sendPreview = await wallet.createTx(QwertycoinSend.createWalletTxConfig(
+          toAddress, amountAtomic, paymentIdNormalized || undefined, sendPriority, sendMaxRequested
+        ));
+        const summary = QwertycoinSend.summarizeWalletTxPreview(sendPreview, amountAtomic, sendMaxRequested);
+        const tx = summary.tx;
         if (!sendPreview || (!sendPreview.signedTxHex && !tx.metadata)) {
           throw new Error('Transaction review did not return relayable transaction data');
         }
+        if (sendMaxRequested) sendAmountEl.value = qwcAtomicToDisplay(summary.amount_atomic);
 
         document.getElementById('confirm-to').textContent = toAddress;
-        document.getElementById('confirm-amount').textContent = qwcAtomicToDisplay(amountAtomic) + ' QWC';
-        document.getElementById('confirm-fee').textContent = qwcAtomicToDisplay(feeAtomic) + ' QWC';
-        document.getElementById('confirm-total').textContent = qwcAtomicToDisplay(amountAtomic + feeAtomic) + ' QWC';
+        document.getElementById('confirm-amount').textContent = qwcAtomicToDisplay(summary.amount_atomic) + ' QWC';
+        document.getElementById('confirm-fee').textContent = qwcAtomicToDisplay(summary.fee_atomic) + ' QWC';
+        document.getElementById('confirm-total').textContent = qwcAtomicToDisplay(summary.total_atomic) + ' QWC';
         sendShowStep('confirm');
         return;
       }
